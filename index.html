@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M-Abogado System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+
+    <div id="login-view">
+        <div class="login-box">
+            <h1>⚖️ M-Abogado</h1>
+            <input type="email" id="email" placeholder="Law Student Email">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="authLogin()">Login</button>
+            <button onclick="authRegister()" class="secondary-btn">Create Account</button>
+        </div>
+    </div>
+
+    <div id="app-view" style="display:none;">
+        <nav class="sidebar">
+            <h2>M-Abogado</h2>
+            <ul>
+                <li onclick="renderDashboard()"><i class="fas fa-home"></i> Dashboard</li>
+                <li onclick="renderSubjects()"><i class="fas fa-book"></i> Subjects</li>
+                <li onclick="renderDigester()"><i class="fas fa-gavel"></i> Case Digester</li>
+                <li onclick="openCodal()"><i class="fas fa-scale-balanced"></i> eCodal+</li>
+                <li onclick="renderMockReview()"><i class="fas fa-pencil-alt"></i> Mock Review</li>
+                <li onclick="logout()" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</li>
+            </ul>
+        </nav>
+
+        <main id="main-content">
+            </main>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
