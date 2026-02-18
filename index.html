@@ -3,87 +3,718 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M-Abogado | Bar Review System</title>
+    <title>Lex: Law School Companion</title>
     
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Merriweather:wght@300;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
-    <link rel="stylesheet" href="style.css">
-
+    <!-- PDF.js for parsing uploaded files -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
-</head>
-<body>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
 
-    <div id="login-view">
-        <div class="login-container">
-            <div class="brand-logo">⚖️ M-Abogado</div>
-            <p style="color: #64748b; margin-bottom: 20px;">The Smart Bar Review Companion</p>
-            
-            <input type="email" id="email" placeholder="Email Address">
-            <input type="password" id="password" placeholder="Password">
-            
-            <button id="btn-login" class="btn-primary">Login</button>
-            <button id="btn-register" class="btn-secondary">Create Account</button>
-        </div>
-    </div>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <div id="app-view" style="display:none;">
+    <!-- Google Fonts: Merriweather for reading, Inter for UI -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .serif-text { font-family: 'Merriweather', serif; }
         
-        <nav class="sidebar">
-            <div class="sidebar-header">
-                <h2>⚖️ M-Abogado</h2>
-                <span id="user-role">Bar Candidate</span>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+
+        /* Loading Spinner */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #1e3a8a;
+            width: 24px;
+            height: 24px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex overflow-hidden">
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-64 bg-slate-900 text-white flex flex-col shadow-xl flex-shrink-0 transition-all duration-300" id="sidebar">
+        <div class="p-6 border-b border-slate-800 flex items-center gap-3">
+            <div class="w-10 h-10 bg-amber-600 rounded-lg flex items-center justify-center text-xl font-bold font-serif">L</div>
+            <div>
+                <h1 class="font-bold text-lg tracking-wide">LEX COMPANION</h1>
+                <p class="text-xs text-slate-400">Juris Doctor Journey</p>
             </div>
-            
-            <ul class="nav-list">
-                <li onclick="router('dashboard')" id="nav-dashboard">
-                    <i class="fas fa-home"></i> <span>Dashboard</span>
-                </li>
+        </div>
 
-                <li onclick="router('subjects')" id="nav-subjects">
-                    <i class="fas fa-book"></i> <span>Subjects</span>
-                </li>
-
-                <li onclick="router('codals')" id="nav-codals">
-                    <i class="fas fa-gavel"></i> <span>Codals (eCodal+)</span>
-                </li>
-
-                <li onclick="router('digester')" id="nav-digester">
-                    <i class="fas fa-feather-alt"></i> <span>Case Digester</span>
-                </li>
-
-                <li onclick="router('cons-digests')" id="nav-cons-digests">
-                    <i class="fas fa-folder-open"></i> <span>Cons. Digests</span>
-                </li>
-
-                <li onclick="router('cons-subjects')" id="nav-cons-subjects">
-                    <i class="fas fa-layer-group"></i> <span>Cons. Subjects</span>
-                </li>
-
-                <li onclick="router('mock-review')" id="nav-mock">
-                    <i class="fas fa-brain"></i> <span>Mock Review</span>
-                </li>
-                
-                <li onclick="router('logout')" class="logout-btn">
-                    <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
-                </li>
-            </ul>
+        <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3">
+            <!-- Navigation Items will be injected here by JS -->
         </nav>
 
-        <main id="main-content">
-            <div style="text-align: center; margin-top: 50px; color: #64748b;">
-                <i class="fas fa-circle-notch fa-spin fa-3x"></i>
-                <p>Loading System...</p>
+        <div class="p-4 border-t border-slate-800">
+            <div class="flex items-center gap-3 px-3 py-2 rounded bg-slate-800">
+                <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center">
+                    <i class="fas fa-user text-xs"></i>
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-sm font-medium truncate" id="user-display">Student</p>
+                    <p class="text-xs text-green-400">Online</p>
+                </div>
             </div>
-        </main>
+        </div>
+    </aside>
 
-    </div>
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-50 relative">
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 flex-shrink-0">
+            <h2 id="page-title" class="text-2xl font-bold text-slate-800 serif-text">Dashboard</h2>
+            <div class="flex items-center gap-4">
+                <span id="header-date-display" class="text-sm font-medium text-slate-600 hidden md:inline-block"></span>
+                <span id="header-clock" class="text-sm font-mono text-slate-500 bg-slate-100 px-3 py-1 rounded">00:00:00</span>
+            </div>
+        </header>
 
-    <script type="module" src="js/main.js"></script>
+        <!-- Dynamic Content Container -->
+        <div id="content-area" class="flex-1 overflow-y-auto p-8 relative">
+            <!-- Views are rendered here -->
+            <div class="flex items-center justify-center h-full">
+                <div class="loader"></div>
+            </div>
+        </div>
+    </main>
 
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, doc, updateDoc, deleteDoc, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- CONFIGURATION ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'law-companion-v1';
+        
+        // --- APP STATE ---
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        let currentUser = null;
+        let currentView = 'dashboard';
+
+        // --- BIBLE VERSES DATABASE ---
+        const verses = [
+            { text: "Learn to do right; seek justice. Defend the oppressed. Take up the cause of the fatherless; plead the case of the widow.", ref: "Isaiah 1:17" },
+            { text: "But let justice roll on like a river, righteousness like a never-failing stream!", ref: "Amos 5:24" },
+            { text: "Speak up for those who cannot speak for themselves, for the rights of all who are destitute.", ref: "Proverbs 31:8" },
+            { text: "He has shown you, O mortal, what is good. And what does the Lord require of you? To act justly and to love mercy and to walk humbly with your God.", ref: "Micah 6:8" },
+            { text: "Blessed are those who observe justice, who do righteousness at all times!", ref: "Psalm 106:3" },
+            { text: "For the Lord is a God of justice; blessed are all those who wait for him.", ref: "Isaiah 30:18" }
+        ];
+
+        // --- UTILITIES ---
+        const Utils = {
+            formatDate: (date) => new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            getDailyVerse: () => {
+                const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+                return verses[dayOfYear % verses.length];
+            },
+            showToast: (msg) => {
+                // Simple toast implementation could go here
+                console.log("Toast:", msg);
+            }
+        };
+
+        // --- VIEW CONTROLLERS (Separated Logic) ---
+
+        /**
+         * DASHBOARD VIEW
+         * Handles Clock, Verse, Reminders
+         */
+        class DashboardView {
+            constructor() {
+                this.reminders = [];
+            }
+
+            render() {
+                const verse = Utils.getDailyVerse();
+                return `
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+                        <!-- Welcome & Verse -->
+                        <div class="lg:col-span-2 space-y-6">
+                            <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg">
+                                <h3 class="text-2xl font-bold serif-text mb-2">Welcome back, Counsel.</h3>
+                                <p class="text-slate-300 mb-6">Your journey to the Bar continues today.</p>
+                                <div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm">
+                                    <p class="serif-text italic text-lg mb-2">"${verse.text}"</p>
+                                    <p class="text-sm text-amber-400 font-bold text-right">— ${verse.ref}</p>
+                                </div>
+                            </div>
+
+                            <!-- Quick Stats / Schedule -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h4 class="font-bold text-slate-700">Upcoming</h4>
+                                        <i class="fas fa-calendar-alt text-blue-600"></i>
+                                    </div>
+                                    <div id="dashboard-schedule-list" class="space-y-3">
+                                        <p class="text-sm text-slate-400 italic">Loading schedule...</p>
+                                    </div>
+                                </div>
+                                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h4 class="font-bold text-slate-700">Study Streak</h4>
+                                        <i class="fas fa-fire text-amber-500"></i>
+                                    </div>
+                                    <div class="text-center py-2">
+                                        <span class="text-4xl font-bold text-slate-800">Active</span>
+                                        <p class="text-xs text-slate-500 mt-1">Keep pushing forward</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar: Reminders & Todo -->
+                        <div class="lg:col-span-1">
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col">
+                                <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                                    <h4 class="font-bold text-slate-700">Reminders</h4>
+                                    <button onclick="window.appHandlers.addReminder()" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition">
+                                        <i class="fas fa-plus mr-1"></i> Add
+                                    </button>
+                                </div>
+                                <div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]">
+                                    <!-- Reminders injected here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            async init() {
+                // Real-time clock logic
+                const clockEl = document.getElementById('header-clock');
+                if (clockEl) {
+                    setInterval(() => {
+                        const now = new Date();
+                        clockEl.innerText = now.toLocaleTimeString('en-US', { hour12: true });
+                        // Fixed Syntax Error: Removed invalid optional chaining assignment (?. =)
+                        const dateEl = document.getElementById('header-date-display');
+                        if (dateEl) {
+                            dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+                        }
+                    }, 1000);
+                }
+
+                // Load Reminders
+                const q = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'reminders');
+                onSnapshot(q, (snapshot) => {
+                    const list = document.getElementById('reminder-list');
+                    const schedList = document.getElementById('dashboard-schedule-list');
+                    if (!list) return;
+
+                    list.innerHTML = '';
+                    schedList.innerHTML = '';
+
+                    if (snapshot.empty) {
+                        list.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">No reminders set.</div>`;
+                        schedList.innerHTML = `<div class="text-slate-400 text-sm">No upcoming events.</div>`;
+                        return;
+                    }
+
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const id = doc.id;
+                        const date = data.date ? new Date(data.date).toLocaleDateString() : 'No Date';
+                        
+                        // Reminder Item
+                        const item = document.createElement('div');
+                        item.className = `p-3 rounded-lg border-l-4 ${data.type === 'Quiz' ? 'border-red-500 bg-red-50' : 'border-blue-500 bg-blue-50'} flex justify-between items-start group`;
+                        item.innerHTML = `
+                            <div>
+                                <p class="text-sm font-semibold text-slate-800">${data.title}</p>
+                                <p class="text-xs text-slate-500">${data.type} • ${date}</p>
+                            </div>
+                            <button onclick="window.appHandlers.deleteReminder('${id}')" class="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        `;
+                        list.appendChild(item);
+
+                        // Schedule Item (Simplified)
+                        if (schedList.children.length < 3) {
+                            const schedItem = document.createElement('div');
+                            schedItem.className = "flex items-center gap-3 text-sm";
+                            schedItem.innerHTML = `
+                                <div class="w-2 h-2 rounded-full ${data.type === 'Quiz' ? 'bg-red-500' : 'bg-blue-500'}"></div>
+                                <span class="flex-1 truncate">${data.title}</span>
+                                <span class="text-slate-400 text-xs">${date}</span>
+                            `;
+                            schedList.appendChild(schedItem);
+                        }
+                    });
+                });
+            }
+        }
+
+        /**
+         * SUBJECTS VIEW
+         * Organized by Year -> Subject
+         */
+        class SubjectsView {
+            render() {
+                return `
+                    <div class="max-w-5xl mx-auto">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-bold text-slate-700">My Subjects</h3>
+                            <button onclick="window.appHandlers.addSubject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm transition shadow-md">
+                                <i class="fas fa-plus mr-2"></i>New Subject
+                            </button>
+                        </div>
+                        <div id="subjects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <!-- Subjects Injected Here -->
+                            <div class="col-span-full text-center py-12">
+                                <div class="loader mx-auto mb-4"></div>
+                                <p class="text-slate-500">Loading your curriculum...</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            init() {
+                const q = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects');
+                onSnapshot(q, (snapshot) => {
+                    const grid = document.getElementById('subjects-grid');
+                    if (!grid) return;
+                    grid.innerHTML = '';
+
+                    if (snapshot.empty) {
+                        grid.innerHTML = `
+                            <div class="col-span-full text-center py-12 border-2 border-dashed border-slate-300 rounded-xl">
+                                <p class="text-slate-500 mb-2">No subjects added yet.</p>
+                                <button onclick="window.appHandlers.addSubject()" class="text-blue-600 font-medium hover:underline">Add your first subject</button>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const card = document.createElement('div');
+                        card.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition cursor-pointer group relative";
+                        card.innerHTML = `
+                            <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition">
+                                <button onclick="window.appHandlers.deleteSubject('${doc.id}')" class="text-slate-400 hover:text-red-500"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <span class="inline-block px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded mb-3 font-semibold tracking-wider uppercase">${data.year || 'General'}</span>
+                            <h4 class="text-lg font-bold text-slate-800 mb-2 serif-text">${data.name}</h4>
+                            <p class="text-sm text-slate-500 line-clamp-3 mb-4">${data.description || 'No notes added yet.'}</p>
+                            <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+                                <span class="text-xs text-slate-400"><i class="fas fa-book mr-1"></i> Notes</span>
+                                <span class="text-blue-600 text-xs font-medium group-hover:translate-x-1 transition-transform">Open <i class="fas fa-arrow-right ml-1"></i></span>
+                            </div>
+                        `;
+                        // In a full app, clicking would open detailed notes view
+                        grid.appendChild(card);
+                    });
+                });
+            }
+        }
+
+        /**
+         * DIGESTS VIEW
+         * Consolidated Case Digests
+         */
+        class DigestsView {
+            render() {
+                return `
+                    <div class="max-w-4xl mx-auto h-full flex flex-col">
+                        <div class="flex justify-between items-center mb-6 flex-shrink-0">
+                            <h3 class="text-xl font-bold text-slate-700">Case Digests</h3>
+                            <button onclick="window.appHandlers.addDigest()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm transition shadow-md">
+                                <i class="fas fa-gavel mr-2"></i>New Digest
+                            </button>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
+                            <div class="p-4 border-b border-slate-100 bg-slate-50 flex gap-4 text-sm font-semibold text-slate-600">
+                                <div class="w-1/4">Case Title</div>
+                                <div class="w-1/4">Subject</div>
+                                <div class="w-1/2">Ruling Summary</div>
+                            </div>
+                            <div id="digest-list" class="overflow-y-auto flex-1 p-2">
+                                <!-- List Items -->
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            init() {
+                const q = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'digests');
+                onSnapshot(q, (snapshot) => {
+                    const list = document.getElementById('digest-list');
+                    if (!list) return;
+                    list.innerHTML = '';
+                    
+                    if(snapshot.empty) {
+                        list.innerHTML = `<div class="p-8 text-center text-slate-400">No case digests found.</div>`;
+                        return;
+                    }
+
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const row = document.createElement('div');
+                        row.className = "p-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 flex gap-4 text-sm items-start transition";
+                        row.innerHTML = `
+                            <div class="w-1/4 font-semibold text-slate-800 serif-text">${data.title}</div>
+                            <div class="w-1/4 text-slate-500"><span class="bg-slate-100 px-2 py-0.5 rounded text-xs">${data.subject}</span></div>
+                            <div class="w-1/2 text-slate-600 line-clamp-2">${data.ruling}</div>
+                            <button onclick="window.appHandlers.deleteDigest('${doc.id}')" class="text-slate-300 hover:text-red-500 ml-2"><i class="fas fa-trash"></i></button>
+                        `;
+                        list.appendChild(row);
+                    });
+                });
+            }
+        }
+
+        /**
+         * MOCK REVIEW VIEW
+         * PDF Upload, Parsing, and Flashcard/Essay Generation
+         */
+        class ReviewView {
+            constructor() {
+                this.generatedContent = null;
+                this.isProcessing = false;
+            }
+
+            render() {
+                return `
+                    <div class="max-w-5xl mx-auto h-full flex flex-col">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+                            <!-- Left: Upload & Controls -->
+                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+                                <h3 class="font-bold text-lg text-slate-800 mb-4">Material Upload</h3>
+                                
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
+                                    <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
+                                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-3"></i>
+                                    <p class="text-sm font-medium text-slate-600">Click to upload PDF</p>
+                                    <p class="text-xs text-slate-400 mt-1">Lecture notes, reviewers, or codals</p>
+                                </div>
+                                <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
+
+                                <div class="mt-6 space-y-3">
+                                    <label class="block text-sm font-medium text-slate-700">Review Mode</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 bg-slate-800 text-white transition">Recit (Flashcards)</button>
+                                        <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
+                                    </div>
+                                </div>
+
+                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg font-medium shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    Generate Review
+                                </button>
+                            </div>
+
+                            <!-- Right: Output Area -->
+                            <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
+                                    <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
+                                    <h4 class="text-lg font-semibold">AI Mock Review</h4>
+                                    <p class="text-sm max-w-xs mt-2">Upload a PDF to generate practice questions or flashcards based on your material.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Logic handled in appHandlers
+        }
+
+        // --- MAIN APP LOGIC ---
+
+        // Initialize Views
+        const views = {
+            dashboard: new DashboardView(),
+            subjects: new SubjectsView(),
+            digests: new DigestsView(),
+            review: new ReviewView(),
+            codals: { render: () => window.open('https://ecodal.plus', '_blank') || `<div class="text-center mt-20">Opening eCodal+ ...</div>` }, // Simple link behavior
+            cons_subject: new SubjectsView() // Reusing subject view for consolidated for this demo
+        };
+
+        // DOM Elements
+        const sidebarNav = document.querySelector('nav');
+        const contentArea = document.getElementById('content-area');
+        const pageTitle = document.getElementById('page-title');
+
+        // Navigation Config
+        const navItems = [
+            { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' },
+            { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
+            { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' },
+            { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' },
+            { id: 'cons_subject', label: 'Cons. Subjects', icon: 'fa-layer-group' },
+            { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }
+        ];
+
+        function renderSidebar() {
+            sidebarNav.innerHTML = navItems.map(item => `
+                <a href="#" onclick="window.appHandlers.navigate('${item.id}')" 
+                   class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 
+                   ${currentView === item.id ? 'bg-amber-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}">
+                    <i class="fas ${item.icon} w-5 text-center"></i>
+                    ${item.label}
+                </a>
+            `).join('');
+        }
+
+        // Global Handlers
+        window.appHandlers = {
+            navigate: (viewId) => {
+                if (viewId === 'codals') {
+                    window.open('https://ecodal.plus', '_blank');
+                    return;
+                }
+                currentView = viewId;
+                renderSidebar();
+                
+                // Update Header
+                const item = navItems.find(i => i.id === viewId);
+                pageTitle.innerText = item ? item.label : 'App';
+                
+                // Render Content
+                if (views[viewId]) {
+                    contentArea.innerHTML = views[viewId].render();
+                    if (views[viewId].init) views[viewId].init();
+                }
+            },
+
+            // --- DASHBOARD ACTIONS ---
+            addReminder: async () => {
+                const title = prompt("Reminder Title:");
+                if (!title) return;
+                const type = confirm("Is this a Quiz? (Cancel for Assignment/Other)") ? "Quiz" : "Assignment";
+                
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'reminders'), {
+                    title,
+                    type,
+                    date: new Date().toISOString(),
+                    created: serverTimestamp()
+                });
+            },
+            deleteReminder: async (id) => {
+                if(confirm("Complete this task?")) {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'reminders', id));
+                }
+            },
+
+            // --- SUBJECT ACTIONS ---
+            addSubject: async () => {
+                const name = prompt("Subject Name (e.g., Crim 1):");
+                if (!name) return;
+                const year = prompt("Year Level (e.g., 1L):") || "1L";
+                const desc = prompt("Short Note/Description:");
+
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects'), {
+                    name, year, description: desc, created: serverTimestamp()
+                });
+            },
+            deleteSubject: async (id) => {
+                if(confirm("Remove this subject?")) {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects', id));
+                }
+            },
+
+            // --- DIGEST ACTIONS ---
+            addDigest: async () => {
+                const title = prompt("Case Title:");
+                if(!title) return;
+                const subject = prompt("Subject:");
+                const ruling = prompt("Ruling Summary:");
+
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'digests'), {
+                    title, subject, ruling, created: serverTimestamp()
+                });
+            },
+            deleteDigest: async (id) => await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'digests', id)),
+
+            // --- MOCK REVIEW LOGIC (COMPLEX) ---
+            reviewMode: 'recit',
+            pdfText: '',
+
+            setMode: (mode) => {
+                window.appHandlers.reviewMode = mode;
+                document.getElementById('btn-recit').className = mode === 'recit' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
+                document.getElementById('btn-exam').className = mode === 'exam' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
+            },
+
+            handleFileUpload: async (input) => {
+                const file = input.files[0];
+                if (!file) return;
+
+                document.getElementById('file-name-display').innerText = file.name;
+                document.getElementById('file-name-display').classList.remove('hidden');
+                document.getElementById('btn-generate').innerText = "Processing PDF...";
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    
+                    let fullText = "";
+                    // Limit to first 10 pages for performance in demo
+                    const maxPages = Math.min(pdf.numPages, 10);
+                    
+                    for (let i = 1; i <= maxPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + "\n";
+                    }
+
+                    window.appHandlers.pdfText = fullText;
+                    document.getElementById('btn-generate').disabled = false;
+                    document.getElementById('btn-generate').innerText = "Generate Review";
+                } catch (e) {
+                    console.error(e);
+                    alert("Error reading PDF. Please try a text-heavy PDF.");
+                    document.getElementById('btn-generate').innerText = "Error";
+                }
+            },
+
+            generateReview: () => {
+                const text = window.appHandlers.pdfText;
+                const mode = window.appHandlers.reviewMode;
+                const output = document.getElementById('review-output');
+                
+                output.innerHTML = `<div class="flex justify-center p-10"><div class="loader"></div></div>`;
+
+                // Simulate AI Generation delay
+                setTimeout(() => {
+                    output.innerHTML = '';
+                    
+                    // Simple NLP Simulation logic
+                    // 1. Split sentences
+                    const sentences = text.match(/[^\.!\?]+[\.!\?]+/g) || [];
+                    const meaningfulSentences = sentences.filter(s => s.length > 50 && (s.includes('court') || s.includes('law') || s.includes('act') || s.includes('is') || s.includes('shall')));
+
+                    if (mode === 'recit') {
+                        // RECIT: FLASHCARDS
+                        // Heuristic: Find sentences with definitions ("is defined as", "refers to")
+                        const cards = [];
+                        meaningfulSentences.forEach((s, idx) => {
+                            if (cards.length >= 10) return;
+                            if (idx % 3 === 0) { // randomness
+                                cards.push({
+                                    front: `Based on the text, discuss the concept mentioned in this context: "...${s.substring(0, 40)}..."`,
+                                    back: s
+                                });
+                            }
+                        });
+                        
+                        // Fallback if no cards
+                        if(cards.length === 0) cards.push({front: "No clear definitions found.", back: "Try a different PDF."});
+
+                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Flashcards (${cards.length})</h3>`;
+                        const grid = document.createElement('div');
+                        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4";
+                        
+                        cards.forEach((card, i) => {
+                            const el = document.createElement('div');
+                            el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective";
+                            el.onclick = function() {
+                                this.querySelector('.card-inner').classList.toggle('hidden');
+                                this.querySelector('.card-back').classList.toggle('hidden');
+                            };
+                            el.innerHTML = `
+                                <div class="card-inner">
+                                    <span class="text-xs text-blue-600 font-bold uppercase mb-2 block">Card ${i+1}</span>
+                                    <p class="serif-text font-medium text-slate-800">${card.front}</p>
+                                    <p class="text-xs text-slate-400 mt-4 text-center">(Click to reveal)</p>
+                                </div>
+                                <div class="card-back hidden animate-fade-in">
+                                    <span class="text-xs text-green-600 font-bold uppercase mb-2 block">Answer</span>
+                                    <p class="text-sm text-slate-700 leading-relaxed">${card.back}</p>
+                                </div>
+                            `;
+                            grid.appendChild(el);
+                        });
+                        output.appendChild(grid);
+
+                    } else {
+                        // EXAM: ESSAY QUESTIONS
+                        // Heuristic: Extract capitalized keywords and create standard law questions
+                        const words = text.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g) || ["The Doctrine"];
+                        const uniqueTerms = [...new Set(words)].slice(0, 5);
+                        
+                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Bar Exam Simulation</h3>`;
+                        const paper = document.createElement('div');
+                        paper.className = "bg-white p-8 rounded shadow-sm border border-slate-300 min-h-[500px] serif-text";
+                        
+                        let html = `<div class="text-center border-b-2 border-black pb-4 mb-6">
+                            <h2 class="text-2xl font-bold uppercase">Mock Bar Examination</h2>
+                            <p class="italic">Subject: Review of Uploaded Material</p>
+                        </div>`;
+
+                        uniqueTerms.forEach((term, i) => {
+                            html += `
+                                <div class="mb-8">
+                                    <p class="font-bold mb-2">Question ${i+1}</p>
+                                    <p class="mb-4 leading-loose text-justify">
+                                        Analyze the legal implications of <strong>${term}</strong> as presented in the materials. 
+                                        Discuss its application in contemporary jurisprudence and distinguish it from related concepts. 
+                                        Cite specific provisions or doctrines where applicable.
+                                    </p>
+                                    <textarea class="w-full p-3 border border-slate-200 rounded bg-slate-50 font-sans text-sm" rows="4" placeholder="Type your answer here..."></textarea>
+                                </div>
+                            `;
+                        });
+                        paper.innerHTML = html;
+                        output.appendChild(paper);
+                    }
+                }, 1500);
+            }
+        };
+
+        // --- AUTHENTICATION & STARTUP ---
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        initAuth();
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('user-display').innerText = "Law Student"; // Could be user.uid
+                window.appHandlers.navigate('dashboard');
+            } else {
+                contentArea.innerHTML = `<div class="flex items-center justify-center h-full">Signing in...</div>`;
+            }
+        });
+
+    </script>
 </body>
 </html>
