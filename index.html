@@ -66,9 +66,15 @@
         </nav>
 
         <div class="p-4 border-t border-slate-800 space-y-3">
-            <div id="local-mode-indicator" class="hidden text-xs bg-amber-900/50 text-amber-200 p-2 rounded border border-amber-700/50">
-                <i class="fas fa-save mr-1"></i> Local Storage Mode
+            <!-- Updated Local Mode Indicator with Help Action -->
+            <div id="local-mode-indicator" onclick="window.appHandlers.showAuthHelp()" class="hidden cursor-pointer text-xs bg-amber-900/50 text-amber-200 p-2 rounded border border-amber-700/50 hover:bg-amber-900/70 transition" title="Click for instructions to enable cloud sync">
+                <div class="flex items-center justify-between">
+                    <span><i class="fas fa-save mr-1"></i> Offline Mode</span>
+                    <i class="fas fa-question-circle opacity-50"></i>
+                </div>
+                <div class="text-[10px] text-amber-400/70 mt-1">Click to fix cloud sync</div>
             </div>
+
             <div class="flex items-center gap-3 px-3 py-2 rounded bg-slate-800">
                 <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center">
                     <i class="fas fa-user text-xs"></i>
@@ -155,7 +161,10 @@
                     // Firebase implementation
                     const q = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName);
                     return onSnapshot(q, callback, (error) => {
-                        console.error("Firestore Error:", error);
+                        // Suppress permission errors in console during mode switch
+                        if (error.code !== 'permission-denied') {
+                             console.error("Firestore Error:", error);
+                        }
                         // Fallback to empty state if permission denied
                         callback({ empty: true, forEach: () => {} }); 
                     });
@@ -451,6 +460,54 @@
         }
 
         /**
+         * CASE DIGESTER VIEW (NEW)
+         * Automates extraction of Facts, Issue, Ruling
+         */
+        class CaseDigesterView {
+            constructor() {
+                this.digestedData = null;
+            }
+
+            render() {
+                return `
+                    <div class="max-w-4xl mx-auto h-full flex flex-col">
+                        <h3 class="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
+                            <i class="fas fa-magic text-amber-500"></i> AI Case Digester
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
+                            <!-- Input Column -->
+                            <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter</label>
+                                <input type="text" id="digest-subject" placeholder="e.g. Criminal Law" class="w-full p-2 border border-slate-200 rounded text-sm mb-4">
+                                
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Case Upload</label>
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative mb-4">
+                                    <input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)">
+                                    <i class="fas fa-file-pdf text-3xl text-red-400 mb-2"></i>
+                                    <p class="text-xs text-slate-500">Upload Full Text PDF</p>
+                                </div>
+                                <div id="digest-filename" class="text-xs text-blue-600 mb-4 truncate hidden"></div>
+                                
+                                <button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-700 transition disabled:opacity-50" disabled>
+                                    <i class="fas fa-robot mr-1"></i> Digest Case
+                                </button>
+                            </div>
+
+                            <!-- Output Column -->
+                            <div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area">
+                                <div class="h-full flex flex-col items-center justify-center text-slate-400 text-center">
+                                    <i class="fas fa-file-invoice text-4xl mb-3 opacity-30"></i>
+                                    <p class="text-sm">Upload a case file to extract the<br>Facts, Issue, and Ruling.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        /**
          * MOCK REVIEW VIEW
          */
         class ReviewView {
@@ -506,6 +563,7 @@
             dashboard: new DashboardView(),
             subjects: new SubjectsView(),
             digests: new DigestsView(),
+            case_digester: new CaseDigesterView(), // New View
             review: new ReviewView(),
             codals: { render: () => window.open('https://www.ecodalplus.com/ecodals', '_blank') || `<div class="text-center mt-20">Opening eCodal+ ...</div>` }, 
             cons_subject: new SubjectsView()
@@ -520,6 +578,7 @@
             { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' },
             { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' },
+            { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }, // New Nav Item
             { id: 'cons_subject', label: 'Cons. Subjects', icon: 'fa-layer-group' },
             { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }
         ];
@@ -557,6 +616,10 @@
                     contentArea.innerHTML = views[viewId].render();
                     if (views[viewId].init) views[viewId].init();
                 }
+            },
+
+            showAuthHelp: () => {
+                alert("To enable Cloud Sync:\n\n1. Go to Firebase Console > Authentication > Sign-in method.\n2. Enable 'Anonymous' provider.\n3. Refresh this page.");
             },
 
             addReminder: async () => {
@@ -606,6 +669,114 @@
                 });
             },
             deleteDigest: async (id) => await AppDB.delete('digests', id),
+
+            // --- CASE DIGESTER LOGIC ---
+            digestText: '',
+            
+            handleDigestUpload: async (input) => {
+                const file = input.files[0];
+                if (!file) return;
+                
+                const display = document.getElementById('digest-filename');
+                const btn = document.getElementById('btn-process-digest');
+                display.innerText = file.name;
+                display.classList.remove('hidden');
+                btn.innerText = "Reading PDF...";
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    
+                    let fullText = "";
+                    const maxPages = Math.min(pdf.numPages, 10);
+                    for (let i = 1; i <= maxPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + "\n";
+                    }
+                    window.appHandlers.digestText = fullText;
+                    btn.disabled = false;
+                    btn.innerText = "Digest Case";
+                } catch (e) {
+                    console.error(e);
+                    alert("Failed to read PDF.");
+                    btn.innerText = "Error";
+                }
+            },
+
+            processDigest: () => {
+                const text = window.appHandlers.digestText;
+                const area = document.getElementById('digest-results-area');
+                const subject = document.getElementById('digest-subject').value || "General";
+                
+                area.innerHTML = `<div class="flex justify-center h-full items-center"><div class="loader"></div></div>`;
+                
+                setTimeout(() => {
+                    // Heuristic AI Simulation
+                    // Facts: Usually start
+                    // Issue: Look for "Whether"
+                    // Ruling: Look for "Held" or "Ruling" or end
+                    
+                    let facts = "Unable to automatically extract facts. Please verify the document structure.";
+                    let issue = "Unable to determine the main issue.";
+                    let ruling = "Ruling could not be isolated.";
+                    
+                    const issueIdx = text.search(/Whether|Issue|WHETHER|ISSUE/);
+                    const rulingIdx = text.search(/Held|Ruling|HELD|RULING|WHEREFORE/);
+                    
+                    if (issueIdx > -1) {
+                        facts = text.substring(0, issueIdx).substring(0, 500) + "..."; // First part
+                        if (rulingIdx > -1) {
+                            issue = text.substring(issueIdx, rulingIdx).substring(0, 300) + "...";
+                            ruling = text.substring(rulingIdx).substring(0, 500) + "...";
+                        } else {
+                            issue = text.substring(issueIdx).substring(0, 300) + "...";
+                        }
+                    } else {
+                        // Fallback split
+                        const chunks = text.match(/.{1,500}/g) || [];
+                        facts = chunks[0] || "";
+                        issue = chunks[1] || "";
+                        ruling = chunks[2] || "";
+                    }
+
+                    // Store pending save data
+                    window.pendingDigest = { title: "New Case Digest", subject, ruling: ruling.substring(0,100) + "..." };
+                    
+                    area.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="bg-white p-4 rounded border-l-4 border-blue-500 shadow-sm">
+                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Facts of the Case</h4>
+                                <p class="text-sm text-slate-600 leading-relaxed">${facts}</p>
+                            </div>
+                            <div class="bg-white p-4 rounded border-l-4 border-amber-500 shadow-sm">
+                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Issue</h4>
+                                <p class="text-sm text-slate-600 leading-relaxed font-semibold">${issue}</p>
+                            </div>
+                            <div class="bg-white p-4 rounded border-l-4 border-green-500 shadow-sm">
+                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Ruling</h4>
+                                <p class="text-sm text-slate-600 leading-relaxed">${ruling}</p>
+                            </div>
+                            <button onclick="window.appHandlers.saveDigestedCase()" class="w-full py-2 bg-slate-800 text-white rounded text-sm hover:bg-slate-700 transition">
+                                <i class="fas fa-save mr-2"></i> Save to Digests
+                            </button>
+                        </div>
+                    `;
+                }, 1500);
+            },
+
+            saveDigestedCase: async () => {
+                if (window.pendingDigest) {
+                    const title = prompt("Enter Case Title:", "People vs. Example");
+                    if (title) {
+                        window.pendingDigest.title = title;
+                        await AppDB.add('digests', { ...window.pendingDigest, created: AppDB.isLocal ? new Date().toISOString() : serverTimestamp() });
+                        alert("Case saved to 'Cons. Digests'!");
+                        window.appHandlers.navigate('digests');
+                    }
+                }
+            },
 
             reviewMode: 'recit',
             pdfText: '',
@@ -738,12 +909,17 @@
             try {
                 await signInAnonymously(auth);
             } catch (e) {
-                console.warn("Firebase Auth failed. Switching to Local Storage Mode.", e);
+                // Suppress console spam for known configuration issue
+                if (e.code !== 'auth/admin-restricted-operation') {
+                    console.warn("Auth initialization error:", e);
+                } else {
+                    console.log("Running in offline mode (Anonymous auth disabled).");
+                }
+                
                 // Fallback Logic
                 AppDB.isLocal = true;
                 currentUser = { uid: 'local-guest' };
                 document.getElementById('local-mode-indicator').classList.remove('hidden');
-                // Allow the app to start despite auth error
                 window.appHandlers.navigate('dashboard');
             }
         };
