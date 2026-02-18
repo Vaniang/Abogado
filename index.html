@@ -65,7 +65,10 @@
             <!-- Navigation Items will be injected here by JS -->
         </nav>
 
-        <div class="p-4 border-t border-slate-800">
+        <div class="p-4 border-t border-slate-800 space-y-3">
+            <div id="local-mode-indicator" class="hidden text-xs bg-amber-900/50 text-amber-200 p-2 rounded border border-amber-700/50">
+                <i class="fas fa-save mr-1"></i> Local Storage Mode
+            </div>
             <div class="flex items-center gap-3 px-3 py-2 rounded bg-slate-800">
                 <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center">
                     <i class="fas fa-user text-xs"></i>
@@ -101,20 +104,88 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, query, onSnapshot, doc, updateDoc, deleteDoc, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURATION ---
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'law-companion-v1';
+        const firebaseConfig = {
+            apiKey: "AIzaSyDxKEf2v5P2LN_a2BcR_ODYDGINZMmVPWk",
+            authDomain: "abogado-ea708.firebaseapp.com",
+            projectId: "abogado-ea708",
+            storageBucket: "abogado-ea708.firebasestorage.app",
+            messagingSenderId: "469135522184",
+            appId: "1:469135522184:web:d7cf28de119011f282623d",
+            measurementId: "G-CPJBKR7T59"
+        };
+        
+        const appNamespace = 'law-companion-v1'; 
         
         // --- APP STATE ---
         const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app); 
         const auth = getAuth(app);
         const db = getFirestore(app);
         
         let currentUser = null;
         let currentView = 'dashboard';
+
+        // --- DATABASE ADAPTER (Switches between Firebase and LocalStorage) ---
+        const AppDB = {
+            isLocal: false,
+
+            subscribe: (collectionName, callback) => {
+                if (AppDB.isLocal) {
+                    // Local Storage polling implementation
+                    const fetchData = () => {
+                        const key = `lex_${currentUser.uid}_${collectionName}`;
+                        const data = JSON.parse(localStorage.getItem(key) || '[]');
+                        // Mimic Firestore snapshot
+                        callback({
+                            empty: data.length === 0,
+                            forEach: (fn) => data.forEach(item => fn({ id: item.id, data: () => item })),
+                            docs: data.map(item => ({ id: item.id, data: () => item }))
+                        });
+                    };
+                    fetchData(); // Initial call
+                    // Poll for changes every 2 seconds (simple reactivity for local mode)
+                    const interval = setInterval(fetchData, 2000);
+                    return () => clearInterval(interval); // Return unsubscribe function
+                } else {
+                    // Firebase implementation
+                    const q = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName);
+                    return onSnapshot(q, callback, (error) => {
+                        console.error("Firestore Error:", error);
+                        // Fallback to empty state if permission denied
+                        callback({ empty: true, forEach: () => {} }); 
+                    });
+                }
+            },
+
+            add: async (collectionName, data) => {
+                if (AppDB.isLocal) {
+                    const key = `lex_${currentUser.uid}_${collectionName}`;
+                    const current = JSON.parse(localStorage.getItem(key) || '[]');
+                    const newItem = { ...data, id: 'local_' + Date.now(), created: new Date().toISOString() };
+                    current.push(newItem);
+                    localStorage.setItem(key, JSON.stringify(current));
+                    return newItem;
+                } else {
+                    return addDoc(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName), data);
+                }
+            },
+
+            delete: async (collectionName, id) => {
+                if (AppDB.isLocal) {
+                    const key = `lex_${currentUser.uid}_${collectionName}`;
+                    const current = JSON.parse(localStorage.getItem(key) || '[]');
+                    const updated = current.filter(item => item.id !== id);
+                    localStorage.setItem(key, JSON.stringify(updated));
+                } else {
+                    return deleteDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id));
+                }
+            }
+        };
 
         // --- BIBLE VERSES DATABASE ---
         const verses = [
@@ -134,27 +205,24 @@
                 return verses[dayOfYear % verses.length];
             },
             showToast: (msg) => {
-                // Simple toast implementation could go here
                 console.log("Toast:", msg);
             }
         };
 
-        // --- VIEW CONTROLLERS (Separated Logic) ---
+        // --- VIEW CONTROLLERS ---
 
         /**
          * DASHBOARD VIEW
-         * Handles Clock, Verse, Reminders
          */
         class DashboardView {
             constructor() {
-                this.reminders = [];
+                this.unsubscribe = null;
             }
 
             render() {
                 const verse = Utils.getDailyVerse();
                 return `
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-                        <!-- Welcome & Verse -->
                         <div class="lg:col-span-2 space-y-6">
                             <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg">
                                 <h3 class="text-2xl font-bold serif-text mb-2">Welcome back, Counsel.</h3>
@@ -165,7 +233,6 @@
                                 </div>
                             </div>
 
-                            <!-- Quick Stats / Schedule -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
                                     <div class="flex items-center justify-between mb-4">
@@ -189,7 +256,6 @@
                             </div>
                         </div>
 
-                        <!-- Sidebar: Reminders & Todo -->
                         <div class="lg:col-span-1">
                             <div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col">
                                 <div class="p-5 border-b border-slate-100 flex justify-between items-center">
@@ -208,13 +274,11 @@
             }
 
             async init() {
-                // Real-time clock logic
                 const clockEl = document.getElementById('header-clock');
                 if (clockEl) {
                     setInterval(() => {
                         const now = new Date();
                         clockEl.innerText = now.toLocaleTimeString('en-US', { hour12: true });
-                        // Fixed Syntax Error: Removed invalid optional chaining assignment (?. =)
                         const dateEl = document.getElementById('header-date-display');
                         if (dateEl) {
                             dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -222,9 +286,7 @@
                     }, 1000);
                 }
 
-                // Load Reminders
-                const q = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'reminders');
-                onSnapshot(q, (snapshot) => {
+                this.unsubscribe = AppDB.subscribe('reminders', (snapshot) => {
                     const list = document.getElementById('reminder-list');
                     const schedList = document.getElementById('dashboard-schedule-list');
                     if (!list) return;
@@ -243,7 +305,6 @@
                         const id = doc.id;
                         const date = data.date ? new Date(data.date).toLocaleDateString() : 'No Date';
                         
-                        // Reminder Item
                         const item = document.createElement('div');
                         item.className = `p-3 rounded-lg border-l-4 ${data.type === 'Quiz' ? 'border-red-500 bg-red-50' : 'border-blue-500 bg-blue-50'} flex justify-between items-start group`;
                         item.innerHTML = `
@@ -257,7 +318,6 @@
                         `;
                         list.appendChild(item);
 
-                        // Schedule Item (Simplified)
                         if (schedList.children.length < 3) {
                             const schedItem = document.createElement('div');
                             schedItem.className = "flex items-center gap-3 text-sm";
@@ -275,9 +335,9 @@
 
         /**
          * SUBJECTS VIEW
-         * Organized by Year -> Subject
          */
         class SubjectsView {
+            constructor() { this.unsubscribe = null; }
             render() {
                 return `
                     <div class="max-w-5xl mx-auto">
@@ -288,7 +348,6 @@
                             </button>
                         </div>
                         <div id="subjects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <!-- Subjects Injected Here -->
                             <div class="col-span-full text-center py-12">
                                 <div class="loader mx-auto mb-4"></div>
                                 <p class="text-slate-500">Loading your curriculum...</p>
@@ -299,8 +358,7 @@
             }
 
             init() {
-                const q = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects');
-                onSnapshot(q, (snapshot) => {
+                this.unsubscribe = AppDB.subscribe('subjects', (snapshot) => {
                     const grid = document.getElementById('subjects-grid');
                     if (!grid) return;
                     grid.innerHTML = '';
@@ -331,7 +389,6 @@
                                 <span class="text-blue-600 text-xs font-medium group-hover:translate-x-1 transition-transform">Open <i class="fas fa-arrow-right ml-1"></i></span>
                             </div>
                         `;
-                        // In a full app, clicking would open detailed notes view
                         grid.appendChild(card);
                     });
                 });
@@ -340,9 +397,9 @@
 
         /**
          * DIGESTS VIEW
-         * Consolidated Case Digests
          */
         class DigestsView {
+            constructor() { this.unsubscribe = null; }
             render() {
                 return `
                     <div class="max-w-4xl mx-auto h-full flex flex-col">
@@ -367,8 +424,7 @@
             }
 
             init() {
-                const q = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'digests');
-                onSnapshot(q, (snapshot) => {
+                this.unsubscribe = AppDB.subscribe('digests', (snapshot) => {
                     const list = document.getElementById('digest-list');
                     if (!list) return;
                     list.innerHTML = '';
@@ -396,7 +452,6 @@
 
         /**
          * MOCK REVIEW VIEW
-         * PDF Upload, Parsing, and Flashcard/Essay Generation
          */
         class ReviewView {
             constructor() {
@@ -408,7 +463,6 @@
                 return `
                     <div class="max-w-5xl mx-auto h-full flex flex-col">
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-                            <!-- Left: Upload & Controls -->
                             <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
                                 <h3 class="font-bold text-lg text-slate-800 mb-4">Material Upload</h3>
                                 
@@ -433,7 +487,6 @@
                                 </button>
                             </div>
 
-                            <!-- Right: Output Area -->
                             <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
                                 <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
                                     <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
@@ -445,28 +498,23 @@
                     </div>
                 `;
             }
-
-            // Logic handled in appHandlers
         }
 
         // --- MAIN APP LOGIC ---
 
-        // Initialize Views
         const views = {
             dashboard: new DashboardView(),
             subjects: new SubjectsView(),
             digests: new DigestsView(),
             review: new ReviewView(),
-            codals: { render: () => window.open('https://ecodal.plus', '_blank') || `<div class="text-center mt-20">Opening eCodal+ ...</div>` }, // Simple link behavior
-            cons_subject: new SubjectsView() // Reusing subject view for consolidated for this demo
+            codals: { render: () => window.open('https://www.ecodalplus.com/ecodals', '_blank') || `<div class="text-center mt-20">Opening eCodal+ ...</div>` }, 
+            cons_subject: new SubjectsView()
         };
 
-        // DOM Elements
         const sidebarNav = document.querySelector('nav');
         const contentArea = document.getElementById('content-area');
         const pageTitle = document.getElementById('page-title');
 
-        // Navigation Config
         const navItems = [
             { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' },
             { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
@@ -487,77 +535,78 @@
             `).join('');
         }
 
-        // Global Handlers
         window.appHandlers = {
             navigate: (viewId) => {
                 if (viewId === 'codals') {
-                    window.open('https://ecodal.plus', '_blank');
+                    window.open('https://www.ecodalplus.com/ecodals', '_blank');
                     return;
                 }
+                
+                // Cleanup previous view if needed
+                if(views[currentView] && views[currentView].unsubscribe) {
+                    views[currentView].unsubscribe();
+                }
+
                 currentView = viewId;
                 renderSidebar();
                 
-                // Update Header
                 const item = navItems.find(i => i.id === viewId);
                 pageTitle.innerText = item ? item.label : 'App';
                 
-                // Render Content
                 if (views[viewId]) {
                     contentArea.innerHTML = views[viewId].render();
                     if (views[viewId].init) views[viewId].init();
                 }
             },
 
-            // --- DASHBOARD ACTIONS ---
             addReminder: async () => {
                 const title = prompt("Reminder Title:");
                 if (!title) return;
                 const type = confirm("Is this a Quiz? (Cancel for Assignment/Other)") ? "Quiz" : "Assignment";
                 
-                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'reminders'), {
+                await AppDB.add('reminders', {
                     title,
                     type,
                     date: new Date().toISOString(),
-                    created: serverTimestamp()
+                    created: AppDB.isLocal ? new Date().toISOString() : serverTimestamp()
                 });
             },
             deleteReminder: async (id) => {
                 if(confirm("Complete this task?")) {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'reminders', id));
+                    await AppDB.delete('reminders', id);
                 }
             },
 
-            // --- SUBJECT ACTIONS ---
             addSubject: async () => {
                 const name = prompt("Subject Name (e.g., Crim 1):");
                 if (!name) return;
                 const year = prompt("Year Level (e.g., 1L):") || "1L";
                 const desc = prompt("Short Note/Description:");
 
-                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects'), {
-                    name, year, description: desc, created: serverTimestamp()
+                await AppDB.add('subjects', {
+                    name, year, description: desc, 
+                    created: AppDB.isLocal ? new Date().toISOString() : serverTimestamp()
                 });
             },
             deleteSubject: async (id) => {
                 if(confirm("Remove this subject?")) {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects', id));
+                    await AppDB.delete('subjects', id);
                 }
             },
 
-            // --- DIGEST ACTIONS ---
             addDigest: async () => {
                 const title = prompt("Case Title:");
                 if(!title) return;
                 const subject = prompt("Subject:");
                 const ruling = prompt("Ruling Summary:");
 
-                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'digests'), {
-                    title, subject, ruling, created: serverTimestamp()
+                await AppDB.add('digests', {
+                    title, subject, ruling, 
+                    created: AppDB.isLocal ? new Date().toISOString() : serverTimestamp()
                 });
             },
-            deleteDigest: async (id) => await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'digests', id)),
+            deleteDigest: async (id) => await AppDB.delete('digests', id),
 
-            // --- MOCK REVIEW LOGIC (COMPLEX) ---
             reviewMode: 'recit',
             pdfText: '',
 
@@ -580,7 +629,6 @@
                     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     
                     let fullText = "";
-                    // Limit to first 10 pages for performance in demo
                     const maxPages = Math.min(pdf.numPages, 10);
                     
                     for (let i = 1; i <= maxPages; i++) {
@@ -607,22 +655,17 @@
                 
                 output.innerHTML = `<div class="flex justify-center p-10"><div class="loader"></div></div>`;
 
-                // Simulate AI Generation delay
                 setTimeout(() => {
                     output.innerHTML = '';
                     
-                    // Simple NLP Simulation logic
-                    // 1. Split sentences
                     const sentences = text.match(/[^\.!\?]+[\.!\?]+/g) || [];
                     const meaningfulSentences = sentences.filter(s => s.length > 50 && (s.includes('court') || s.includes('law') || s.includes('act') || s.includes('is') || s.includes('shall')));
 
                     if (mode === 'recit') {
-                        // RECIT: FLASHCARDS
-                        // Heuristic: Find sentences with definitions ("is defined as", "refers to")
                         const cards = [];
                         meaningfulSentences.forEach((s, idx) => {
                             if (cards.length >= 10) return;
-                            if (idx % 3 === 0) { // randomness
+                            if (idx % 3 === 0) { 
                                 cards.push({
                                     front: `Based on the text, discuss the concept mentioned in this context: "...${s.substring(0, 40)}..."`,
                                     back: s
@@ -630,7 +673,6 @@
                             }
                         });
                         
-                        // Fallback if no cards
                         if(cards.length === 0) cards.push({front: "No clear definitions found.", back: "Try a different PDF."});
 
                         output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Flashcards (${cards.length})</h3>`;
@@ -660,8 +702,6 @@
                         output.appendChild(grid);
 
                     } else {
-                        // EXAM: ESSAY QUESTIONS
-                        // Heuristic: Extract capitalized keywords and create standard law questions
                         const words = text.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g) || ["The Doctrine"];
                         const uniqueTerms = [...new Set(words)].slice(0, 5);
                         
@@ -694,12 +734,17 @@
             }
         };
 
-        // --- AUTHENTICATION & STARTUP ---
         const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
+            try {
                 await signInAnonymously(auth);
+            } catch (e) {
+                console.warn("Firebase Auth failed. Switching to Local Storage Mode.", e);
+                // Fallback Logic
+                AppDB.isLocal = true;
+                currentUser = { uid: 'local-guest' };
+                document.getElementById('local-mode-indicator').classList.remove('hidden');
+                // Allow the app to start despite auth error
+                window.appHandlers.navigate('dashboard');
             }
         };
 
@@ -708,9 +753,13 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = user;
-                document.getElementById('user-display').innerText = "Law Student"; // Could be user.uid
+                document.getElementById('user-display').innerText = "Law Student";
+                // Hide local mode indicator if we successfully logged in
+                document.getElementById('local-mode-indicator').classList.add('hidden');
+                AppDB.isLocal = false; // Ensure we try Firebase first next time
                 window.appHandlers.navigate('dashboard');
-            } else {
+            } else if (!AppDB.isLocal) {
+                // Only show loading if we aren't already in local fallback mode
                 contentArea.innerHTML = `<div class="flex items-center justify-center h-full">Signing in...</div>`;
             }
         });
