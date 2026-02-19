@@ -102,12 +102,11 @@
         </div>
     </main>
 
-    <script type="module">
+   <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
-        // IMPORT GOOGLE AUTH PROVIDER
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURATION ---
         const firebaseConfig = {
@@ -126,13 +125,13 @@
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app); 
         const auth = getAuth(app);
-        const provider = new GoogleAuthProvider(); // SETUP GOOGLE AUTH
+        const provider = new GoogleAuthProvider();
         const db = getFirestore(app);
         
         let currentUser = null;
         let currentView = 'dashboard';
 
-        // --- DATABASE ADAPTER (Strictly Cloud-Only Now) ---
+        // --- DATABASE ADAPTER (Cloud-Only) ---
         const AppDB = {
             subscribe: (collectionName, callback) => {
                 if (!currentUser) return () => {};
@@ -155,7 +154,10 @@
         const verses = [
             { text: "Learn to do right; seek justice. Defend the oppressed. Take up the cause of the fatherless; plead the case of the widow.", ref: "Isaiah 1:17" },
             { text: "But let justice roll on like a river, righteousness like a never-failing stream!", ref: "Amos 5:24" },
-            { text: "Speak up for those who cannot speak for themselves, for the rights of all who are destitute.", ref: "Proverbs 31:8" }
+            { text: "Speak up for those who cannot speak for themselves, for the rights of all who are destitute.", ref: "Proverbs 31:8" },
+            { text: "He has shown you, O mortal, what is good. And what does the Lord require of you? To act justly and to love mercy and to walk humbly with your God.", ref: "Micah 6:8" },
+            { text: "Blessed are those who observe justice, who do righteousness at all times!", ref: "Psalm 106:3" },
+            { text: "For the Lord is a God of justice; blessed are all those who wait for him.", ref: "Isaiah 30:18" }
         ];
 
         const Utils = {
@@ -381,11 +383,99 @@
             }
         }
 
+        class CaseDigesterView {
+            constructor() { this.digestedData = null; }
+            render() {
+                return `
+                    <div class="max-w-4xl mx-auto h-full flex flex-col">
+                        <h3 class="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
+                            <i class="fas fa-magic text-amber-500"></i> AI Case Digester
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
+                            <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter</label>
+                                <input type="text" id="digest-subject" placeholder="e.g. Criminal Law" class="w-full p-2 border border-slate-200 rounded text-sm mb-4">
+                                
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Case Upload</label>
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative mb-4">
+                                    <input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)">
+                                    <i class="fas fa-file-pdf text-3xl text-red-400 mb-2"></i>
+                                    <p class="text-xs text-slate-500">Upload Full Text PDF</p>
+                                </div>
+                                <div id="digest-filename" class="text-xs text-blue-600 mb-4 truncate hidden"></div>
+                                
+                                <button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-700 transition disabled:opacity-50" disabled>
+                                    <i class="fas fa-robot mr-1"></i> Digest Case
+                                </button>
+                            </div>
+
+                            <div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area">
+                                <div class="h-full flex flex-col items-center justify-center text-slate-400 text-center">
+                                    <i class="fas fa-file-invoice text-4xl mb-3 opacity-30"></i>
+                                    <p class="text-sm">Upload a case file to extract the<br>Facts, Issue, and Ruling.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        class ReviewView {
+            constructor() {
+                this.generatedContent = null;
+                this.isProcessing = false;
+            }
+            render() {
+                return `
+                    <div class="max-w-5xl mx-auto h-full flex flex-col">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+                                <h3 class="font-bold text-lg text-slate-800 mb-4">Material Upload</h3>
+                                
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
+                                    <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
+                                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-3"></i>
+                                    <p class="text-sm font-medium text-slate-600">Click to upload PDF</p>
+                                    <p class="text-xs text-slate-400 mt-1">Lecture notes, reviewers, or codals</p>
+                                </div>
+                                <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
+
+                                <div class="mt-6 space-y-3">
+                                    <label class="block text-sm font-medium text-slate-700">Review Mode</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 bg-slate-800 text-white transition">Recit (Flashcards)</button>
+                                        <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
+                                    </div>
+                                </div>
+
+                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg font-medium shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    Generate Review
+                                </button>
+                            </div>
+
+                            <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
+                                    <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
+                                    <h4 class="text-lg font-semibold">AI Mock Review</h4>
+                                    <p class="text-sm max-w-xs mt-2">Upload a PDF to generate practice questions or flashcards based on your material.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
         const views = {
             dashboard: new DashboardView(),
             subjects: new SubjectsView(),
             digests: new DigestsView(),
-            codals: { render: () => { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return `<div class="text-center mt-20">Opening eCodal+ ...</div>`; } }
+            case_digester: new CaseDigesterView(), 
+            review: new ReviewView(),
+            codals: { render: () => { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return `<div class="text-center mt-20">Opening eCodal+ ...</div>`; } },
+            cons_subject: new SubjectsView()
         };
 
         const sidebarNav = document.querySelector('nav');
@@ -396,7 +486,10 @@
             { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' },
             { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' },
-            { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' }
+            { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' },
+            { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }, 
+            { id: 'cons_subject', label: 'Cons. Subjects', icon: 'fa-layer-group' },
+            { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }
         ];
 
         function renderSidebar() {
@@ -411,7 +504,7 @@
         }
 
         window.appHandlers = {
-            // AUTHENTICATION METHODS
+            // --- AUTHENTICATION METHODS ---
             login: async () => {
                 try {
                     await signInWithPopup(auth, provider);
@@ -428,6 +521,7 @@
                 }
             },
 
+            // --- NAVIGATION ---
             navigate: (viewId) => {
                 if (viewId === 'codals') {
                     window.open('https://www.ecodalplus.com/ecodals', '_blank');
@@ -450,6 +544,7 @@
                 }
             },
 
+            // --- DATABASE ACTIONS ---
             addReminder: async () => {
                 const title = prompt("Reminder Title:");
                 if (!title) return;
@@ -491,7 +586,229 @@
                     created: serverTimestamp()
                 });
             },
-            deleteDigest: async (id) => await AppDB.delete('digests', id)
+            deleteDigest: async (id) => await AppDB.delete('digests', id),
+
+            // --- CASE DIGESTER LOGIC ---
+            digestText: '',
+            handleDigestUpload: async (input) => {
+                const file = input.files[0];
+                if (!file) return;
+                
+                const display = document.getElementById('digest-filename');
+                const btn = document.getElementById('btn-process-digest');
+                display.innerText = file.name;
+                display.classList.remove('hidden');
+                btn.innerText = "Reading PDF...";
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    
+                    let fullText = "";
+                    const maxPages = Math.min(pdf.numPages, 10);
+                    for (let i = 1; i <= maxPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + "\n";
+                    }
+                    window.appHandlers.digestText = fullText;
+                    btn.disabled = false;
+                    btn.innerText = "Digest Case";
+                } catch (e) {
+                    console.error(e);
+                    alert("Failed to read PDF.");
+                    btn.innerText = "Error";
+                }
+            },
+            processDigest: () => {
+                const text = window.appHandlers.digestText;
+                const area = document.getElementById('digest-results-area');
+                const subject = document.getElementById('digest-subject').value || "General";
+                
+                area.innerHTML = `<div class="flex justify-center h-full items-center"><div class="loader"></div></div>`;
+                
+                setTimeout(() => {
+                    let facts = "Unable to automatically extract facts. Please verify the document structure.";
+                    let issue = "Unable to determine the main issue.";
+                    let ruling = "Ruling could not be isolated.";
+                    
+                    const issueIdx = text.search(/Whether|Issue|WHETHER|ISSUE/);
+                    const rulingIdx = text.search(/Held|Ruling|HELD|RULING|WHEREFORE/);
+                    
+                    if (issueIdx > -1) {
+                        facts = text.substring(0, issueIdx).substring(0, 500) + "..."; 
+                        if (rulingIdx > -1) {
+                            issue = text.substring(issueIdx, rulingIdx).substring(0, 300) + "...";
+                            ruling = text.substring(rulingIdx).substring(0, 500) + "...";
+                        } else {
+                            issue = text.substring(issueIdx).substring(0, 300) + "...";
+                        }
+                    } else {
+                        const chunks = text.match(/.{1,500}/g) || [];
+                        facts = chunks[0] || "";
+                        issue = chunks[1] || "";
+                        ruling = chunks[2] || "";
+                    }
+
+                    window.pendingDigest = { title: "New Case Digest", subject, ruling: ruling.substring(0,100) + "..." };
+                    
+                    area.innerHTML = `
+                        <div class="space-y-4">
+                            <div class="bg-white p-4 rounded border-l-4 border-blue-500 shadow-sm">
+                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Facts of the Case</h4>
+                                <p class="text-sm text-slate-600 leading-relaxed">${facts}</p>
+                            </div>
+                            <div class="bg-white p-4 rounded border-l-4 border-amber-500 shadow-sm">
+                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Issue</h4>
+                                <p class="text-sm text-slate-600 leading-relaxed font-semibold">${issue}</p>
+                            </div>
+                            <div class="bg-white p-4 rounded border-l-4 border-green-500 shadow-sm">
+                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Ruling</h4>
+                                <p class="text-sm text-slate-600 leading-relaxed">${ruling}</p>
+                            </div>
+                            <button onclick="window.appHandlers.saveDigestedCase()" class="w-full py-2 bg-slate-800 text-white rounded text-sm hover:bg-slate-700 transition">
+                                <i class="fas fa-save mr-2"></i> Save to Digests
+                            </button>
+                        </div>
+                    `;
+                }, 1500);
+            },
+            saveDigestedCase: async () => {
+                if (window.pendingDigest) {
+                    const title = prompt("Enter Case Title:", "People vs. Example");
+                    if (title) {
+                        window.pendingDigest.title = title;
+                        await AppDB.add('digests', { ...window.pendingDigest, created: serverTimestamp() });
+                        alert("Case saved to 'Cons. Digests'!");
+                        window.appHandlers.navigate('digests');
+                    }
+                }
+            },
+
+            // --- MOCK REVIEW LOGIC ---
+            reviewMode: 'recit',
+            pdfText: '',
+            setMode: (mode) => {
+                window.appHandlers.reviewMode = mode;
+                document.getElementById('btn-recit').className = mode === 'recit' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
+                document.getElementById('btn-exam').className = mode === 'exam' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
+            },
+            handleFileUpload: async (input) => {
+                const file = input.files[0];
+                if (!file) return;
+
+                document.getElementById('file-name-display').innerText = file.name;
+                document.getElementById('file-name-display').classList.remove('hidden');
+                document.getElementById('btn-generate').innerText = "Processing PDF...";
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    
+                    let fullText = "";
+                    const maxPages = Math.min(pdf.numPages, 10);
+                    
+                    for (let i = 1; i <= maxPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + "\n";
+                    }
+
+                    window.appHandlers.pdfText = fullText;
+                    document.getElementById('btn-generate').disabled = false;
+                    document.getElementById('btn-generate').innerText = "Generate Review";
+                } catch (e) {
+                    console.error(e);
+                    alert("Error reading PDF. Please try a text-heavy PDF.");
+                    document.getElementById('btn-generate').innerText = "Error";
+                }
+            },
+            generateReview: () => {
+                const text = window.appHandlers.pdfText;
+                const mode = window.appHandlers.reviewMode;
+                const output = document.getElementById('review-output');
+                
+                output.innerHTML = `<div class="flex justify-center p-10"><div class="loader"></div></div>`;
+
+                setTimeout(() => {
+                    output.innerHTML = '';
+                    
+                    const sentences = text.match(/[^\.!\?]+[\.!\?]+/g) || [];
+                    const meaningfulSentences = sentences.filter(s => s.length > 50 && (s.includes('court') || s.includes('law') || s.includes('act') || s.includes('is') || s.includes('shall')));
+
+                    if (mode === 'recit') {
+                        const cards = [];
+                        meaningfulSentences.forEach((s, idx) => {
+                            if (cards.length >= 10) return;
+                            if (idx % 3 === 0) { 
+                                cards.push({
+                                    front: `Based on the text, discuss the concept mentioned in this context: "...${s.substring(0, 40)}..."`,
+                                    back: s
+                                });
+                            }
+                        });
+                        
+                        if(cards.length === 0) cards.push({front: "No clear definitions found.", back: "Try a different PDF."});
+
+                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Flashcards (${cards.length})</h3>`;
+                        const grid = document.createElement('div');
+                        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4";
+                        
+                        cards.forEach((card, i) => {
+                            const el = document.createElement('div');
+                            el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective";
+                            el.onclick = function() {
+                                this.querySelector('.card-inner').classList.toggle('hidden');
+                                this.querySelector('.card-back').classList.toggle('hidden');
+                            };
+                            el.innerHTML = `
+                                <div class="card-inner">
+                                    <span class="text-xs text-blue-600 font-bold uppercase mb-2 block">Card ${i+1}</span>
+                                    <p class="serif-text font-medium text-slate-800">${card.front}</p>
+                                    <p class="text-xs text-slate-400 mt-4 text-center">(Click to reveal)</p>
+                                </div>
+                                <div class="card-back hidden animate-fade-in">
+                                    <span class="text-xs text-green-600 font-bold uppercase mb-2 block">Answer</span>
+                                    <p class="text-sm text-slate-700 leading-relaxed">${card.back}</p>
+                                </div>
+                            `;
+                            grid.appendChild(el);
+                        });
+                        output.appendChild(grid);
+
+                    } else {
+                        const words = text.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g) || ["The Doctrine"];
+                        const uniqueTerms = [...new Set(words)].slice(0, 5);
+                        
+                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Bar Exam Simulation</h3>`;
+                        const paper = document.createElement('div');
+                        paper.className = "bg-white p-8 rounded shadow-sm border border-slate-300 min-h-[500px] serif-text";
+                        
+                        let html = `<div class="text-center border-b-2 border-black pb-4 mb-6">
+                            <h2 class="text-2xl font-bold uppercase">Mock Bar Examination</h2>
+                            <p class="italic">Subject: Review of Uploaded Material</p>
+                        </div>`;
+
+                        uniqueTerms.forEach((term, i) => {
+                            html += `
+                                <div class="mb-8">
+                                    <p class="font-bold mb-2">Question ${i+1}</p>
+                                    <p class="mb-4 leading-loose text-justify">
+                                        Analyze the legal implications of <strong>${term}</strong> as presented in the materials. 
+                                        Discuss its application in contemporary jurisprudence and distinguish it from related concepts. 
+                                        Cite specific provisions or doctrines where applicable.
+                                    </p>
+                                    <textarea class="w-full p-3 border border-slate-200 rounded bg-slate-50 font-sans text-sm" rows="4" placeholder="Type your answer here..."></textarea>
+                                </div>
+                            `;
+                        });
+                        paper.innerHTML = html;
+                        output.appendChild(paper);
+                    }
+                }, 1500);
+            }
         };
 
         // --- AUTHENTICATION LISTENER ---
@@ -499,22 +816,17 @@
             const loginScreen = document.getElementById('login-screen');
             if (user) {
                 currentUser = user;
-                // Set the user's name from their Google profile
                 document.getElementById('user-display').innerText = user.displayName || "Counsel";
                 
-                // Hide login screen smoothly
                 loginScreen.classList.add('opacity-0', 'pointer-events-none');
                 setTimeout(() => loginScreen.classList.add('hidden'), 300);
                 
-                // Load Dashboard
                 window.appHandlers.navigate('dashboard');
             } else {
                 currentUser = null;
-                // Cleanup current view subscriptions if logging out
                 if(views[currentView] && views[currentView].unsubscribe) {
                     views[currentView].unsubscribe();
                 }
-                // Show login screen
                 loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
             }
         });
