@@ -5,19 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lex: Law School Companion</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- PDF.js for parsing uploaded files -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
 
-    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Google Fonts: Merriweather for reading, Inter for UI -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
 
     <style>
@@ -43,7 +39,7 @@
             border-top: 3px solid #1e3a8a;
             width: 24px;
             height: 24px;
-            -webkit-animation: spin 1s linear infinite; /* Safari */
+            -webkit-animation: spin 1s linear infinite;
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -51,7 +47,15 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex overflow-hidden">
 
-    <!-- Sidebar Navigation -->
+    <div id="login-screen" class="fixed inset-0 bg-slate-900 z-[100] flex flex-col items-center justify-center text-white transition-opacity duration-300">
+        <div class="w-16 h-16 bg-amber-600 rounded-2xl flex items-center justify-center text-3xl font-bold font-serif mb-6 shadow-lg">L</div>
+        <h1 class="text-3xl font-bold mb-2 tracking-wide">LEX COMPANION</h1>
+        <p class="text-slate-400 mb-8">Your 2L Journey, Synced Anywhere.</p>
+        <button onclick="window.appHandlers.login()" class="bg-white text-slate-900 px-6 py-3 rounded-lg font-bold flex items-center gap-3 hover:bg-slate-100 transition shadow-xl">
+            <i class="fab fa-google text-red-500"></i> Sign in with Google
+        </button>
+    </div>
+
     <aside class="w-64 bg-slate-900 text-white flex flex-col shadow-xl flex-shrink-0 transition-all duration-300" id="sidebar">
         <div class="p-6 border-b border-slate-800 flex items-center gap-3">
             <div class="w-10 h-10 bg-amber-600 rounded-lg flex items-center justify-center text-xl font-bold font-serif">L</div>
@@ -62,34 +66,27 @@
         </div>
 
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3">
-            <!-- Navigation Items will be injected here by JS -->
-        </nav>
+            </nav>
 
         <div class="p-4 border-t border-slate-800 space-y-3">
-            <!-- Updated Local Mode Indicator with Help Action -->
-            <div id="local-mode-indicator" onclick="window.appHandlers.showAuthHelp()" class="hidden cursor-pointer text-xs bg-red-900/50 text-red-200 p-3 rounded border border-red-700/50 hover:bg-red-900/70 transition" title="Click for instructions to enable cloud sync">
-                <div class="flex items-center justify-between font-bold mb-1">
-                    <span><i class="fas fa-wifi-slash mr-1"></i> Not Syncing</span>
-                    <i class="fas fa-exclamation-circle text-red-400"></i>
+            <div class="flex items-center justify-between px-3 py-2 rounded bg-slate-800">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center">
+                        <i class="fas fa-user text-xs"></i>
+                    </div>
+                    <div class="overflow-hidden">
+                        <p class="text-sm font-medium truncate" id="user-display">Student</p>
+                        <p class="text-[10px] text-green-400"><i class="fas fa-cloud text-[10px]"></i> Cloud Sync Active</p>
+                    </div>
                 </div>
-                <div class="text-[10px] text-red-300/80 leading-tight">Data stays on this device only. Click to fix.</div>
-            </div>
-
-            <div class="flex items-center gap-3 px-3 py-2 rounded bg-slate-800">
-                <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center">
-                    <i class="fas fa-user text-xs"></i>
-                </div>
-                <div class="overflow-hidden">
-                    <p class="text-sm font-medium truncate" id="user-display">Student</p>
-                    <p class="text-xs text-green-400">Online</p>
-                </div>
+                <button onclick="window.appHandlers.logout()" class="text-slate-400 hover:text-red-400 transition" title="Log Out">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
             </div>
         </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="flex-1 flex flex-col min-w-0 bg-slate-50 relative">
-        <!-- Header -->
         <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 flex-shrink-0">
             <h2 id="page-title" class="text-2xl font-bold text-slate-800 serif-text">Dashboard</h2>
             <div class="flex items-center gap-4">
@@ -98,48 +95,19 @@
             </div>
         </header>
 
-        <!-- Dynamic Content Container -->
         <div id="content-area" class="flex-1 overflow-y-auto p-8 relative">
-            <!-- Views are rendered here -->
             <div class="flex items-center justify-center h-full">
                 <div class="loader"></div>
             </div>
         </div>
     </main>
-    
-    <!-- Help Modal Overlay -->
-    <div id="help-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 animate-fade-in">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-slate-800"><i class="fas fa-cloud text-blue-500 mr-2"></i>Enable Cloud Sync</h3>
-                <button onclick="document.getElementById('help-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
-            </div>
-            <div class="space-y-4 text-sm text-slate-600">
-                <p>Your devices are not syncing because the Cloud Database permission is currently disabled. Follow these steps to fix it:</p>
-                <ol class="list-decimal pl-5 space-y-2 marker:text-blue-600 marker:font-bold">
-                    <li>Go to your <a href="https://console.firebase.google.com/" target="_blank" class="text-blue-600 font-bold hover:underline">Firebase Console <i class="fas fa-external-link-alt text-xs"></i></a>.</li>
-                    <li>Click on your project <strong>(abogado-ea708)</strong>.</li>
-                    <li>In the left menu, click <strong>Build</strong> > <strong>Authentication</strong>.</li>
-                    <li>Click the <strong>Sign-in method</strong> tab.</li>
-                    <li>Click on <strong>Anonymous</strong>, switch it to <strong>Enable</strong>, and click <strong>Save</strong>.</li>
-                    <li>Come back here and <button onclick="location.reload()" class="text-blue-600 underline font-bold">Refresh this page</button>.</li>
-                </ol>
-                <div class="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800 mt-4">
-                    <strong>Note:</strong> Once fixed, any data currently on this PC will remain here, but new data will sync to the cloud. You may need to re-enter local data once cloud sync is active.
-                </div>
-            </div>
-            <div class="mt-6 text-right">
-                <button onclick="document.getElementById('help-modal').classList.add('hidden')" class="bg-slate-800 text-white px-4 py-2 rounded hover:bg-slate-700 transition">Got it</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, doc, updateDoc, deleteDoc, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // IMPORT GOOGLE AUTH PROVIDER
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURATION ---
         const firebaseConfig = {
@@ -158,125 +126,53 @@
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app); 
         const auth = getAuth(app);
+        const provider = new GoogleAuthProvider(); // SETUP GOOGLE AUTH
         const db = getFirestore(app);
         
         let currentUser = null;
         let currentView = 'dashboard';
 
-        // --- DATABASE ADAPTER (Switches between Firebase and LocalStorage) ---
+        // --- DATABASE ADAPTER (Strictly Cloud-Only Now) ---
         const AppDB = {
-            isLocal: false,
-
             subscribe: (collectionName, callback) => {
-                if (AppDB.isLocal) {
-                    // Local Storage polling implementation
-                    const fetchData = () => {
-                        const key = `lex_${currentUser.uid}_${collectionName}`;
-                        const data = JSON.parse(localStorage.getItem(key) || '[]');
-                        // Mimic Firestore snapshot
-                        callback({
-                            empty: data.length === 0,
-                            forEach: (fn) => data.forEach(item => fn({ id: item.id, data: () => item })),
-                            docs: data.map(item => ({ id: item.id, data: () => item }))
-                        });
-                    };
-                    fetchData(); // Initial call
-                    // Poll for changes every 2 seconds (simple reactivity for local mode)
-                    const interval = setInterval(fetchData, 2000);
-                    return () => clearInterval(interval); // Return unsubscribe function
-                } else {
-                    // Firebase implementation
-                    const q = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName);
-                    return onSnapshot(q, callback, (error) => {
-                        // Suppress permission errors in console during mode switch
-                        if (error.code !== 'permission-denied') {
-                             console.error("Firestore Error:", error);
-                        }
-                        // Fallback to empty state if permission denied
-                        callback({ empty: true, forEach: () => {} }); 
-                    });
-                }
+                if (!currentUser) return () => {};
+                const q = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName);
+                return onSnapshot(q, callback, (error) => {
+                    console.error("Firestore Error:", error);
+                    callback({ empty: true, forEach: () => {} }); 
+                });
             },
-
             add: async (collectionName, data) => {
-                if (AppDB.isLocal) {
-                    const key = `lex_${currentUser.uid}_${collectionName}`;
-                    const current = JSON.parse(localStorage.getItem(key) || '[]');
-                    const newItem = { ...data, id: 'local_' + Date.now(), created: new Date().toISOString() };
-                    current.push(newItem);
-                    localStorage.setItem(key, JSON.stringify(current));
-                    return newItem;
-                } else {
-                    return addDoc(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName), data);
-                }
+                if (!currentUser) throw new Error("User not authenticated");
+                return addDoc(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName), data);
             },
-
             delete: async (collectionName, id) => {
-                if (AppDB.isLocal) {
-                    const key = `lex_${currentUser.uid}_${collectionName}`;
-                    const current = JSON.parse(localStorage.getItem(key) || '[]');
-                    const updated = current.filter(item => item.id !== id);
-                    localStorage.setItem(key, JSON.stringify(updated));
-                } else {
-                    return deleteDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id));
-                }
+                if (!currentUser) throw new Error("User not authenticated");
+                return deleteDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id));
             }
         };
 
-        // --- BIBLE VERSES DATABASE ---
         const verses = [
             { text: "Learn to do right; seek justice. Defend the oppressed. Take up the cause of the fatherless; plead the case of the widow.", ref: "Isaiah 1:17" },
             { text: "But let justice roll on like a river, righteousness like a never-failing stream!", ref: "Amos 5:24" },
-            { text: "Speak up for those who cannot speak for themselves, for the rights of all who are destitute.", ref: "Proverbs 31:8" },
-            { text: "He has shown you, O mortal, what is good. And what does the Lord require of you? To act justly and to love mercy and to walk humbly with your God.", ref: "Micah 6:8" },
-            { text: "Blessed are those who observe justice, who do righteousness at all times!", ref: "Psalm 106:3" },
-            { text: "For the Lord is a God of justice; blessed are all those who wait for him.", ref: "Isaiah 30:18" }
+            { text: "Speak up for those who cannot speak for themselves, for the rights of all who are destitute.", ref: "Proverbs 31:8" }
         ];
 
-        // --- UTILITIES ---
         const Utils = {
             formatDate: (date) => new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             getDailyVerse: () => {
                 const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
                 return verses[dayOfYear % verses.length];
-            },
-            showToast: (msg) => {
-                console.log("Toast:", msg);
             }
         };
 
         // --- VIEW CONTROLLERS ---
-
-        /**
-         * DASHBOARD VIEW
-         */
         class DashboardView {
-            constructor() {
-                this.unsubscribe = null;
-            }
-
+            constructor() { this.unsubscribe = null; }
             render() {
                 const verse = Utils.getDailyVerse();
-                
-                // --- Warning Banner for Local Mode ---
-                const offlineWarning = AppDB.isLocal ? `
-                    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
-                        <div class="flex items-start gap-3">
-                            <i class="fas fa-wifi-slash text-xl mt-1"></i>
-                            <div>
-                                <p class="font-bold">Sync is Disabled (Offline Mode)</p>
-                                <p class="text-sm text-red-600">Data you save here stays on this PC and <strong>will not appear</strong> on your iPad.</p>
-                            </div>
-                        </div>
-                        <button onclick="window.appHandlers.showAuthHelp()" class="whitespace-nowrap bg-red-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-700 transition shadow hover:shadow-md">
-                            Fix Syncing Now
-                        </button>
-                    </div>
-                ` : '';
-
                 return `
                     <div class="max-w-6xl mx-auto">
-                        ${offlineWarning}
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div class="lg:col-span-2 space-y-6">
                                 <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg">
@@ -319,9 +215,7 @@
                                             <i class="fas fa-plus mr-1"></i> Add
                                         </button>
                                     </div>
-                                    <div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]">
-                                        <!-- Reminders injected here -->
-                                    </div>
+                                    <div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]"></div>
                                 </div>
                             </div>
                         </div>
@@ -336,9 +230,7 @@
                         const now = new Date();
                         clockEl.innerText = now.toLocaleTimeString('en-US', { hour12: true });
                         const dateEl = document.getElementById('header-date-display');
-                        if (dateEl) {
-                            dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-                        }
+                        if (dateEl) dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
                     }, 1000);
                 }
 
@@ -389,9 +281,6 @@
             }
         }
 
-        /**
-         * SUBJECTS VIEW
-         */
         class SubjectsView {
             constructor() { this.unsubscribe = null; }
             render() {
@@ -403,12 +292,7 @@
                                 <i class="fas fa-plus mr-2"></i>New Subject
                             </button>
                         </div>
-                        <div id="subjects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div class="col-span-full text-center py-12">
-                                <div class="loader mx-auto mb-4"></div>
-                                <p class="text-slate-500">Loading your curriculum...</p>
-                            </div>
-                        </div>
+                        <div id="subjects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
                     </div>
                 `;
             }
@@ -440,10 +324,6 @@
                             <span class="inline-block px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded mb-3 font-semibold tracking-wider uppercase">${data.year || 'General'}</span>
                             <h4 class="text-lg font-bold text-slate-800 mb-2 serif-text">${data.name}</h4>
                             <p class="text-sm text-slate-500 line-clamp-3 mb-4">${data.description || 'No notes added yet.'}</p>
-                            <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
-                                <span class="text-xs text-slate-400"><i class="fas fa-book mr-1"></i> Notes</span>
-                                <span class="text-blue-600 text-xs font-medium group-hover:translate-x-1 transition-transform">Open <i class="fas fa-arrow-right ml-1"></i></span>
-                            </div>
                         `;
                         grid.appendChild(card);
                     });
@@ -451,9 +331,6 @@
             }
         }
 
-        /**
-         * DIGESTS VIEW
-         */
         class DigestsView {
             constructor() { this.unsubscribe = null; }
             render() {
@@ -471,9 +348,7 @@
                                 <div class="w-1/4">Subject</div>
                                 <div class="w-1/2">Ruling Summary</div>
                             </div>
-                            <div id="digest-list" class="overflow-y-auto flex-1 p-2">
-                                <!-- List Items -->
-                            </div>
+                            <div id="digest-list" class="overflow-y-auto flex-1 p-2"></div>
                         </div>
                     </div>
                 `;
@@ -506,114 +381,11 @@
             }
         }
 
-        /**
-         * CASE DIGESTER VIEW (NEW)
-         * Automates extraction of Facts, Issue, Ruling
-         */
-        class CaseDigesterView {
-            constructor() {
-                this.digestedData = null;
-            }
-
-            render() {
-                return `
-                    <div class="max-w-4xl mx-auto h-full flex flex-col">
-                        <h3 class="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
-                            <i class="fas fa-magic text-amber-500"></i> AI Case Digester
-                        </h3>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
-                            <!-- Input Column -->
-                            <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto">
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter</label>
-                                <input type="text" id="digest-subject" placeholder="e.g. Criminal Law" class="w-full p-2 border border-slate-200 rounded text-sm mb-4">
-                                
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Case Upload</label>
-                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative mb-4">
-                                    <input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)">
-                                    <i class="fas fa-file-pdf text-3xl text-red-400 mb-2"></i>
-                                    <p class="text-xs text-slate-500">Upload Full Text PDF</p>
-                                </div>
-                                <div id="digest-filename" class="text-xs text-blue-600 mb-4 truncate hidden"></div>
-                                
-                                <button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-2 rounded text-sm font-medium hover:bg-slate-700 transition disabled:opacity-50" disabled>
-                                    <i class="fas fa-robot mr-1"></i> Digest Case
-                                </button>
-                            </div>
-
-                            <!-- Output Column -->
-                            <div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area">
-                                <div class="h-full flex flex-col items-center justify-center text-slate-400 text-center">
-                                    <i class="fas fa-file-invoice text-4xl mb-3 opacity-30"></i>
-                                    <p class="text-sm">Upload a case file to extract the<br>Facts, Issue, and Ruling.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-        }
-
-        /**
-         * MOCK REVIEW VIEW
-         */
-        class ReviewView {
-            constructor() {
-                this.generatedContent = null;
-                this.isProcessing = false;
-            }
-
-            render() {
-                return `
-                    <div class="max-w-5xl mx-auto h-full flex flex-col">
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-                                <h3 class="font-bold text-lg text-slate-800 mb-4">Material Upload</h3>
-                                
-                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
-                                    <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
-                                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-3"></i>
-                                    <p class="text-sm font-medium text-slate-600">Click to upload PDF</p>
-                                    <p class="text-xs text-slate-400 mt-1">Lecture notes, reviewers, or codals</p>
-                                </div>
-                                <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
-
-                                <div class="mt-6 space-y-3">
-                                    <label class="block text-sm font-medium text-slate-700">Review Mode</label>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 bg-slate-800 text-white transition">Recit (Flashcards)</button>
-                                        <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
-                                    </div>
-                                </div>
-
-                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg font-medium shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                    Generate Review
-                                </button>
-                            </div>
-
-                            <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
-                                <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
-                                    <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
-                                    <h4 class="text-lg font-semibold">AI Mock Review</h4>
-                                    <p class="text-sm max-w-xs mt-2">Upload a PDF to generate practice questions or flashcards based on your material.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-        }
-
-        // --- MAIN APP LOGIC ---
-
         const views = {
             dashboard: new DashboardView(),
             subjects: new SubjectsView(),
             digests: new DigestsView(),
-            case_digester: new CaseDigesterView(), // New View
-            review: new ReviewView(),
-            codals: { render: () => window.open('https://www.ecodalplus.com/ecodals', '_blank') || `<div class="text-center mt-20">Opening eCodal+ ...</div>` }, 
-            cons_subject: new SubjectsView()
+            codals: { render: () => { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return `<div class="text-center mt-20">Opening eCodal+ ...</div>`; } }
         };
 
         const sidebarNav = document.querySelector('nav');
@@ -624,10 +396,7 @@
             { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' },
             { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' },
-            { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' },
-            { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }, // New Nav Item
-            { id: 'cons_subject', label: 'Cons. Subjects', icon: 'fa-layer-group' },
-            { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }
+            { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' }
         ];
 
         function renderSidebar() {
@@ -642,13 +411,29 @@
         }
 
         window.appHandlers = {
+            // AUTHENTICATION METHODS
+            login: async () => {
+                try {
+                    await signInWithPopup(auth, provider);
+                } catch (error) {
+                    console.error("Login Error:", error);
+                    alert("Failed to login: " + error.message);
+                }
+            },
+            logout: async () => {
+                try {
+                    await signOut(auth);
+                } catch (error) {
+                    console.error("Logout Error:", error);
+                }
+            },
+
             navigate: (viewId) => {
                 if (viewId === 'codals') {
                     window.open('https://www.ecodalplus.com/ecodals', '_blank');
                     return;
                 }
                 
-                // Cleanup previous view if needed
                 if(views[currentView] && views[currentView].unsubscribe) {
                     views[currentView].unsubscribe();
                 }
@@ -665,43 +450,34 @@
                 }
             },
 
-            showAuthHelp: () => {
-                document.getElementById('help-modal').classList.remove('hidden');
-            },
-
             addReminder: async () => {
                 const title = prompt("Reminder Title:");
                 if (!title) return;
                 const type = confirm("Is this a Quiz? (Cancel for Assignment/Other)") ? "Quiz" : "Assignment";
                 
                 await AppDB.add('reminders', {
-                    title,
-                    type,
+                    title, type,
                     date: new Date().toISOString(),
-                    created: AppDB.isLocal ? new Date().toISOString() : serverTimestamp()
+                    created: serverTimestamp()
                 });
             },
             deleteReminder: async (id) => {
-                if(confirm("Complete this task?")) {
-                    await AppDB.delete('reminders', id);
-                }
+                if(confirm("Complete this task?")) await AppDB.delete('reminders', id);
             },
 
             addSubject: async () => {
-                const name = prompt("Subject Name (e.g., Crim 1):");
+                const name = prompt("Subject Name (e.g., Obicon):");
                 if (!name) return;
-                const year = prompt("Year Level (e.g., 1L):") || "1L";
+                const year = prompt("Year Level (e.g., 2L):") || "2L";
                 const desc = prompt("Short Note/Description:");
 
                 await AppDB.add('subjects', {
                     name, year, description: desc, 
-                    created: AppDB.isLocal ? new Date().toISOString() : serverTimestamp()
+                    created: serverTimestamp()
                 });
             },
             deleteSubject: async (id) => {
-                if(confirm("Remove this subject?")) {
-                    await AppDB.delete('subjects', id);
-                }
+                if(confirm("Remove this subject?")) await AppDB.delete('subjects', id);
             },
 
             addDigest: async () => {
@@ -712,278 +488,34 @@
 
                 await AppDB.add('digests', {
                     title, subject, ruling, 
-                    created: AppDB.isLocal ? new Date().toISOString() : serverTimestamp()
+                    created: serverTimestamp()
                 });
             },
-            deleteDigest: async (id) => await AppDB.delete('digests', id),
-
-            // --- CASE DIGESTER LOGIC ---
-            digestText: '',
-            
-            handleDigestUpload: async (input) => {
-                const file = input.files[0];
-                if (!file) return;
-                
-                const display = document.getElementById('digest-filename');
-                const btn = document.getElementById('btn-process-digest');
-                display.innerText = file.name;
-                display.classList.remove('hidden');
-                btn.innerText = "Reading PDF...";
-                
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    let fullText = "";
-                    const maxPages = Math.min(pdf.numPages, 10);
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + "\n";
-                    }
-                    window.appHandlers.digestText = fullText;
-                    btn.disabled = false;
-                    btn.innerText = "Digest Case";
-                } catch (e) {
-                    console.error(e);
-                    alert("Failed to read PDF.");
-                    btn.innerText = "Error";
-                }
-            },
-
-            processDigest: () => {
-                const text = window.appHandlers.digestText;
-                const area = document.getElementById('digest-results-area');
-                const subject = document.getElementById('digest-subject').value || "General";
-                
-                area.innerHTML = `<div class="flex justify-center h-full items-center"><div class="loader"></div></div>`;
-                
-                setTimeout(() => {
-                    // Heuristic AI Simulation
-                    // Facts: Usually start
-                    // Issue: Look for "Whether"
-                    // Ruling: Look for "Held" or "Ruling" or end
-                    
-                    let facts = "Unable to automatically extract facts. Please verify the document structure.";
-                    let issue = "Unable to determine the main issue.";
-                    let ruling = "Ruling could not be isolated.";
-                    
-                    const issueIdx = text.search(/Whether|Issue|WHETHER|ISSUE/);
-                    const rulingIdx = text.search(/Held|Ruling|HELD|RULING|WHEREFORE/);
-                    
-                    if (issueIdx > -1) {
-                        facts = text.substring(0, issueIdx).substring(0, 500) + "..."; // First part
-                        if (rulingIdx > -1) {
-                            issue = text.substring(issueIdx, rulingIdx).substring(0, 300) + "...";
-                            ruling = text.substring(rulingIdx).substring(0, 500) + "...";
-                        } else {
-                            issue = text.substring(issueIdx).substring(0, 300) + "...";
-                        }
-                    } else {
-                        // Fallback split
-                        const chunks = text.match(/.{1,500}/g) || [];
-                        facts = chunks[0] || "";
-                        issue = chunks[1] || "";
-                        ruling = chunks[2] || "";
-                    }
-
-                    // Store pending save data
-                    window.pendingDigest = { title: "New Case Digest", subject, ruling: ruling.substring(0,100) + "..." };
-                    
-                    area.innerHTML = `
-                        <div class="space-y-4">
-                            <div class="bg-white p-4 rounded border-l-4 border-blue-500 shadow-sm">
-                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Facts of the Case</h4>
-                                <p class="text-sm text-slate-600 leading-relaxed">${facts}</p>
-                            </div>
-                            <div class="bg-white p-4 rounded border-l-4 border-amber-500 shadow-sm">
-                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Issue</h4>
-                                <p class="text-sm text-slate-600 leading-relaxed font-semibold">${issue}</p>
-                            </div>
-                            <div class="bg-white p-4 rounded border-l-4 border-green-500 shadow-sm">
-                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Ruling</h4>
-                                <p class="text-sm text-slate-600 leading-relaxed">${ruling}</p>
-                            </div>
-                            <button onclick="window.appHandlers.saveDigestedCase()" class="w-full py-2 bg-slate-800 text-white rounded text-sm hover:bg-slate-700 transition">
-                                <i class="fas fa-save mr-2"></i> Save to Digests
-                            </button>
-                        </div>
-                    `;
-                }, 1500);
-            },
-
-            saveDigestedCase: async () => {
-                if (window.pendingDigest) {
-                    const title = prompt("Enter Case Title:", "People vs. Example");
-                    if (title) {
-                        window.pendingDigest.title = title;
-                        await AppDB.add('digests', { ...window.pendingDigest, created: AppDB.isLocal ? new Date().toISOString() : serverTimestamp() });
-                        alert("Case saved to 'Cons. Digests'!");
-                        window.appHandlers.navigate('digests');
-                    }
-                }
-            },
-
-            reviewMode: 'recit',
-            pdfText: '',
-
-            setMode: (mode) => {
-                window.appHandlers.reviewMode = mode;
-                document.getElementById('btn-recit').className = mode === 'recit' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
-                document.getElementById('btn-exam').className = mode === 'exam' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
-            },
-
-            handleFileUpload: async (input) => {
-                const file = input.files[0];
-                if (!file) return;
-
-                document.getElementById('file-name-display').innerText = file.name;
-                document.getElementById('file-name-display').classList.remove('hidden');
-                document.getElementById('btn-generate').innerText = "Processing PDF...";
-                
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    let fullText = "";
-                    const maxPages = Math.min(pdf.numPages, 10);
-                    
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + "\n";
-                    }
-
-                    window.appHandlers.pdfText = fullText;
-                    document.getElementById('btn-generate').disabled = false;
-                    document.getElementById('btn-generate').innerText = "Generate Review";
-                } catch (e) {
-                    console.error(e);
-                    alert("Error reading PDF. Please try a text-heavy PDF.");
-                    document.getElementById('btn-generate').innerText = "Error";
-                }
-            },
-
-            generateReview: () => {
-                const text = window.appHandlers.pdfText;
-                const mode = window.appHandlers.reviewMode;
-                const output = document.getElementById('review-output');
-                
-                output.innerHTML = `<div class="flex justify-center p-10"><div class="loader"></div></div>`;
-
-                setTimeout(() => {
-                    output.innerHTML = '';
-                    
-                    const sentences = text.match(/[^\.!\?]+[\.!\?]+/g) || [];
-                    const meaningfulSentences = sentences.filter(s => s.length > 50 && (s.includes('court') || s.includes('law') || s.includes('act') || s.includes('is') || s.includes('shall')));
-
-                    if (mode === 'recit') {
-                        const cards = [];
-                        meaningfulSentences.forEach((s, idx) => {
-                            if (cards.length >= 10) return;
-                            if (idx % 3 === 0) { 
-                                cards.push({
-                                    front: `Based on the text, discuss the concept mentioned in this context: "...${s.substring(0, 40)}..."`,
-                                    back: s
-                                });
-                            }
-                        });
-                        
-                        if(cards.length === 0) cards.push({front: "No clear definitions found.", back: "Try a different PDF."});
-
-                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Flashcards (${cards.length})</h3>`;
-                        const grid = document.createElement('div');
-                        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4";
-                        
-                        cards.forEach((card, i) => {
-                            const el = document.createElement('div');
-                            el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective";
-                            el.onclick = function() {
-                                this.querySelector('.card-inner').classList.toggle('hidden');
-                                this.querySelector('.card-back').classList.toggle('hidden');
-                            };
-                            el.innerHTML = `
-                                <div class="card-inner">
-                                    <span class="text-xs text-blue-600 font-bold uppercase mb-2 block">Card ${i+1}</span>
-                                    <p class="serif-text font-medium text-slate-800">${card.front}</p>
-                                    <p class="text-xs text-slate-400 mt-4 text-center">(Click to reveal)</p>
-                                </div>
-                                <div class="card-back hidden animate-fade-in">
-                                    <span class="text-xs text-green-600 font-bold uppercase mb-2 block">Answer</span>
-                                    <p class="text-sm text-slate-700 leading-relaxed">${card.back}</p>
-                                </div>
-                            `;
-                            grid.appendChild(el);
-                        });
-                        output.appendChild(grid);
-
-                    } else {
-                        const words = text.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g) || ["The Doctrine"];
-                        const uniqueTerms = [...new Set(words)].slice(0, 5);
-                        
-                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Bar Exam Simulation</h3>`;
-                        const paper = document.createElement('div');
-                        paper.className = "bg-white p-8 rounded shadow-sm border border-slate-300 min-h-[500px] serif-text";
-                        
-                        let html = `<div class="text-center border-b-2 border-black pb-4 mb-6">
-                            <h2 class="text-2xl font-bold uppercase">Mock Bar Examination</h2>
-                            <p class="italic">Subject: Review of Uploaded Material</p>
-                        </div>`;
-
-                        uniqueTerms.forEach((term, i) => {
-                            html += `
-                                <div class="mb-8">
-                                    <p class="font-bold mb-2">Question ${i+1}</p>
-                                    <p class="mb-4 leading-loose text-justify">
-                                        Analyze the legal implications of <strong>${term}</strong> as presented in the materials. 
-                                        Discuss its application in contemporary jurisprudence and distinguish it from related concepts. 
-                                        Cite specific provisions or doctrines where applicable.
-                                    </p>
-                                    <textarea class="w-full p-3 border border-slate-200 rounded bg-slate-50 font-sans text-sm" rows="4" placeholder="Type your answer here..."></textarea>
-                                </div>
-                            `;
-                        });
-                        paper.innerHTML = html;
-                        output.appendChild(paper);
-                    }
-                }, 1500);
-            }
+            deleteDigest: async (id) => await AppDB.delete('digests', id)
         };
 
-        const initAuth = async () => {
-            try {
-                await signInAnonymously(auth);
-            } catch (e) {
-                // Suppress console spam for known configuration issue
-                if (e.code !== 'auth/admin-restricted-operation') {
-                    console.warn("Auth initialization error:", e);
-                } else {
-                    console.log("Running in offline mode (Anonymous auth disabled).");
-                }
-                
-                // Fallback Logic
-                AppDB.isLocal = true;
-                currentUser = { uid: 'local-guest' };
-                document.getElementById('local-mode-indicator').classList.remove('hidden');
-                window.appHandlers.navigate('dashboard');
-            }
-        };
-
-        initAuth();
-
+        // --- AUTHENTICATION LISTENER ---
         onAuthStateChanged(auth, (user) => {
+            const loginScreen = document.getElementById('login-screen');
             if (user) {
                 currentUser = user;
-                document.getElementById('user-display').innerText = "Law Student";
-                // Hide local mode indicator if we successfully logged in
-                document.getElementById('local-mode-indicator').classList.add('hidden');
-                AppDB.isLocal = false; // Ensure we try Firebase first next time
+                // Set the user's name from their Google profile
+                document.getElementById('user-display').innerText = user.displayName || "Counsel";
+                
+                // Hide login screen smoothly
+                loginScreen.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => loginScreen.classList.add('hidden'), 300);
+                
+                // Load Dashboard
                 window.appHandlers.navigate('dashboard');
-            } else if (!AppDB.isLocal) {
-                // Only show loading if we aren't already in local fallback mode
-                contentArea.innerHTML = `<div class="flex items-center justify-center h-full">Signing in...</div>`;
+            } else {
+                currentUser = null;
+                // Cleanup current view subscriptions if logging out
+                if(views[currentView] && views[currentView].unsubscribe) {
+                    views[currentView].unsubscribe();
+                }
+                // Show login screen
+                loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
             }
         });
 
