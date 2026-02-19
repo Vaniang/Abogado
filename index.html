@@ -117,7 +117,7 @@
         </div>
     </div>
 
-   <script type="module">
+  <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -146,7 +146,7 @@
         let currentUser = null;
         let currentView = 'dashboard';
 
-        // --- DATABASE ADAPTER (Cloud-Only) ---
+        // --- DATABASE ADAPTER ---
         const AppDB = {
             subscribe: (collectionName, callback) => {
                 if (!currentUser) return () => {};
@@ -518,324 +518,7 @@
             `).join('');
         }
 
-        window.appHandlers = {
-            // --- AUTHENTICATION METHODS ---
-            login: async () => {
-                try {
-                    await signInWithPopup(auth, provider);
-                } catch (error) {
-                    console.error("Login Error:", error);
-                    alert("Failed to login: " + error.message);
-                }
-            },
-            logout: async () => {
-                try {
-                    await signOut(auth);
-                } catch (error) {
-                    console.error("Logout Error:", error);
-                }
-            },
-
-            // --- NAVIGATION ---
-            navigate: (viewId) => {
-                if (viewId === 'codals') {
-                    window.open('https://www.ecodalplus.com/ecodals', '_blank');
-                    return;
-                }
-                
-                if(views[currentView] && views[currentView].unsubscribe) {
-                    views[currentView].unsubscribe();
-                }
-
-                currentView = viewId;
-                renderSidebar();
-                
-                const item = navItems.find(i => i.id === viewId);
-                pageTitle.innerText = item ? item.label : 'App';
-                
-                if (views[viewId]) {
-                    contentArea.innerHTML = views[viewId].render();
-                    if (views[viewId].init) views[viewId].init();
-                }
-            },
-
-            // --- DATABASE ACTIONS ---
-            addReminder: async () => {
-                const title = prompt("Reminder Title:");
-                if (!title) return;
-                const type = confirm("Is this a Quiz? (Cancel for Assignment/Other)") ? "Quiz" : "Assignment";
-                
-                await AppDB.add('reminders', {
-                    title, type,
-                    date: new Date().toISOString(),
-                    created: serverTimestamp()
-                });
-            },
-            deleteReminder: async (id) => {
-                if(confirm("Complete this task?")) await AppDB.delete('reminders', id);
-            },
-
-            addSubject: async () => {
-                const name = prompt("Subject Name (e.g., Obicon):");
-                if (!name) return;
-                const year = prompt("Year Level (e.g., 2L):") || "2L";
-                const desc = prompt("Short Note/Description:");
-
-                await AppDB.add('subjects', {
-                    name, year, description: desc, 
-                    created: serverTimestamp()
-                });
-            },
-            deleteSubject: async (id) => {
-                if(confirm("Remove this subject?")) await AppDB.delete('subjects', id);
-            },
-
-            addDigest: async () => {
-                const title = prompt("Case Title:");
-                if(!title) return;
-                const subject = prompt("Subject:");
-                const ruling = prompt("Ruling Summary:");
-
-                await AppDB.add('digests', {
-                    title, subject, ruling, 
-                    created: serverTimestamp()
-                });
-            },
-            deleteDigest: async (id) => await AppDB.delete('digests', id),
-
-            // --- CASE DIGESTER LOGIC ---
-            digestText: '',
-            handleDigestUpload: async (input) => {
-                const file = input.files[0];
-                if (!file) return;
-                
-                const display = document.getElementById('digest-filename');
-                const btn = document.getElementById('btn-process-digest');
-                display.innerText = file.name;
-                display.classList.remove('hidden');
-                btn.innerText = "Reading PDF...";
-                
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    let fullText = "";
-                    const maxPages = Math.min(pdf.numPages, 10);
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + "\n";
-                    }
-                    window.appHandlers.digestText = fullText;
-                    btn.disabled = false;
-                    btn.innerText = "Digest Case";
-                } catch (e) {
-                    console.error(e);
-                    alert("Failed to read PDF.");
-                    btn.innerText = "Error";
-                }
-            },
-            processDigest: () => {
-                const text = window.appHandlers.digestText;
-                const area = document.getElementById('digest-results-area');
-                const subject = document.getElementById('digest-subject').value || "General";
-                
-                area.innerHTML = `<div class="flex justify-center h-full items-center"><div class="loader"></div></div>`;
-                
-                setTimeout(() => {
-                    let facts = "Unable to automatically extract facts. Please verify the document structure.";
-                    let issue = "Unable to determine the main issue.";
-                    let ruling = "Ruling could not be isolated.";
-                    
-                    const issueIdx = text.search(/Whether|Issue|WHETHER|ISSUE/);
-                    const rulingIdx = text.search(/Held|Ruling|HELD|RULING|WHEREFORE/);
-                    
-                    if (issueIdx > -1) {
-                        facts = text.substring(0, issueIdx).substring(0, 500) + "..."; 
-                        if (rulingIdx > -1) {
-                            issue = text.substring(issueIdx, rulingIdx).substring(0, 300) + "...";
-                            ruling = text.substring(rulingIdx).substring(0, 500) + "...";
-                        } else {
-                            issue = text.substring(issueIdx).substring(0, 300) + "...";
-                        }
-                    } else {
-                        const chunks = text.match(/.{1,500}/g) || [];
-                        facts = chunks[0] || "";
-                        issue = chunks[1] || "";
-                        ruling = chunks[2] || "";
-                    }
-
-                    window.pendingDigest = { title: "New Case Digest", subject, ruling: ruling.substring(0,100) + "..." };
-                    
-                    area.innerHTML = `
-                        <div class="space-y-4">
-                            <div class="bg-white p-4 rounded border-l-4 border-blue-500 shadow-sm">
-                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Facts of the Case</h4>
-                                <p class="text-sm text-slate-600 leading-relaxed">${facts}</p>
-                            </div>
-                            <div class="bg-white p-4 rounded border-l-4 border-amber-500 shadow-sm">
-                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Issue</h4>
-                                <p class="text-sm text-slate-600 leading-relaxed font-semibold">${issue}</p>
-                            </div>
-                            <div class="bg-white p-4 rounded border-l-4 border-green-500 shadow-sm">
-                                <h4 class="font-bold text-slate-700 mb-2 uppercase text-xs">Ruling</h4>
-                                <p class="text-sm text-slate-600 leading-relaxed">${ruling}</p>
-                            </div>
-                            <button onclick="window.appHandlers.saveDigestedCase()" class="w-full py-2 bg-slate-800 text-white rounded text-sm hover:bg-slate-700 transition">
-                                <i class="fas fa-save mr-2"></i> Save to Digests
-                            </button>
-                        </div>
-                    `;
-                }, 1500);
-            },
-            saveDigestedCase: async () => {
-                if (window.pendingDigest) {
-                    const title = prompt("Enter Case Title:", "People vs. Example");
-                    if (title) {
-                        window.pendingDigest.title = title;
-                        await AppDB.add('digests', { ...window.pendingDigest, created: serverTimestamp() });
-                        alert("Case saved to 'Cons. Digests'!");
-                        window.appHandlers.navigate('digests');
-                    }
-                }
-            },
-
-            // --- MOCK REVIEW LOGIC ---
-            reviewMode: 'recit',
-            pdfText: '',
-            setMode: (mode) => {
-                window.appHandlers.reviewMode = mode;
-                document.getElementById('btn-recit').className = mode === 'recit' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
-                document.getElementById('btn-exam').className = mode === 'exam' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
-            },
-            handleFileUpload: async (input) => {
-                const file = input.files[0];
-                if (!file) return;
-
-                document.getElementById('file-name-display').innerText = file.name;
-                document.getElementById('file-name-display').classList.remove('hidden');
-                document.getElementById('btn-generate').innerText = "Processing PDF...";
-                
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    let fullText = "";
-                    const maxPages = Math.min(pdf.numPages, 10);
-                    
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + "\n";
-                    }
-
-                    window.appHandlers.pdfText = fullText;
-                    document.getElementById('btn-generate').disabled = false;
-                    document.getElementById('btn-generate').innerText = "Generate Review";
-                } catch (e) {
-                    console.error(e);
-                    alert("Error reading PDF. Please try a text-heavy PDF.");
-                    document.getElementById('btn-generate').innerText = "Error";
-                }
-            },
-            generateReview: () => {
-                const text = window.appHandlers.pdfText;
-                const mode = window.appHandlers.reviewMode;
-                const output = document.getElementById('review-output');
-                
-                output.innerHTML = `<div class="flex justify-center p-10"><div class="loader"></div></div>`;
-
-                setTimeout(() => {
-                    output.innerHTML = '';
-                    
-                    const sentences = text.match(/[^\.!\?]+[\.!\?]+/g) || [];
-                    const meaningfulSentences = sentences.filter(s => s.length > 50 && (s.includes('court') || s.includes('law') || s.includes('act') || s.includes('is') || s.includes('shall')));
-
-                    if (mode === 'recit') {
-                        const cards = [];
-                        meaningfulSentences.forEach((s, idx) => {
-                            if (cards.length >= 10) return;
-                            if (idx % 3 === 0) { 
-                                cards.push({
-                                    front: `Based on the text, discuss the concept mentioned in this context: "...${s.substring(0, 40)}..."`,
-                                    back: s
-                                });
-                            }
-                        });
-                        
-                        if(cards.length === 0) cards.push({front: "No clear definitions found.", back: "Try a different PDF."});
-
-                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Flashcards (${cards.length})</h3>`;
-                        const grid = document.createElement('div');
-                        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4";
-                        
-                        cards.forEach((card, i) => {
-                            const el = document.createElement('div');
-                            el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective";
-                            el.onclick = function() {
-                                this.querySelector('.card-inner').classList.toggle('hidden');
-                                this.querySelector('.card-back').classList.toggle('hidden');
-                            };
-                            el.innerHTML = `
-                                <div class="card-inner">
-                                    <span class="text-xs text-blue-600 font-bold uppercase mb-2 block">Card ${i+1}</span>
-                                    <p class="serif-text font-medium text-slate-800">${card.front}</p>
-                                    <p class="text-xs text-slate-400 mt-4 text-center">(Click to reveal)</p>
-                                </div>
-                                <div class="card-back hidden animate-fade-in">
-                                    <span class="text-xs text-green-600 font-bold uppercase mb-2 block">Answer</span>
-                                    <p class="text-sm text-slate-700 leading-relaxed">${card.back}</p>
-                                </div>
-                            `;
-                            grid.appendChild(el);
-                        });
-                        output.appendChild(grid);
-
-                    } else {
-                        const words = text.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g) || ["The Doctrine"];
-                        const uniqueTerms = [...new Set(words)].slice(0, 5);
-                        
-                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2">Bar Exam Simulation</h3>`;
-                        const paper = document.createElement('div');
-                        paper.className = "bg-white p-8 rounded shadow-sm border border-slate-300 min-h-[500px] serif-text";
-                        
-                        let html = `<div class="text-center border-b-2 border-black pb-4 mb-6">
-                            <h2 class="text-2xl font-bold uppercase">Mock Bar Examination</h2>
-                            <p class="italic">Subject: Review of Uploaded Material</p>
-                        </div>`;
-
-                        uniqueTerms.forEach((term, i) => {
-                            html += `
-                                <div class="mb-8">
-                                    <p class="font-bold mb-2">Question ${i+1}</p>
-                                    <p class="mb-4 leading-loose text-justify">
-                                        Analyze the legal implications of <strong>${term}</strong> as presented in the materials. 
-                                        Discuss its application in contemporary jurisprudence and distinguish it from related concepts. 
-                                        Cite specific provisions or doctrines where applicable.
-                                    </p>
-                                    <textarea class="w-full p-3 border border-slate-200 rounded bg-slate-50 font-sans text-sm" rows="4" placeholder="Type your answer here..."></textarea>
-                                </div>
-                            `;
-                        });
-                        paper.innerHTML = html;
-                        output.appendChild(paper);
-                    }
-                }, 1500);
-            }
-        };
-
-        // --- AUTHENTICATION LISTENER ---
-        onAuthStateChanged(auth, (user) => {
-            const loginScreen = document.getElementById('login-screen');
-            if (user) {
-                currentUser = user;
-                document.getElementById('user-display').innerText = user.displayName || "Counsel";
-                
-                loginScreen.classList.add('opacity-0', 'pointer-events-none');
-                setTimeout(() => loginScreen.classList.add('hidden'), 300);
-              // --- CUSTOM MODAL CONTROLLER ---
+        // --- CUSTOM MODAL CONTROLLER ---
         const Modal = {
             show: (options) => {
                 const modal = document.getElementById('app-modal');
@@ -1252,6 +935,25 @@
                 }, 1500);
             }
         };
+
+        // --- AUTHENTICATION LISTENER ---
+        onAuthStateChanged(auth, (user) => {
+            const loginScreen = document.getElementById('login-screen');
+            if (user) {
+                currentUser = user;
+                document.getElementById('user-display').innerText = user.displayName || "Counsel";
+                
+                loginScreen.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => loginScreen.classList.add('hidden'), 300);
+                
+                window.appHandlers.navigate('dashboard');
+            } else {
+                currentUser = null;
+                if(views[currentView] && views[currentView].unsubscribe) {
+                    views[currentView].unsubscribe();
+                }
+                loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+            }
         });
 
     </script>
