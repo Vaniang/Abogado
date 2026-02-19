@@ -67,12 +67,12 @@
 
         <div class="p-4 border-t border-slate-800 space-y-3">
             <!-- Updated Local Mode Indicator with Help Action -->
-            <div id="local-mode-indicator" onclick="window.appHandlers.showAuthHelp()" class="hidden cursor-pointer text-xs bg-amber-900/50 text-amber-200 p-2 rounded border border-amber-700/50 hover:bg-amber-900/70 transition" title="Click for instructions to enable cloud sync">
-                <div class="flex items-center justify-between">
-                    <span><i class="fas fa-save mr-1"></i> Offline Mode</span>
-                    <i class="fas fa-question-circle opacity-50"></i>
+            <div id="local-mode-indicator" onclick="window.appHandlers.showAuthHelp()" class="hidden cursor-pointer text-xs bg-red-900/50 text-red-200 p-3 rounded border border-red-700/50 hover:bg-red-900/70 transition" title="Click for instructions to enable cloud sync">
+                <div class="flex items-center justify-between font-bold mb-1">
+                    <span><i class="fas fa-wifi-slash mr-1"></i> Not Syncing</span>
+                    <i class="fas fa-exclamation-circle text-red-400"></i>
                 </div>
-                <div class="text-[10px] text-amber-400/70 mt-1">Click to fix cloud sync</div>
+                <div class="text-[10px] text-red-300/80 leading-tight">Data stays on this device only. Click to fix.</div>
             </div>
 
             <div class="flex items-center gap-3 px-3 py-2 rounded bg-slate-800">
@@ -106,6 +106,33 @@
             </div>
         </div>
     </main>
+    
+    <!-- Help Modal Overlay -->
+    <div id="help-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-800"><i class="fas fa-cloud text-blue-500 mr-2"></i>Enable Cloud Sync</h3>
+                <button onclick="document.getElementById('help-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="space-y-4 text-sm text-slate-600">
+                <p>Your devices are not syncing because the Cloud Database permission is currently disabled. Follow these steps to fix it:</p>
+                <ol class="list-decimal pl-5 space-y-2 marker:text-blue-600 marker:font-bold">
+                    <li>Go to your <a href="https://console.firebase.google.com/" target="_blank" class="text-blue-600 font-bold hover:underline">Firebase Console <i class="fas fa-external-link-alt text-xs"></i></a>.</li>
+                    <li>Click on your project <strong>(abogado-ea708)</strong>.</li>
+                    <li>In the left menu, click <strong>Build</strong> > <strong>Authentication</strong>.</li>
+                    <li>Click the <strong>Sign-in method</strong> tab.</li>
+                    <li>Click on <strong>Anonymous</strong>, switch it to <strong>Enable</strong>, and click <strong>Save</strong>.</li>
+                    <li>Come back here and <button onclick="location.reload()" class="text-blue-600 underline font-bold">Refresh this page</button>.</li>
+                </ol>
+                <div class="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-800 mt-4">
+                    <strong>Note:</strong> Once fixed, any data currently on this PC will remain here, but new data will sync to the cloud. You may need to re-enter local data once cloud sync is active.
+                </div>
+            </div>
+            <div class="mt-6 text-right">
+                <button onclick="document.getElementById('help-modal').classList.add('hidden')" class="bg-slate-800 text-white px-4 py-2 rounded hover:bg-slate-700 transition">Got it</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Firebase SDKs -->
     <script type="module">
@@ -230,51 +257,71 @@
 
             render() {
                 const verse = Utils.getDailyVerse();
-                return `
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-                        <div class="lg:col-span-2 space-y-6">
-                            <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg">
-                                <h3 class="text-2xl font-bold serif-text mb-2">Welcome back, Counsel.</h3>
-                                <p class="text-slate-300 mb-6">Your journey to the Bar continues today.</p>
-                                <div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm">
-                                    <p class="serif-text italic text-lg mb-2">"${verse.text}"</p>
-                                    <p class="text-sm text-amber-400 font-bold text-right">— ${verse.ref}</p>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <h4 class="font-bold text-slate-700">Upcoming</h4>
-                                        <i class="fas fa-calendar-alt text-blue-600"></i>
-                                    </div>
-                                    <div id="dashboard-schedule-list" class="space-y-3">
-                                        <p class="text-sm text-slate-400 italic">Loading schedule...</p>
-                                    </div>
-                                </div>
-                                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <h4 class="font-bold text-slate-700">Study Streak</h4>
-                                        <i class="fas fa-fire text-amber-500"></i>
-                                    </div>
-                                    <div class="text-center py-2">
-                                        <span class="text-4xl font-bold text-slate-800">Active</span>
-                                        <p class="text-xs text-slate-500 mt-1">Keep pushing forward</p>
-                                    </div>
-                                </div>
+                
+                // --- Warning Banner for Local Mode ---
+                const offlineWarning = AppDB.isLocal ? `
+                    <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-wifi-slash text-xl mt-1"></i>
+                            <div>
+                                <p class="font-bold">Sync is Disabled (Offline Mode)</p>
+                                <p class="text-sm text-red-600">Data you save here stays on this PC and <strong>will not appear</strong> on your iPad.</p>
                             </div>
                         </div>
+                        <button onclick="window.appHandlers.showAuthHelp()" class="whitespace-nowrap bg-red-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-700 transition shadow hover:shadow-md">
+                            Fix Syncing Now
+                        </button>
+                    </div>
+                ` : '';
 
-                        <div class="lg:col-span-1">
-                            <div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col">
-                                <div class="p-5 border-b border-slate-100 flex justify-between items-center">
-                                    <h4 class="font-bold text-slate-700">Reminders</h4>
-                                    <button onclick="window.appHandlers.addReminder()" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition">
-                                        <i class="fas fa-plus mr-1"></i> Add
-                                    </button>
+                return `
+                    <div class="max-w-6xl mx-auto">
+                        ${offlineWarning}
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2 space-y-6">
+                                <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg">
+                                    <h3 class="text-2xl font-bold serif-text mb-2">Welcome back, Counsel.</h3>
+                                    <p class="text-slate-300 mb-6">Your journey to the Bar continues today.</p>
+                                    <div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm">
+                                        <p class="serif-text italic text-lg mb-2">"${verse.text}"</p>
+                                        <p class="text-sm text-amber-400 font-bold text-right">— ${verse.ref}</p>
+                                    </div>
                                 </div>
-                                <div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]">
-                                    <!-- Reminders injected here -->
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <h4 class="font-bold text-slate-700">Upcoming</h4>
+                                            <i class="fas fa-calendar-alt text-blue-600"></i>
+                                        </div>
+                                        <div id="dashboard-schedule-list" class="space-y-3">
+                                            <p class="text-sm text-slate-400 italic">Loading schedule...</p>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <h4 class="font-bold text-slate-700">Study Streak</h4>
+                                            <i class="fas fa-fire text-amber-500"></i>
+                                        </div>
+                                        <div class="text-center py-2">
+                                            <span class="text-4xl font-bold text-slate-800">Active</span>
+                                            <p class="text-xs text-slate-500 mt-1">Keep pushing forward</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="lg:col-span-1">
+                                <div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col">
+                                    <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                                        <h4 class="font-bold text-slate-700">Reminders</h4>
+                                        <button onclick="window.appHandlers.addReminder()" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition">
+                                            <i class="fas fa-plus mr-1"></i> Add
+                                        </button>
+                                    </div>
+                                    <div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]">
+                                        <!-- Reminders injected here -->
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -619,7 +666,7 @@
             },
 
             showAuthHelp: () => {
-                alert("To enable Cloud Sync:\n\n1. Go to Firebase Console > Authentication > Sign-in method.\n2. Enable 'Anonymous' provider.\n3. Refresh this page.");
+                document.getElementById('help-modal').classList.remove('hidden');
             },
 
             addReminder: async () => {
