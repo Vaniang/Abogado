@@ -48,7 +48,7 @@
             <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-xl font-bold font-serif shadow-inner">L</div>
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.0</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.1</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -96,7 +96,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // Added query, where, and updateDoc for the Notebook feature
         import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURATION ---
@@ -285,7 +284,6 @@
                     snapshot.forEach(doc => {
                         const data = doc.data();
                         const card = document.createElement('div');
-                        // NEW: Clicking the card opens the Notebook View!
                         card.onclick = () => window.appHandlers.openSubject(doc.id, data.name.replace(/'/g, "\\'"));
                         card.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md hover:border-blue-300 transition cursor-pointer group relative flex flex-col h-full";
                         card.innerHTML = `
@@ -306,7 +304,6 @@
             }
         }
 
-        // NEW: Subject Notebook View
         class SubjectNotebookView {
             constructor() { this.unsubscribe = null; this.subjectId = null; this.subjectName = ""; this.activeNoteId = null; }
             render() {
@@ -469,12 +466,60 @@
             }
         }
 
+        // --- NEW: ReviewView Class Added Back ---
+        class ReviewView {
+            constructor() { this.generatedContent = null; this.isProcessing = false; }
+            render() {
+                const savedKey = localStorage.getItem('gemini_api_key') || '';
+                return `
+                    <div class="max-w-5xl mx-auto h-full flex flex-col">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+                                <h3 class="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+                                    <i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review
+                                </h3>
+                                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
+                                    <input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
+                                </div>
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
+                                    <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
+                                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-3"></i>
+                                    <p class="text-sm font-medium text-slate-600">Click to upload PDF</p>
+                                    <p class="text-xs text-slate-400 mt-1">Lecture notes, reviewers, or codals</p>
+                                </div>
+                                <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
+                                <div class="mt-6 space-y-3">
+                                    <label class="block text-sm font-medium text-slate-700">Review Mode</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Recit (Flashcards)</button>
+                                        <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
+                                    </div>
+                                </div>
+                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    Generate AI Review
+                                </button>
+                            </div>
+                            <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
+                                    <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
+                                    <h4 class="text-lg font-semibold">AI Mock Review</h4>
+                                    <p class="text-sm max-w-xs mt-2">Upload a PDF to generate practice questions or flashcards based on your material.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
         const views = {
             dashboard: new DashboardView(),
             subjects: new SubjectsView(),
             subject_notebook: new SubjectNotebookView(),
             digests: new DigestsView(),
             case_digester: new CaseDigesterView(), 
+            review: new ReviewView(),
             codals: { render: () => { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return `<div class="text-center mt-20 text-slate-500">Opening eCodal+ in a new tab...</div>`; } },
         };
 
@@ -487,7 +532,8 @@
             { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' },
             { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' },
-            { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }
+            { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' },
+            { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }
         ];
 
         function renderSidebar() {
@@ -525,7 +571,7 @@
             openSubject: (id, name) => {
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
                 currentView = 'subject_notebook';
-                renderSidebar(); // Removes highlight from sidebar since we are in a sub-view
+                renderSidebar(); 
                 pageTitle.innerText = 'Notebook';
                 views.subject_notebook.init(id, name);
             },
@@ -541,8 +587,6 @@
             },
             openNote: (noteId, title, content, btnElement) => {
                 views.subject_notebook.activeNoteId = noteId;
-                
-                // Visual update for sidebar
                 document.querySelectorAll('#notebook-pages-list button').forEach(b => {
                     b.classList.remove('bg-blue-50', 'text-blue-700', 'border-l-blue-600');
                     b.classList.add('text-slate-600', 'border-l-transparent');
@@ -705,6 +749,152 @@
                     area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${error.message}</div>`;
                 } finally {
                     btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; window.appHandlers.digestText = '';
+                }
+            },
+
+            // --- AI MOCK REVIEW LOGIC ---
+            reviewMode: 'recit',
+            pdfText: '',
+            setMode: (mode) => {
+                window.appHandlers.reviewMode = mode;
+                document.getElementById('btn-recit').className = mode === 'recit' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
+                document.getElementById('btn-exam').className = mode === 'exam' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
+            },
+            handleFileUpload: async (input) => {
+                const file = input.files[0];
+                if (!file) return;
+
+                document.getElementById('file-name-display').innerText = file.name;
+                document.getElementById('file-name-display').classList.remove('hidden');
+                document.getElementById('btn-generate').innerText = "Processing PDF...";
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    
+                    let fullText = "";
+                    const maxPages = Math.min(pdf.numPages, 10);
+                    
+                    for (let i = 1; i <= maxPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + "\n";
+                    }
+
+                    window.appHandlers.pdfText = fullText;
+                    document.getElementById('btn-generate').disabled = false;
+                    document.getElementById('btn-generate').innerText = "Generate AI Review";
+                } catch (e) {
+                    console.error(e);
+                    alert("Error reading PDF.");
+                    document.getElementById('btn-generate').innerText = "Error";
+                }
+            },
+            generateReview: async () => {
+                const text = window.appHandlers.pdfText;
+                const mode = window.appHandlers.reviewMode;
+                const output = document.getElementById('review-output');
+                const apiKey = document.getElementById('review-api-key').value.trim();
+                const btn = document.getElementById('btn-generate');
+                
+                if (!apiKey) { alert("Please enter your Gemini API Key."); return; }
+                localStorage.setItem('gemini_api_key', apiKey);
+
+                if (!text) { alert("Please upload a PDF first."); return; }
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
+                output.innerHTML = `<div class="flex justify-center flex-col items-center h-full p-10"><div class="loader mb-4"></div><p class="text-slate-500 font-medium">Gemini is designing your ${mode === 'recit' ? 'Flashcards' : 'Mock Bar Exam'}...</p></div>`;
+
+                try {
+                    let promptText = mode === 'recit' ? `
+                        You are a strict law professor helping a student memorize key concepts. 
+                        Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. 
+                        Focus on definitions, elements of crimes/contracts, exceptions, and core doctrines.
+                        Return ONLY a raw JSON array of objects, where each object has a "front" (the question or term) and a "back" (the answer or definition). 
+                        Do NOT use markdown like \`\`\`json. Output raw JSON only.
+                        Material: ${text.substring(0, 45000)}
+                    ` : `
+                        You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 3 essay-type hypothetical legal problems.
+                        These problems must test issue spotting, critical thinking, and the direct application of the rules and jurisprudence found in the text.
+                        Return ONLY a raw JSON array of objects, where each object has:
+                        "question": (The hypothetical scenario and the specific question asked at the end).
+                        "guide": (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply).
+                        Do NOT use markdown like \`\`\`json. Output raw JSON only.
+                        Material: ${text.substring(0, 45000)}
+                    `;
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ role: "user", parts: [{ text: promptText }] }],
+                            generationConfig: { responseMimeType: "application/json" }
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+                    const data = await response.json();
+                    let jsonString = data.candidates[0].content.parts[0].text;
+                    jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+                    const parsedData = JSON.parse(jsonString);
+
+                    output.innerHTML = ''; 
+
+                    if (mode === 'recit') {
+                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2 z-10 flex items-center gap-2"><i class="fas fa-bolt text-amber-500"></i> Recit Flashcards (${parsedData.length})</h3>`;
+                        const grid = document.createElement('div');
+                        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4 pb-8";
+                        
+                        parsedData.forEach((card, i) => {
+                            const el = document.createElement('div');
+                            el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective relative overflow-hidden";
+                            el.onclick = function() {
+                                this.querySelector('.card-inner').classList.toggle('hidden');
+                                this.querySelector('.card-back').classList.toggle('hidden');
+                            };
+                            el.innerHTML = `
+                                <div class="card-inner"><span class="text-[10px] text-blue-600 font-bold uppercase mb-3 block tracking-widest">Card ${i+1} / Question</span><p class="serif-text font-semibold text-slate-800 leading-snug">${card.front}</p><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-amber-600 transition">(Click to reveal answer)</p></div></div>
+                                <div class="card-back hidden animate-fade-in flex flex-col h-full justify-between"><div><span class="text-[10px] text-green-600 font-bold uppercase mb-3 block tracking-widest">Answer</span><p class="text-sm text-slate-700 leading-relaxed">${card.back}</p></div><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-blue-600 transition">(Click to flip back)</p></div></div>
+                            `;
+                            grid.appendChild(el);
+                        });
+                        output.appendChild(grid);
+
+                    } else {
+                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2 z-10 flex items-center gap-2"><i class="fas fa-balance-scale text-slate-800"></i> Mock Bar Examination</h3>`;
+                        const paper = document.createElement('div');
+                        paper.className = "bg-white p-8 rounded shadow-md border border-slate-300 min-h-[500px] serif-text mb-8";
+                        
+                        let html = `<div class="text-center border-b-2 border-black pb-4 mb-8"><h2 class="text-2xl font-bold uppercase tracking-widest">Mock Bar Examination</h2><p class="italic text-slate-600 mt-1">Focus: Issue Spotting & Application</p></div>`;
+
+                        parsedData.forEach((item, i) => {
+                            html += `
+                                <div class="mb-10">
+                                    <h4 class="font-bold mb-3 text-lg font-sans">Question ${i+1}</h4>
+                                    <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${item.question}</p>
+                                    <div class="bg-slate-50 p-3 border border-slate-200 rounded-t-lg"><label class="text-xs font-bold text-slate-500 uppercase font-sans tracking-wider">Your Answer</label></div>
+                                    <textarea class="w-full p-4 border-x border-b border-slate-200 rounded-b-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px]" placeholder="Type your legal analysis here (IRAC format recommended)..."></textarea>
+                                    <details class="mt-4 font-sans text-sm group">
+                                        <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Guide / Rubric</summary>
+                                        <div class="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-lg text-slate-800 leading-relaxed shadow-inner"><strong>Key Issues to Spot:</strong><br>${item.guide}</div>
+                                    </details>
+                                </div>
+                                ${i !== parsedData.length - 1 ? '<hr class="my-8 border-slate-200">' : ''}
+                            `;
+                        });
+                        paper.innerHTML = html;
+                        output.appendChild(paper);
+                    }
+
+                } catch (error) {
+                    console.error("Gemini failed:", error);
+                    output.innerHTML = `<div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 flex items-start gap-4 shadow-sm w-full max-w-lg mx-auto mt-10"><i class="fas fa-exclamation-triangle text-2xl mt-1"></i><div><p class="font-bold text-lg mb-1">Failed to generate review.</p><p class="text-sm opacity-90">${error.message}</p></div></div>`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Generate AI Review';
                 }
             }
         };
