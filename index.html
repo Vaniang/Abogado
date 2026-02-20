@@ -25,21 +25,9 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(226, 232, 240, 0.8);
-        }
-
-        /* Loading Spinner */
         .loader {
-            border: 3px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 3px solid #1e3a8a;
-            width: 24px;
-            height: 24px;
-            -webkit-animation: spin 1s linear infinite;
-            animation: spin 1s linear infinite;
+            border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #2563eb;
+            width: 24px; height: 24px; animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -59,8 +47,8 @@
         <div class="p-6 border-b border-slate-800 flex items-center gap-3">
             <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-xl font-bold font-serif shadow-inner">L</div>
             <div>
-                <h1 class="font-bold text-lg tracking-wide">LEX COMPANION</h1>
-                <p class="text-xs text-amber-400 font-bold tracking-wider">Juris Doctor • v2.0</p>
+                <h1 class="font-bold text-lg tracking-wide">LEX</h1>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.0</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -100,7 +88,7 @@
             <div id="app-modal-body" class="p-6 space-y-4"></div>
             <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
                 <button onclick="document.getElementById('app-modal').classList.add('hidden')" class="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium transition">Cancel</button>
-                <button id="app-modal-submit" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 text-sm font-medium transition shadow-sm">Save</button>
+                <button id="app-modal-submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition shadow-sm">Save</button>
             </div>
         </div>
     </div>
@@ -108,7 +96,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Added query, where, and updateDoc for the Notebook feature
+        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURATION ---
         const firebaseConfig = {
@@ -122,7 +111,6 @@
         
         const appNamespace = 'law-companion-v1'; 
         
-        // --- APP STATE ---
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
@@ -136,14 +124,20 @@
             subscribe: (collectionName, callback) => {
                 if (!currentUser) return () => {};
                 const q = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName);
-                return onSnapshot(q, callback, (error) => {
-                    console.error("Firestore Error:", error);
-                    callback({ empty: true, forEach: () => {} }); 
-                });
+                return onSnapshot(q, callback, (error) => { console.error("Firestore Error:", error); callback({ empty: true, forEach: () => {} }); });
+            },
+            subscribeQuery: (collectionName, field, op, value, callback) => {
+                if (!currentUser) return () => {};
+                const q = query(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName), where(field, op, value));
+                return onSnapshot(q, callback, (error) => { console.error("Firestore Error:", error); callback({ empty: true, forEach: () => {} }); });
             },
             add: async (collectionName, data) => {
                 if (!currentUser) throw new Error("User not authenticated");
                 return addDoc(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName), data);
+            },
+            update: async (collectionName, id, data) => {
+                if (!currentUser) throw new Error("User not authenticated");
+                return updateDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id), data);
             },
             delete: async (collectionName, id) => {
                 if (!currentUser) throw new Error("User not authenticated");
@@ -151,52 +145,40 @@
             }
         };
 
-        const verses = [
-            { text: "Learn to do right; seek justice. Defend the oppressed.", ref: "Isaiah 1:17" },
-            { text: "But let justice roll on like a river, righteousness like a never-failing stream!", ref: "Amos 5:24" },
-            { text: "Speak up for those who cannot speak for themselves, for the rights of all who are destitute.", ref: "Proverbs 31:8" }
-        ];
-
         const Utils = {
-            formatDate: (date) => new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
             getDailyVerse: () => {
+                const verses = [
+                    { text: "Learn to do right; seek justice. Defend the oppressed.", ref: "Isaiah 1:17" },
+                    { text: "But let justice roll on like a river, righteousness like a never-failing stream!", ref: "Amos 5:24" },
+                    { text: "Speak up for those who cannot speak for themselves...", ref: "Proverbs 31:8" }
+                ];
                 const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
                 return verses[dayOfYear % verses.length];
             }
         };
 
-        // --- MODAL CONTROLLER ---
+        // --- CUSTOM MODAL CONTROLLER ---
         const Modal = {
             show: (options) => {
                 const modal = document.getElementById('app-modal');
                 document.getElementById('app-modal-title').innerHTML = options.title;
                 document.getElementById('app-modal-body').innerHTML = options.content;
-                
                 const submitBtn = document.getElementById('app-modal-submit');
                 submitBtn.innerText = options.submitText || 'Save';
-                submitBtn.className = options.submitClass || 'px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 text-sm font-medium transition shadow-sm';
-                
+                submitBtn.className = options.submitClass || 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition shadow-sm';
                 submitBtn.onclick = async () => {
                     const originalText = submitBtn.innerText;
-                    submitBtn.innerText = 'Processing...';
-                    submitBtn.disabled = true;
-                    try {
-                        await options.onSubmit();
-                        modal.classList.add('hidden');
-                    } catch (e) {
-                        console.error(e);
-                        alert("An error occurred.");
-                    } finally {
-                        submitBtn.innerText = originalText;
-                        submitBtn.disabled = false;
-                    }
+                    submitBtn.innerText = 'Processing...'; submitBtn.disabled = true;
+                    try { await options.onSubmit(); modal.classList.add('hidden'); } 
+                    catch (e) { console.error(e); alert("An error occurred."); } 
+                    finally { submitBtn.innerText = originalText; submitBtn.disabled = false; }
                 };
                 modal.classList.remove('hidden');
             },
             hide: () => document.getElementById('app-modal').classList.add('hidden')
         };
 
-        // --- VIEW CONTROLLERS ---
+        // --- VIEWS ---
         class DashboardView {
             constructor() { this.unsubscribe = null; }
             render() {
@@ -205,45 +187,31 @@
                     <div class="max-w-6xl mx-auto">
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div class="lg:col-span-2 space-y-6">
-                                <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg">
-                                    <h3 class="text-2xl font-bold serif-text mb-2">Welcome back, Counsel.</h3>
-                                    <p class="text-slate-300 mb-6">Your journey to the Bar continues today.</p>
-                                    <div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm">
+                                <div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
+                                    <i class="fas fa-balance-scale text-white opacity-5 text-9xl absolute -right-10 -bottom-10"></i>
+                                    <h3 class="text-2xl font-bold serif-text mb-2 relative z-10">Welcome back, Counsel.</h3>
+                                    <p class="text-blue-200 mb-6 relative z-10">Your journey to the Bar continues today.</p>
+                                    <div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm relative z-10">
                                         <p class="serif-text italic text-lg mb-2">"${verse.text}"</p>
                                         <p class="text-sm text-amber-400 font-bold text-right">— ${verse.ref}</p>
                                     </div>
                                 </div>
-
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                                        <div class="flex items-center justify-between mb-4">
-                                            <h4 class="font-bold text-slate-700">Upcoming</h4>
-                                            <i class="fas fa-calendar-alt text-blue-600"></i>
-                                        </div>
-                                        <div id="dashboard-schedule-list" class="space-y-3">
-                                            <p class="text-sm text-slate-400 italic">Loading schedule...</p>
-                                        </div>
+                                        <div class="flex items-center justify-between mb-4"><h4 class="font-bold text-slate-700">Upcoming</h4><i class="fas fa-calendar-alt text-blue-600"></i></div>
+                                        <div id="dashboard-schedule-list" class="space-y-3"><p class="text-sm text-slate-400 italic">Loading schedule...</p></div>
                                     </div>
                                     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                                        <div class="flex items-center justify-between mb-4">
-                                            <h4 class="font-bold text-slate-700">Study Streak</h4>
-                                            <i class="fas fa-fire text-amber-500"></i>
-                                        </div>
-                                        <div class="text-center py-2">
-                                            <span class="text-4xl font-bold text-slate-800">Active</span>
-                                            <p class="text-xs text-slate-500 mt-1">Keep pushing forward</p>
-                                        </div>
+                                        <div class="flex items-center justify-between mb-4"><h4 class="font-bold text-slate-700">Study Streak</h4><i class="fas fa-fire text-amber-500"></i></div>
+                                        <div class="text-center py-2"><span class="text-4xl font-bold text-slate-800">Active</span><p class="text-xs text-slate-500 mt-1">Keep pushing forward</p></div>
                                     </div>
                                 </div>
                             </div>
-
                             <div class="lg:col-span-1">
                                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col">
                                     <div class="p-5 border-b border-slate-100 flex justify-between items-center">
                                         <h4 class="font-bold text-slate-700">Reminders</h4>
-                                        <button onclick="window.appHandlers.addReminder()" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition">
-                                            <i class="fas fa-plus mr-1"></i> Add
-                                        </button>
+                                        <button onclick="window.appHandlers.addReminder()" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition"><i class="fas fa-plus mr-1"></i> Add</button>
                                     </div>
                                     <div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]"></div>
                                 </div>
@@ -252,7 +220,6 @@
                     </div>
                 `;
             }
-
             async init() {
                 const clockEl = document.getElementById('header-clock');
                 if (clockEl) {
@@ -263,47 +230,27 @@
                         if (dateEl) dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
                     }, 1000);
                 }
-
                 this.unsubscribe = AppDB.subscribe('reminders', (snapshot) => {
                     const list = document.getElementById('reminder-list');
                     const schedList = document.getElementById('dashboard-schedule-list');
                     if (!list) return;
-
-                    list.innerHTML = '';
-                    schedList.innerHTML = '';
-
+                    list.innerHTML = ''; schedList.innerHTML = '';
                     if (snapshot.empty) {
                         list.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">No reminders set.</div>`;
                         schedList.innerHTML = `<div class="text-slate-400 text-sm">No upcoming events.</div>`;
                         return;
                     }
-
                     snapshot.forEach(doc => {
-                        const data = doc.data();
-                        const id = doc.id;
+                        const data = doc.data(); const id = doc.id;
                         const date = data.date ? new Date(data.date).toLocaleDateString() : 'No Date';
-                        
                         const item = document.createElement('div');
                         item.className = `p-3 rounded-lg border-l-4 ${data.type === 'Quiz' ? 'border-red-500 bg-red-50' : 'border-blue-500 bg-blue-50'} flex justify-between items-start group`;
-                        item.innerHTML = `
-                            <div>
-                                <p class="text-sm font-semibold text-slate-800">${data.title}</p>
-                                <p class="text-xs text-slate-500">${data.type} • ${date}</p>
-                            </div>
-                            <button onclick="window.appHandlers.deleteReminder('${id}')" class="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        `;
+                        item.innerHTML = `<div><p class="text-sm font-semibold text-slate-800">${data.title}</p><p class="text-xs text-slate-500">${data.type} • ${date}</p></div><button onclick="window.appHandlers.deleteReminder('${id}')" class="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i class="fas fa-times"></i></button>`;
                         list.appendChild(item);
-
                         if (schedList.children.length < 3) {
                             const schedItem = document.createElement('div');
                             schedItem.className = "flex items-center gap-3 text-sm";
-                            schedItem.innerHTML = `
-                                <div class="w-2 h-2 rounded-full ${data.type === 'Quiz' ? 'bg-red-500' : 'bg-blue-500'}"></div>
-                                <span class="flex-1 truncate">${data.title}</span>
-                                <span class="text-slate-400 text-xs">${date}</span>
-                            `;
+                            schedItem.innerHTML = `<div class="w-2 h-2 rounded-full ${data.type === 'Quiz' ? 'bg-red-500' : 'bg-blue-500'}"></div><span class="flex-1 truncate">${data.title}</span><span class="text-slate-400 text-xs">${date}</span>`;
                             schedList.appendChild(schedItem);
                         }
                     });
@@ -318,7 +265,7 @@
                     <div class="max-w-5xl mx-auto">
                         <div class="flex justify-between items-center mb-6">
                             <h3 class="text-xl font-bold text-slate-700">My Subjects</h3>
-                            <button onclick="window.appHandlers.addSubject()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm transition shadow-md">
+                            <button onclick="window.appHandlers.addSubject()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition shadow-md">
                                 <i class="fas fa-plus mr-2"></i>New Subject
                             </button>
                         </div>
@@ -326,36 +273,94 @@
                     </div>
                 `;
             }
-
             init() {
                 this.unsubscribe = AppDB.subscribe('subjects', (snapshot) => {
                     const grid = document.getElementById('subjects-grid');
                     if (!grid) return;
                     grid.innerHTML = '';
-
                     if (snapshot.empty) {
-                        grid.innerHTML = `
-                            <div class="col-span-full text-center py-12 border-2 border-dashed border-slate-300 rounded-xl">
-                                <p class="text-slate-500 mb-2">No subjects added yet.</p>
-                                <button onclick="window.appHandlers.addSubject()" class="text-blue-600 font-medium hover:underline">Add your first subject</button>
+                        grid.innerHTML = `<div class="col-span-full text-center py-12 border-2 border-dashed border-slate-300 rounded-xl bg-white"><i class="fas fa-book-open text-4xl text-slate-300 mb-3"></i><p class="text-slate-500 mb-3">No subjects added yet.</p><button onclick="window.appHandlers.addSubject()" class="text-blue-600 font-bold hover:underline">Create Subject Notebook</button></div>`;
+                        return;
+                    }
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const card = document.createElement('div');
+                        // NEW: Clicking the card opens the Notebook View!
+                        card.onclick = () => window.appHandlers.openSubject(doc.id, data.name.replace(/'/g, "\\'"));
+                        card.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md hover:border-blue-300 transition cursor-pointer group relative flex flex-col h-full";
+                        card.innerHTML = `
+                            <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition z-10">
+                                <button onclick="event.stopPropagation(); window.appHandlers.deleteSubject('${doc.id}')" class="text-slate-400 hover:text-red-500 bg-white rounded-full p-1"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <span class="inline-block self-start px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded mb-3 font-bold tracking-wider uppercase">${data.year || 'General'}</span>
+                            <h4 class="text-lg font-bold text-slate-800 mb-2 serif-text">${data.name}</h4>
+                            <p class="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">${data.description || 'Open notebook to view notes.'}</p>
+                            <div class="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider"><i class="fas fa-book mr-1"></i> Notebook</span>
+                                <span class="text-blue-600 text-xs font-bold group-hover:translate-x-1 transition-transform">Open <i class="fas fa-arrow-right ml-1"></i></span>
                             </div>
                         `;
+                        grid.appendChild(card);
+                    });
+                });
+            }
+        }
+
+        // NEW: Subject Notebook View
+        class SubjectNotebookView {
+            constructor() { this.unsubscribe = null; this.subjectId = null; this.subjectName = ""; this.activeNoteId = null; }
+            render() {
+                return `
+                    <div class="h-[calc(100vh-4rem)] flex flex-col -m-8">
+                        <div class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center flex-shrink-0 shadow-sm z-10">
+                            <div class="flex items-center gap-4">
+                                <button onclick="window.appHandlers.navigate('subjects')" class="text-slate-400 hover:text-blue-600 transition flex items-center gap-2 font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200"><i class="fas fa-arrow-left"></i> Back to Subjects</button>
+                                <h3 class="text-xl font-bold text-slate-800 serif-text">${this.subjectName}</h3>
+                            </div>
+                            <button onclick="window.appHandlers.addNote('${this.subjectId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
+                                <i class="fas fa-plus mr-2"></i>New Page
+                            </button>
+                        </div>
+                        <div class="flex flex-1 overflow-hidden bg-slate-50">
+                            <div class="w-72 bg-white border-r border-slate-200 overflow-y-auto flex flex-col shadow-sm z-0" id="notebook-pages-list">
+                                <div class="p-8 text-center text-slate-400"><div class="loader mx-auto"></div></div>
+                            </div>
+                            <div class="flex-1 flex flex-col relative bg-slate-50/50" id="notebook-editor-area">
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                                    <i class="fas fa-book-open text-6xl mb-4 opacity-20"></i>
+                                    <p class="font-medium text-slate-500">Select a page from the sidebar</p>
+                                    <p class="text-sm mt-1">or create a new one to start taking notes.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            init(subjectId, subjectName) {
+                this.subjectId = subjectId; this.subjectName = subjectName; this.activeNoteId = null; 
+                document.getElementById('content-area').innerHTML = this.render();
+
+                this.unsubscribe = AppDB.subscribeQuery('notes', 'subjectId', '==', subjectId, (snapshot) => {
+                    const list = document.getElementById('notebook-pages-list');
+                    if (!list) return;
+                    list.innerHTML = '';
+
+                    if (snapshot.empty) {
+                        list.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm mt-10"><i class="far fa-folder-open text-4xl mb-3 opacity-30"></i><br>Notebook is empty.</div>`;
                         return;
                     }
 
                     snapshot.forEach(doc => {
-                        const data = doc.data();
-                        const card = document.createElement('div');
-                        card.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition cursor-pointer group relative";
-                        card.innerHTML = `
-                            <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition">
-                                <button onclick="window.appHandlers.deleteSubject('${doc.id}')" class="text-slate-400 hover:text-red-500"><i class="fas fa-trash"></i></button>
-                            </div>
-                            <span class="inline-block px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded mb-3 font-semibold tracking-wider uppercase">${data.year || 'General'}</span>
-                            <h4 class="text-lg font-bold text-slate-800 mb-2 serif-text">${data.name}</h4>
-                            <p class="text-sm text-slate-500 line-clamp-3 mb-4">${data.description || 'No notes added yet.'}</p>
+                        const data = doc.data(); const noteId = doc.id;
+                        const isActive = this.activeNoteId === noteId;
+                        const btn = document.createElement('button');
+                        btn.className = `w-full text-left px-5 py-4 border-b border-slate-100 text-sm font-medium transition group flex justify-between items-center ${isActive ? 'bg-blue-50 text-blue-700 border-l-4 border-l-blue-600' : 'text-slate-600 hover:bg-slate-50 border-l-4 border-l-transparent'}`;
+                        btn.innerHTML = `
+                            <span class="truncate pr-2 flex items-center gap-2"><i class="far fa-file-alt opacity-50"></i> ${data.title}</span>
+                            <i class="fas fa-trash text-slate-300 hover:text-red-500 transition px-2 py-1 opacity-0 group-hover:opacity-100" onclick="event.stopPropagation(); window.appHandlers.deleteNote('${noteId}')"></i>
                         `;
-                        grid.appendChild(card);
+                        btn.onclick = () => window.appHandlers.openNote(noteId, data.title, data.content, btn);
+                        list.appendChild(btn);
                     });
                 });
             }
@@ -365,54 +370,51 @@
             constructor() { this.unsubscribe = null; }
             render() {
                 return `
-                    <div class="max-w-4xl mx-auto h-full flex flex-col">
+                    <div class="max-w-5xl mx-auto h-full flex flex-col">
                         <div class="flex justify-between items-center mb-6 flex-shrink-0">
-                            <h3 class="text-xl font-bold text-slate-700">Case Digests</h3>
-                            <button onclick="window.appHandlers.addDigest()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm transition shadow-md">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-700">Consolidated Case Digests</h3>
+                                <p class="text-xs text-slate-500 mt-1">If you see a blank digest from testing, click the trash can to delete it.</p>
+                            </div>
+                            <button onclick="window.appHandlers.addDigest()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md">
                                 <i class="fas fa-plus mr-2"></i>Manual Digest
                             </button>
                         </div>
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
-                            <div id="digest-list" class="overflow-y-auto flex-1 p-4 space-y-3"></div>
+                            <div id="digest-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div>
                         </div>
                     </div>
                 `;
             }
-
             init() {
                 this.unsubscribe = AppDB.subscribe('digests', (snapshot) => {
                     const list = document.getElementById('digest-list');
                     if (!list) return;
                     list.innerHTML = '';
-                    
                     if(snapshot.empty) {
-                        list.innerHTML = `<div class="p-8 text-center text-slate-400 mt-10"><i class="fas fa-folder-open text-4xl mb-3 opacity-30"></i><br>No case digests found.</div>`;
+                        list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests found.</p></div>`;
                         return;
                     }
-
                     snapshot.forEach(doc => {
                         const data = doc.data();
                         const row = document.createElement('div');
-                        row.className = "p-4 border border-slate-200 rounded-lg hover:border-blue-300 bg-slate-50 transition";
-                        
-                        // Dropdown Accordion Design
+                        row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
                         row.innerHTML = `
                             <div class="flex justify-between items-start">
-                                <div class="flex-1">
-                                    <h4 class="font-bold text-slate-800 serif-text text-lg">${data.title}</h4>
-                                    <span class="inline-block mt-1 bg-slate-200 text-slate-600 px-2 py-0.5 rounded text-xs font-semibold">${data.subject}</span>
+                                <div class="flex-1 pr-4">
+                                    <h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4>
+                                    <span class="inline-block mt-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.subject}</span>
                                 </div>
-                                <button onclick="window.appHandlers.deleteDigest('${doc.id}')" class="text-slate-400 hover:text-red-500 ml-4 transition"><i class="fas fa-trash"></i></button>
+                                <button onclick="window.appHandlers.deleteDigest('${doc.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button>
                             </div>
-                            
-                            <details class="mt-3 group cursor-pointer outline-none text-sm">
-                                <summary class="font-medium text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-1">
-                                    <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Digest
+                            <details class="mt-4 group cursor-pointer outline-none">
+                                <summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3">
+                                    <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest
                                 </summary>
-                                <div class="mt-3 p-4 bg-white border border-slate-200 rounded-lg space-y-4 shadow-sm cursor-text">
-                                    ${data.facts ? `<div><h5 class="font-bold text-slate-700 text-xs uppercase tracking-wider mb-1">Facts</h5><p class="text-slate-600 leading-relaxed whitespace-pre-wrap">${data.facts}</p></div>` : ''}
-                                    ${data.issue ? `<div><h5 class="font-bold text-slate-700 text-xs uppercase tracking-wider mb-1">Issue</h5><p class="text-slate-600 leading-relaxed font-medium whitespace-pre-wrap">${data.issue}</p></div>` : ''}
-                                    <div><h5 class="font-bold text-slate-700 text-xs uppercase tracking-wider mb-1">Ruling</h5><p class="text-slate-600 leading-relaxed whitespace-pre-wrap">${data.ruling || 'No ruling extracted.'}</p></div>
+                                <div class="mt-4 p-5 bg-white border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">
+                                    ${data.facts ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Facts</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.facts}</p></div>` : ''}
+                                    ${data.issue ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Issue</h5><p class="text-slate-800 font-semibold leading-relaxed whitespace-pre-wrap">${data.issue}</p></div>` : ''}
+                                    <div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Ruling</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.ruling || 'No ruling extracted.'}</p></div>
                                 </div>
                             </details>
                         `;
@@ -426,41 +428,23 @@
             constructor() { this.digestedData = null; }
             render() {
                 const savedKey = localStorage.getItem('gemini_api_key') || '';
-                
                 return `
-                    <div class="max-w-4xl mx-auto h-full flex flex-col">
+                    <div class="max-w-5xl mx-auto h-full flex flex-col">
                         <div class="flex justify-between items-center mb-6">
                             <h3 class="text-xl font-bold text-slate-700 flex items-center gap-2">
-                                <i class="fas fa-magic text-blue-600"></i> AI Case Digester
+                                <i class="fas fa-magic text-amber-500"></i> AI Case Digester
                             </h3>
                         </div>
-                        
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
                             <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4">
-                                
                                 <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                     <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
                                     <input type="password" id="gemini-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
-                                    <p class="text-[10px] text-blue-600 mt-1">Get one free at <a href="https://aistudio.google.com/" target="_blank" class="underline font-bold">Google AI Studio</a>. Saved locally.</p>
                                 </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label>
-                                    <input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter <span class="text-red-500">*</span></label>
-                                    <input type="text" id="digest-subject" placeholder="e.g. Crim 1" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                </div>
-                                
-                                <div class="border-t border-slate-100 pt-4">
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Paste Full Text</label>
-                                    <textarea id="digest-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste case text here..."></textarea>
-                                </div>
-
+                                <div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+                                <div><label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter <span class="text-red-500">*</span></label><input type="text" id="digest-subject" placeholder="e.g. Crim 1" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+                                <div class="border-t border-slate-100 pt-4"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Full Text</label><textarea id="digest-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Paste case text here..."></textarea></div>
                                 <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div>
-
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label>
                                     <div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative">
@@ -470,70 +454,13 @@
                                     </div>
                                     <div id="digest-filename" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div>
                                 </div>
-                                
-                                <button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-3 rounded-lg text-sm font-bold hover:bg-slate-700 transition shadow-md mt-auto">
-                                    <i class="fas fa-robot mr-1"></i> Digest with Gemini
-                                </button>
+                                <button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-3 rounded-lg text-sm font-bold hover:bg-slate-700 transition shadow-md mt-auto"><i class="fas fa-robot mr-1"></i> Digest & Auto-Save</button>
                             </div>
-
                             <div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area">
                                 <div class="h-full flex flex-col items-center justify-center text-slate-400 text-center">
-                                    <i class="fas fa-brain text-4xl mb-3 opacity-30"></i>
-                                    <p class="text-sm">Provide the case text and your API key.<br>Gemini will read it, extract the core elements,<br>and automatically save it.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-        }
-
-        class ReviewView {
-            constructor() {
-                this.generatedContent = null;
-                this.isProcessing = false;
-            }
-            render() {
-                const savedKey = localStorage.getItem('gemini_api_key') || '';
-                return `
-                    <div class="max-w-5xl mx-auto h-full flex flex-col">
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-                                <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2 mb-4">
-                                    <i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review
-                                </h3>
-
-                                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
-                                    <input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
-                                </div>
-                                
-                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
-                                    <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
-                                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-3"></i>
-                                    <p class="text-sm font-medium text-slate-600">Click to upload PDF</p>
-                                    <p class="text-xs text-slate-400 mt-1">Lecture notes, reviewers, or codals</p>
-                                </div>
-                                <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
-
-                                <div class="mt-6 space-y-3">
-                                    <label class="block text-sm font-medium text-slate-700">Review Mode</label>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Recit (Flashcards)</button>
-                                        <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
-                                    </div>
-                                </div>
-
-                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                    Generate AI Review
-                                </button>
-                            </div>
-
-                            <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
-                                <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
-                                    <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
-                                    <h4 class="text-lg font-semibold">AI Mock Review</h4>
-                                    <p class="text-sm max-w-xs mt-2">Upload a PDF to generate practice questions or flashcards based on your material.</p>
+                                    <i class="fas fa-brain text-5xl mb-4 opacity-20"></i>
+                                    <p class="text-sm font-medium">Provide the case text and your API key.</p>
+                                    <p class="text-xs mt-1">Gemini will read it, extract the core elements, and automatically save it.</p>
                                 </div>
                             </div>
                         </div>
@@ -545,10 +472,10 @@
         const views = {
             dashboard: new DashboardView(),
             subjects: new SubjectsView(),
+            subject_notebook: new SubjectNotebookView(),
             digests: new DigestsView(),
             case_digester: new CaseDigesterView(), 
-            review: new ReviewView(),
-            codals: { render: () => { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return `<div class="text-center mt-20">Opening eCodal+ ...</div>`; } },
+            codals: { render: () => { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return `<div class="text-center mt-20 text-slate-500">Opening eCodal+ in a new tab...</div>`; } },
         };
 
         const sidebarNav = document.querySelector('nav');
@@ -560,8 +487,7 @@
             { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' },
             { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' },
-            { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }, 
-            { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }
+            { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }
         ];
 
         function renderSidebar() {
@@ -577,23 +503,15 @@
 
         window.appHandlers = {
             // --- AUTHENTICATION ---
-            login: async () => {
-                try { await signInWithPopup(auth, provider); } 
-                catch (error) { console.error("Login Error:", error); alert("Failed to login."); }
-            },
-            logout: async () => {
-                try { await signOut(auth); } 
-                catch (error) { console.error("Logout Error:", error); }
-            },
+            login: async () => { try { await signInWithPopup(auth, provider); } catch (e) { alert("Login failed. Check Authorized Domains in Firebase Console."); } },
+            logout: async () => { try { await signOut(auth); } catch (e) {} },
 
             // --- NAVIGATION ---
             navigate: (viewId) => {
                 if (viewId === 'codals') { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return; }
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
                 
-                currentView = viewId;
-                renderSidebar();
-                
+                currentView = viewId; renderSidebar();
                 const item = navItems.find(i => i.id === viewId);
                 pageTitle.innerText = item ? item.label : 'App';
                 
@@ -602,124 +520,129 @@
                     if (views[viewId].init) views[viewId].init();
                 }
             },
+            
+            // --- NOTEBOOK ROUTING & LOGIC ---
+            openSubject: (id, name) => {
+                if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
+                currentView = 'subject_notebook';
+                renderSidebar(); // Removes highlight from sidebar since we are in a sub-view
+                pageTitle.innerText = 'Notebook';
+                views.subject_notebook.init(id, name);
+            },
+            addNote: (subjectId) => {
+                Modal.show({
+                    title: '<i class="fas fa-file-alt text-blue-600"></i> New Page',
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Page Title</label><input type="text" id="note-title" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., Article 1156"></div>`,
+                    onSubmit: async () => {
+                        const title = document.getElementById('note-title').value.trim() || 'Untitled Page';
+                        await AppDB.add('notes', { subjectId, title, content: '', created: serverTimestamp() });
+                    }
+                });
+            },
+            openNote: (noteId, title, content, btnElement) => {
+                views.subject_notebook.activeNoteId = noteId;
+                
+                // Visual update for sidebar
+                document.querySelectorAll('#notebook-pages-list button').forEach(b => {
+                    b.classList.remove('bg-blue-50', 'text-blue-700', 'border-l-blue-600');
+                    b.classList.add('text-slate-600', 'border-l-transparent');
+                });
+                if(btnElement) {
+                    btnElement.classList.remove('text-slate-600', 'border-l-transparent');
+                    btnElement.classList.add('bg-blue-50', 'text-blue-700', 'border-l-blue-600');
+                }
 
-            // --- DATABASE CRUD (USING NEW MODALS) ---
+                const area = document.getElementById('notebook-editor-area');
+                area.innerHTML = `
+                    <div class="flex-1 flex flex-col p-8 bg-white m-6 rounded-2xl shadow-sm border border-slate-200">
+                        <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none mb-6 focus:ring-0 placeholder-slate-300 serif-text w-full bg-transparent" value="${title}" placeholder="Page Title...">
+                        <textarea id="note-content-editor" class="flex-1 w-full border-none outline-none resize-none text-slate-700 leading-relaxed text-base font-sans placeholder-slate-300 focus:ring-0 bg-transparent" placeholder="Start typing your notes here...">${content || ''}</textarea>
+                        <div class="mt-4 flex justify-end items-center gap-4 pt-4 border-t border-slate-100">
+                            <span id="note-save-status" class="text-sm font-bold text-green-500 opacity-0 transition-opacity"><i class="fas fa-check-circle mr-1"></i> Saved to Cloud</span>
+                            <button onclick="window.appHandlers.saveNote('${noteId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-save mr-2"></i> Save Page</button>
+                        </div>
+                    </div>
+                `;
+            },
+            saveNote: async (noteId) => {
+                const title = document.getElementById('note-title-editor').value.trim() || 'Untitled Page';
+                const content = document.getElementById('note-content-editor').value;
+                const status = document.getElementById('note-save-status');
+                try {
+                    await AppDB.update('notes', noteId, { title, content, updated: serverTimestamp() });
+                    status.classList.remove('opacity-0');
+                    setTimeout(() => status.classList.add('opacity-0'), 3000);
+                } catch(e) { alert("Error saving note."); }
+            },
+            deleteNote: (noteId) => {
+                Modal.show({
+                    title: '<i class="fas fa-trash text-red-500"></i> Delete Page',
+                    content: '<p class="text-slate-600">Are you sure you want to delete this page permanently?</p>',
+                    submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700',
+                    onSubmit: async () => {
+                        await AppDB.delete('notes', noteId);
+                        views.subject_notebook.activeNoteId = null;
+                        document.getElementById('notebook-editor-area').innerHTML = `
+                            <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                                <i class="fas fa-book-open text-6xl mb-4 opacity-20"></i>
+                                <p class="font-medium text-slate-500">Page deleted.</p>
+                            </div>`;
+                    }
+                });
+            },
+
+            // --- DATABASE CRUD (MODALS) ---
             addReminder: () => {
                 Modal.show({
                     title: '<i class="fas fa-bell text-amber-500"></i> New Reminder',
-                    content: `
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Title</label><input type="text" id="rem-title" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" placeholder="e.g., Read Obicon cases"></div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Type</label><select id="rem-type" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none bg-white"><option value="Assignment">Assignment / Reading</option><option value="Quiz">Quiz / Recit Prep</option></select></div>
-                    `,
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Title</label><input type="text" id="rem-title" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Read Obicon cases"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Type</label><select id="rem-type" class="w-full p-2 border border-slate-300 rounded-lg outline-none"><option value="Assignment">Assignment</option><option value="Quiz">Quiz / Recit</option></select></div>`,
                     onSubmit: async () => {
-                        const title = document.getElementById('rem-title').value.trim();
-                        const type = document.getElementById('rem-type').value;
-                        if (!title) return;
-                        await AppDB.add('reminders', { title, type, date: new Date().toISOString(), created: serverTimestamp() });
+                        const t = document.getElementById('rem-title').value.trim(); if (!t) return;
+                        await AppDB.add('reminders', { title: t, type: document.getElementById('rem-type').value, date: new Date().toISOString(), created: serverTimestamp() });
                     }
                 });
             },
             deleteReminder: (id) => {
-                Modal.show({
-                    title: '<i class="fas fa-check-circle text-green-500"></i> Complete Task',
-                    content: '<p class="text-slate-600">Are you sure you want to mark this reminder as complete?</p>',
-                    submitText: 'Complete',
-                    submitClass: 'px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition shadow-sm',
-                    onSubmit: async () => await AppDB.delete('reminders', id)
-                });
+                Modal.show({ title: '<i class="fas fa-check text-green-500"></i> Complete Task', content: '<p>Mark reminder as complete?</p>', submitText: 'Complete', submitClass: 'px-4 py-2 bg-green-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('reminders', id) });
             },
             addSubject: () => {
                 Modal.show({
                     title: '<i class="fas fa-book text-blue-600"></i> New Subject',
-                    content: `
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Subject Name</label><input type="text" id="sub-name" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., Obligations and Contracts"></div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Year Level</label><input type="text" id="sub-year" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., 2L" value="2L"></div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Description / Notes</label><textarea id="sub-desc" rows="3" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="Short note about the class..."></textarea></div>
-                    `,
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Subject Name</label><input type="text" id="sub-name" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Obicon"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Year</label><input type="text" id="sub-year" class="w-full p-2 border border-slate-300 rounded-lg outline-none" value="2L"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Notes</label><textarea id="sub-desc" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none"></textarea></div>`,
                     onSubmit: async () => {
-                        const name = document.getElementById('sub-name').value.trim();
-                        const year = document.getElementById('sub-year').value.trim() || '2L';
-                        const desc = document.getElementById('sub-desc').value.trim();
-                        if (!name) return;
-                        await AppDB.add('subjects', { name, year, description: desc, created: serverTimestamp() });
+                        const n = document.getElementById('sub-name').value.trim(); if (!n) return;
+                        await AppDB.add('subjects', { name: n, year: document.getElementById('sub-year').value.trim(), description: document.getElementById('sub-desc').value.trim(), created: serverTimestamp() });
                     }
                 });
             },
             deleteSubject: (id) => {
-                Modal.show({
-                    title: '<i class="fas fa-exclamation-triangle text-red-500"></i> Remove Subject',
-                    content: '<p class="text-slate-600">Are you sure you want to remove this subject? This action cannot be undone.</p>',
-                    submitText: 'Delete',
-                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition shadow-sm',
-                    onSubmit: async () => await AppDB.delete('subjects', id)
-                });
+                Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete', content: '<p>Remove subject?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('subjects', id) });
             },
             addDigest: () => {
                 Modal.show({
-                    title: '<i class="fas fa-gavel text-amber-700"></i> Manual Case Digest',
-                    content: `
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input type="text" id="dig-title" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" placeholder="e.g., People vs. Example"></div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><input type="text" id="dig-sub" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" placeholder="e.g., Crim 1"></div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="dig-facts" rows="2" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none resize-none"></textarea></div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="dig-issue" rows="2" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none resize-none"></textarea></div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="dig-ruling" rows="2" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none resize-none"></textarea></div>
-                    `,
+                    title: '<i class="fas fa-gavel text-amber-700"></i> Manual Digest',
+                    content: `<div><label class="block text-sm mb-1">Case Title</label><input type="text" id="dig-title" class="w-full p-2 border rounded-lg outline-none"></div><div class="mt-3"><label class="block text-sm mb-1">Subject</label><input type="text" id="dig-sub" class="w-full p-2 border rounded-lg outline-none"></div><div class="mt-3"><label class="block text-sm mb-1">Facts</label><textarea id="dig-facts" rows="2" class="w-full p-2 border rounded-lg outline-none"></textarea></div><div class="mt-3"><label class="block text-sm mb-1">Issue</label><textarea id="dig-issue" rows="2" class="w-full p-2 border rounded-lg outline-none"></textarea></div><div class="mt-3"><label class="block text-sm mb-1">Ruling</label><textarea id="dig-ruling" rows="2" class="w-full p-2 border rounded-lg outline-none"></textarea></div>`,
                     onSubmit: async () => {
-                        const title = document.getElementById('dig-title').value.trim();
-                        const subject = document.getElementById('dig-sub').value.trim();
-                        const facts = document.getElementById('dig-facts').value.trim();
-                        const issue = document.getElementById('dig-issue').value.trim();
-                        const ruling = document.getElementById('dig-ruling').value.trim();
-                        if (!title) return;
-                        await AppDB.add('digests', { title, subject, facts, issue, ruling, created: serverTimestamp() });
+                        const t = document.getElementById('dig-title').value.trim(); if (!t) return;
+                        await AppDB.add('digests', { title: t, subject: document.getElementById('dig-sub').value, facts: document.getElementById('dig-facts').value, issue: document.getElementById('dig-issue').value, ruling: document.getElementById('dig-ruling').value, created: serverTimestamp() });
                     }
                 });
             },
-            deleteDigest: (id) => {
-                 Modal.show({
-                    title: '<i class="fas fa-trash text-red-500"></i> Delete Digest',
-                    content: '<p class="text-slate-600">Are you sure you want to delete this case digest?</p>',
-                    submitText: 'Delete',
-                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium transition shadow-sm',
-                    onSubmit: async () => await AppDB.delete('digests', id)
-                });
-            },
+            deleteDigest: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete', content: '<p>Delete case digest?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('digests', id) }); },
 
             // --- AI CASE DIGESTER LOGIC ---
             digestText: '',
             handleDigestUpload: async (input) => {
-                const file = input.files[0];
-                if (!file) return;
-                
-                const display = document.getElementById('digest-filename');
-                const btn = document.getElementById('btn-process-digest');
-                display.innerText = file.name;
-                display.classList.remove('hidden');
-                btn.innerText = "Reading PDF...";
-                btn.disabled = true; 
-                
+                const file = input.files[0]; if (!file) return;
+                const display = document.getElementById('digest-filename'); const btn = document.getElementById('btn-process-digest');
+                display.innerText = file.name; display.classList.remove('hidden'); btn.innerText = "Reading PDF..."; btn.disabled = true; 
                 try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    let fullText = "";
-                    const maxPages = Math.min(pdf.numPages, 10);
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + "\n";
-                    }
-                    window.appHandlers.digestText = fullText;
-                    document.getElementById('digest-textarea').value = '';
-                    
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini';
-                } catch (e) {
-                    console.error(e);
-                    alert("Failed to read PDF.");
-                    btn.innerHTML = "Error";
-                }
+                    const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let fullText = ""; const maxPages = Math.min(pdf.numPages, 10);
+                    for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' ') + "\n"; }
+                    window.appHandlers.digestText = fullText; document.getElementById('digest-textarea').value = '';
+                    btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini';
+                } catch (e) { alert("Failed to read PDF."); btn.innerHTML = "Error"; }
             },
             processDigest: async () => {
                 const titleInput = document.getElementById('digest-title').value.trim();
@@ -729,44 +652,34 @@
                 
                 if (!apiKey) { alert("Please enter your Gemini API Key."); return; }
                 localStorage.setItem('gemini_api_key', apiKey);
-
                 if (!titleInput || !subjectInput) { alert("Please enter both the Case Title and Subject Matter."); return; }
-
                 let textToDigest = textAreaInput || window.appHandlers.digestText;
                 if (!textToDigest) { alert("Please paste the full text of the case or upload a PDF."); return; }
 
                 const area = document.getElementById('digest-results-area');
                 const btn = document.getElementById('btn-process-digest');
-                
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Gemini is Digesting...';
-                area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case based on "${subjectInput}"...</p></div>`;
+                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Gemini is Digesting...';
+                area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`;
                 
                 try {
                     const promptText = `
                         You are an expert law professor. Digest the following legal case text. 
-                        Crucially, focus your extraction of the Facts, Issue, and Ruling strictly in relation to the specific subject matter of: "${subjectInput}".
-                        Return the result strictly as a raw JSON object with exactly three keys: "facts", "issue", and "ruling". 
-                        Do not use markdown formatting like \`\`\`json. Just output the raw JSON string.
+                        Focus your extraction of the Facts, Issue, and Ruling strictly in relation to: "${subjectInput}".
+                        Return the result STRICTLY as a raw JSON object with exactly three keys: "facts", "issue", and "ruling". 
+                        Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.
                         
                         Case Text:
                         ${textToDigest.substring(0, 50000)}
                     `;
 
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ role: "user", parts: [{ text: promptText }] }],
-                            generationConfig: { responseMimeType: "application/json" }
-                        })
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } })
                     });
-
                     if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
                     const data = await response.json();
                     let jsonString = data.candidates[0].content.parts[0].text;
-                    // Protect against Gemini sending markdown by mistake
                     jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
                     const parsedDigest = JSON.parse(jsonString);
 
@@ -774,181 +687,24 @@
                     const issue = parsedDigest.issue || "Issue not found.";
                     const ruling = parsedDigest.ruling || "Ruling not found.";
 
-                    // Auto-Save to Firestore!
-                    await AppDB.add('digests', { 
-                        title: titleInput, subject: subjectInput, facts: facts, issue: issue, ruling: ruling, created: serverTimestamp() 
-                    });
+                    await AppDB.add('digests', { title: titleInput, subject: subjectInput, facts: facts, issue: issue, ruling: ruling, created: serverTimestamp() });
                     
                     area.innerHTML = `
                         <div class="space-y-4">
-                            <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center gap-4 shadow-sm animate-fade-in">
-                                <div class="flex items-center gap-3 flex-1">
-                                    <i class="fas fa-check-circle text-2xl"></i>
-                                    <div>
-                                        <p class="font-bold">Successfully Digested by Gemini!</p>
-                                        <p class="text-xs opacity-80 mt-0.5">Added to your Cons. Digests under "${subjectInput}".</p>
-                                    </div>
-                                </div>
-                                <button onclick="window.appHandlers.navigate('digests')" class="whitespace-nowrap bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">View Database</button>
+                            <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm animate-fade-in">
+                                <i class="fas fa-check-circle text-3xl"></i>
+                                <div class="flex-1"><p class="font-bold">Successfully Digested by Gemini!</p><p class="text-xs opacity-80">Saved to Cons. Digests.</p></div>
+                                <button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View</button>
                             </div>
-                            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm max-h-48 overflow-y-auto"><h4 class="font-bold text-slate-700 mb-2 uppercase text-xs tracking-wider">Facts of the Case</h4><p class="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">${facts}</p></div>
-                            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm max-h-48 overflow-y-auto"><h4 class="font-bold text-slate-700 mb-2 uppercase text-xs tracking-wider">Issue</h4><p class="text-sm text-slate-600 leading-relaxed font-medium whitespace-pre-wrap">${issue}</p></div>
-                            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm max-h-48 overflow-y-auto"><h4 class="font-bold text-slate-700 mb-2 uppercase text-xs tracking-wider">Ruling</h4><p class="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">${ruling}</p></div>
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm">${facts}</p></div>
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Issue</h4><p class="text-sm font-medium">${issue}</p></div>
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Ruling</h4><p class="text-sm">${ruling}</p></div>
                         </div>
                     `;
                 } catch (error) {
-                    console.error("Gemini processing failed:", error);
-                    area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 flex items-start gap-3"><i class="fas fa-exclamation-triangle mt-1"></i><div><p class="font-bold text-sm">Error processing with Gemini.</p><p class="text-xs mt-1">${error.message}. Ensure your API key is valid.</p></div></div>`;
+                    area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${error.message}</div>`;
                 } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini';
-                    window.appHandlers.digestText = '';
-                }
-            },
-
-            // --- AI MOCK REVIEW LOGIC ---
-            reviewMode: 'recit',
-            pdfText: '',
-            setMode: (mode) => {
-                window.appHandlers.reviewMode = mode;
-                document.getElementById('btn-recit').className = mode === 'recit' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
-                document.getElementById('btn-exam').className = mode === 'exam' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
-            },
-            handleFileUpload: async (input) => {
-                const file = input.files[0];
-                if (!file) return;
-
-                document.getElementById('file-name-display').innerText = file.name;
-                document.getElementById('file-name-display').classList.remove('hidden');
-                document.getElementById('btn-generate').innerText = "Processing PDF...";
-                
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    let fullText = "";
-                    const maxPages = Math.min(pdf.numPages, 10);
-                    
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + "\n";
-                    }
-
-                    window.appHandlers.pdfText = fullText;
-                    document.getElementById('btn-generate').disabled = false;
-                    document.getElementById('btn-generate').innerText = "Generate AI Review";
-                } catch (e) {
-                    console.error(e);
-                    alert("Error reading PDF.");
-                    document.getElementById('btn-generate').innerText = "Error";
-                }
-            },
-            generateReview: async () => {
-                const text = window.appHandlers.pdfText;
-                const mode = window.appHandlers.reviewMode;
-                const output = document.getElementById('review-output');
-                const apiKey = document.getElementById('review-api-key').value.trim();
-                const btn = document.getElementById('btn-generate');
-                
-                if (!apiKey) { alert("Please enter your Gemini API Key."); return; }
-                localStorage.setItem('gemini_api_key', apiKey);
-
-                if (!text) { alert("Please upload a PDF first."); return; }
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
-                output.innerHTML = `<div class="flex justify-center flex-col items-center h-full p-10"><div class="loader mb-4"></div><p class="text-slate-500 font-medium">Gemini is designing your ${mode === 'recit' ? 'Flashcards' : 'Mock Bar Exam'}...</p></div>`;
-
-                try {
-                    let promptText = mode === 'recit' ? `
-                        You are a strict law professor helping a student memorize key concepts. 
-                        Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. 
-                        Focus on definitions, elements of crimes/contracts, exceptions, and core doctrines.
-                        Return ONLY a raw JSON array of objects, where each object has a "front" (the question or term) and a "back" (the answer or definition). 
-                        Do NOT use markdown like \`\`\`json. Output raw JSON only.
-                        Material: ${text.substring(0, 45000)}
-                    ` : `
-                        You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 3 essay-type hypothetical legal problems.
-                        These problems must test issue spotting, critical thinking, and the direct application of the rules and jurisprudence found in the text.
-                        Return ONLY a raw JSON array of objects, where each object has:
-                        "question": (The hypothetical scenario and the specific question asked at the end).
-                        "guide": (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply).
-                        Do NOT use markdown like \`\`\`json. Output raw JSON only.
-                        Material: ${text.substring(0, 45000)}
-                    `;
-
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ role: "user", parts: [{ text: promptText }] }],
-                            generationConfig: { responseMimeType: "application/json" }
-                        })
-                    });
-
-                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
-
-                    const data = await response.json();
-                    let jsonString = data.candidates[0].content.parts[0].text;
-                    jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-                    const parsedData = JSON.parse(jsonString);
-
-                    output.innerHTML = ''; 
-
-                    if (mode === 'recit') {
-                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2 z-10 flex items-center gap-2"><i class="fas fa-bolt text-amber-500"></i> Recit Flashcards (${parsedData.length})</h3>`;
-                        const grid = document.createElement('div');
-                        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4 pb-8";
-                        
-                        parsedData.forEach((card, i) => {
-                            const el = document.createElement('div');
-                            el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective relative overflow-hidden";
-                            el.onclick = function() {
-                                this.querySelector('.card-inner').classList.toggle('hidden');
-                                this.querySelector('.card-back').classList.toggle('hidden');
-                            };
-                            el.innerHTML = `
-                                <div class="card-inner"><span class="text-[10px] text-blue-600 font-bold uppercase mb-3 block tracking-widest">Card ${i+1} / Question</span><p class="serif-text font-semibold text-slate-800 leading-snug">${card.front}</p><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-amber-600 transition">(Click to reveal answer)</p></div></div>
-                                <div class="card-back hidden animate-fade-in flex flex-col h-full justify-between"><div><span class="text-[10px] text-green-600 font-bold uppercase mb-3 block tracking-widest">Answer</span><p class="text-sm text-slate-700 leading-relaxed">${card.back}</p></div><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-blue-600 transition">(Click to flip back)</p></div></div>
-                            `;
-                            grid.appendChild(el);
-                        });
-                        output.appendChild(grid);
-
-                    } else {
-                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2 z-10 flex items-center gap-2"><i class="fas fa-balance-scale text-slate-800"></i> Mock Bar Examination</h3>`;
-                        const paper = document.createElement('div');
-                        paper.className = "bg-white p-8 rounded shadow-md border border-slate-300 min-h-[500px] serif-text mb-8";
-                        
-                        let html = `<div class="text-center border-b-2 border-black pb-4 mb-8"><h2 class="text-2xl font-bold uppercase tracking-widest">Mock Bar Examination</h2><p class="italic text-slate-600 mt-1">Focus: Issue Spotting & Application</p></div>`;
-
-                        parsedData.forEach((item, i) => {
-                            html += `
-                                <div class="mb-10">
-                                    <h4 class="font-bold mb-3 text-lg font-sans">Question ${i+1}</h4>
-                                    <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${item.question}</p>
-                                    <div class="bg-slate-50 p-3 border border-slate-200 rounded-t-lg"><label class="text-xs font-bold text-slate-500 uppercase font-sans tracking-wider">Your Answer</label></div>
-                                    <textarea class="w-full p-4 border-x border-b border-slate-200 rounded-b-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px]" placeholder="Type your legal analysis here (IRAC format recommended)..."></textarea>
-                                    <details class="mt-4 font-sans text-sm group">
-                                        <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Guide / Rubric</summary>
-                                        <div class="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-lg text-slate-800 leading-relaxed shadow-inner"><strong>Key Issues to Spot:</strong><br>${item.guide}</div>
-                                    </details>
-                                </div>
-                                ${i !== parsedData.length - 1 ? '<hr class="my-8 border-slate-200">' : ''}
-                            `;
-                        });
-                        paper.innerHTML = html;
-                        output.appendChild(paper);
-                    }
-
-                } catch (error) {
-                    console.error("Gemini failed:", error);
-                    output.innerHTML = `<div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 flex items-start gap-4 shadow-sm w-full max-w-lg mx-auto mt-10"><i class="fas fa-exclamation-triangle text-2xl mt-1"></i><div><p class="font-bold text-lg mb-1">Failed to generate review.</p><p class="text-sm opacity-90">${error.message}</p></div></div>`;
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = 'Generate AI Review';
+                    btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; window.appHandlers.digestText = '';
                 }
             }
         };
@@ -959,10 +715,8 @@
             if (user) {
                 currentUser = user;
                 document.getElementById('user-display').innerText = user.displayName || "Counsel";
-                
                 loginScreen.classList.add('opacity-0', 'pointer-events-none');
                 setTimeout(() => loginScreen.classList.add('hidden'), 300);
-                
                 window.appHandlers.navigate('dashboard');
             } else {
                 currentUser = null;
