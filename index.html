@@ -47,7 +47,7 @@
             <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-xl font-bold font-serif shadow-inner">L</div>
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.3</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.4</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -404,7 +404,11 @@
                             </div>
                             <details class="mt-4 group cursor-pointer outline-none">
                                 <summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3">
-                                    <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest
+                                    <div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest</div>
+                                    <div class="flex gap-2">
+                                        <button onclick="event.stopPropagation(); window.appHandlers.printDigest('${data.title.replace(/'/g, "\\'")}', '${(data.facts + data.issue + data.ruling).replace(/'/g, "\\'").replace(/\n/g, "")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button>
+                                        <button onclick="event.stopPropagation(); window.appHandlers.downloadText('${data.title}.txt', \`Title: ${data.title}\\nSubject: ${data.subject}\\n\\nFACTS:\\n${data.facts}\\n\\nISSUE:\\n${data.issue}\\n\\nRULING:\\n${data.ruling}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button>
+                                    </div>
                                 </summary>
                                 <div class="mt-4 p-5 bg-white border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">
                                     ${data.facts ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Facts</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.facts}</p></div>` : ''}
@@ -524,7 +528,7 @@
             }
         }
 
-        // --- NEW: Saved Reviews View ---
+        // --- Saved Reviews View ---
         class SavedReviewsView {
             constructor() { this.unsubscribe = null; }
             render() {
@@ -550,7 +554,6 @@
                         return;
                     }
 
-                    // Reset savedExamData mapping
                     window.appHandlers.savedExamData = {};
 
                     snapshot.forEach(doc => {
@@ -559,9 +562,12 @@
                         row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
 
                         let contentHtml = '';
+                        let textForDownload = '';
+
                         if (data.type === 'recit') {
                             contentHtml = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
                             data.content.forEach((c, i) => {
+                                textForDownload += `Q${i+1}: ${c.front}\nA: ${c.back}\n\n`;
                                 contentHtml += `
                                     <div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between group">
                                         <div>
@@ -576,22 +582,18 @@
                             });
                             contentHtml += `</div>`;
                         } else {
-                            // Store the exam content so the evaluator can access it later
                             window.appHandlers.savedExamData[doc.id] = data.content;
                             data.content.forEach((c, i) => {
+                                textForDownload += `Question ${i+1}:\n${c.question}\n\nSuggested Guide:\n${c.suggested_answer}\n\n-----------------\n\n`;
                                 contentHtml += `
                                     <div class="mb-8 p-5 bg-white border border-slate-200 rounded-xl shadow-sm">
                                         <h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4>
                                         <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${c.question}</p>
-                                        
                                         <textarea id="saved-exam-answer-${doc.id}-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your answer here..."></textarea>
-                                        
                                         <div class="mt-4">
                                             <button onclick="window.appHandlers.evaluateAnswer(${i}, '${doc.id}')" id="btn-eval-${doc.id}-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check Answer</button>
                                         </div>
-                                        
                                         <div id="eval-result-${doc.id}-${i}" class="mt-4 hidden"></div>
-
                                         <details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4">
                                             <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary>
                                             <div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${c.suggested_answer}</div>
@@ -610,7 +612,11 @@
                             </div>
                             <details class="mt-4 group cursor-pointer outline-none">
                                 <summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3">
-                                    <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Material
+                                    <div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Material</div>
+                                    <div class="flex gap-2">
+                                        <button onclick="event.stopPropagation(); window.appHandlers.printContent('${data.title.replace(/'/g, "\\'")}', '<h1>${data.title}</h1><br>${textForDownload.replace(/\n/g, '<br>')}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button>
+                                        <button onclick="event.stopPropagation(); window.appHandlers.downloadText('${data.title}.txt', \`${textForDownload.replace(/'/g, "\\'")}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button>
+                                    </div>
                                 </summary>
                                 <div class="mt-4 cursor-text border-t border-slate-200 pt-4">
                                     ${contentHtml}
@@ -660,6 +666,27 @@
         }
 
         window.appHandlers = {
+            // --- PRINT & DOWNLOAD HELPERS ---
+            printContent: (title, htmlContent) => {
+                const printWindow = window.open('', '', 'height=600,width=800');
+                printWindow.document.write('<html><head><title>'+title+'</title>');
+                printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+                printWindow.document.write('</head><body class="p-10 font-sans">');
+                printWindow.document.write(htmlContent);
+                printWindow.document.write('</body></html>');
+                printWindow.document.close();
+                setTimeout(() => printWindow.print(), 500); // Small delay to load styles
+            },
+            downloadText: (filename, textContent) => {
+                const element = document.createElement('a');
+                element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(textContent));
+                element.setAttribute('download', filename);
+                element.style.display = 'none';
+                document.body.appendChild(element);
+                element.click();
+                document.body.removeChild(element);
+            },
+
             // --- AUTHENTICATION ---
             login: async () => { try { await signInWithPopup(auth, provider); } catch (e) { alert("Login failed. Check Authorized Domains in Firebase Console."); } },
             logout: async () => { try { await signOut(auth); } catch (e) {} },
@@ -711,7 +738,13 @@
                 const area = document.getElementById('notebook-editor-area');
                 area.innerHTML = `
                     <div class="flex-1 flex flex-col p-8 bg-white m-6 rounded-2xl shadow-sm border border-slate-200">
-                        <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none mb-6 focus:ring-0 placeholder-slate-300 serif-text w-full bg-transparent" value="${title}" placeholder="Page Title...">
+                        <div class="flex justify-between items-center mb-6">
+                            <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300 serif-text bg-transparent flex-1" value="${title}" placeholder="Page Title...">
+                            <div class="flex gap-2">
+                                <button onclick="window.appHandlers.printContent('${title}', document.getElementById('note-content-editor').value.replace(/\\n/g, '<br>'))" class="text-slate-400 hover:text-blue-600 p-2"><i class="fas fa-print"></i></button>
+                                <button onclick="window.appHandlers.downloadText('${title}.txt', document.getElementById('note-content-editor').value)" class="text-slate-400 hover:text-blue-600 p-2"><i class="fas fa-download"></i></button>
+                            </div>
+                        </div>
                         <textarea id="note-content-editor" class="flex-1 w-full border-none outline-none resize-none text-slate-700 leading-relaxed text-base font-sans placeholder-slate-300 focus:ring-0 bg-transparent" placeholder="Start typing your notes here...">${content || ''}</textarea>
                         <div class="mt-4 flex justify-end items-center gap-4 pt-4 border-t border-slate-100">
                             <span id="note-save-status" class="text-sm font-bold text-green-500 opacity-0 transition-opacity"><i class="fas fa-check-circle mr-1"></i> Saved to Cloud</span>
@@ -890,10 +923,12 @@
                     
                     let fullText = "";
                     const maxPages = Math.min(pdf.numPages, 10);
+                    
                     for (let i = 1; i <= maxPages; i++) {
                         const page = await pdf.getPage(i);
                         const textContent = await page.getTextContent();
-                        fullText += textContent.items.map(item => item.str).join(' ') + "\n";
+                        fullText += textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + "\n";
                     }
 
                     window.appHandlers.pdfText = fullText;
@@ -909,244 +944,4 @@
                 let text = textAreaInput || window.appHandlers.pdfText;
                 
                 const mode = window.appHandlers.reviewMode;
-                const output = document.getElementById('review-output');
-                const apiKey = document.getElementById('review-api-key').value.trim();
-                const btn = document.getElementById('btn-generate');
-                
-                if (!apiKey) { alert("Please enter your Gemini API Key."); return; }
-                localStorage.setItem('gemini_api_key', apiKey);
-
-                if (!text) { alert("Please paste text or upload a text-searchable PDF first."); return; }
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
-                output.innerHTML = `<div class="flex justify-center flex-col items-center h-full p-10"><div class="loader mb-4"></div><p class="text-slate-500 font-medium">Gemini is designing your ${mode === 'recit' ? 'Flashcards' : 'Mock Bar Exam'}...</p></div>`;
-
-                try {
-                    // Generate 5 questions for Exam mode
-                    let promptText = mode === 'recit' ? `
-                        You are a strict law professor helping a student memorize key concepts. 
-                        Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. 
-                        Focus on definitions, elements, exceptions, and core doctrines.
-                        Return ONLY a raw JSON array of objects, where each object has a "front" (the question or term) and a "back" (the answer or definition). 
-                        Do NOT use markdown like \`\`\`json. Output raw JSON only.
-                        Material: ${text.substring(0, 45000)}
-                    ` : `
-                        You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 5 essay-type hypothetical legal problems.
-                        These problems must test issue spotting, critical thinking, and the direct application of the rules and jurisprudence found in the text.
-                        Return ONLY a raw JSON array of objects, where each object has:
-                        "question": (The hypothetical scenario and the specific question asked at the end).
-                        "suggested_answer": (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply).
-                        Do NOT use markdown like \`\`\`json. Output raw JSON only.
-                        Material: ${text.substring(0, 45000)}
-                    `;
-
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } })
-                    });
-
-                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
-
-                    const data = await response.json();
-                    let jsonString = data.candidates[0].content.parts[0].text;
-                    jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-                    const parsedData = JSON.parse(jsonString);
-
-                    // Save temporarily for the "Save to Reviews" button
-                    window.appHandlers.currentReviewData = { mode: mode, content: parsedData };
-
-                    const saveUI = `
-                        <div class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm mb-6 flex gap-3 items-center sticky top-0 z-20">
-                            <input type="text" id="save-review-title" placeholder="Name this review (e.g., Obicon Art 1156)" class="flex-1 p-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium">
-                            <button onclick="window.appHandlers.saveCurrentReview()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition whitespace-nowrap">
-                                <i class="fas fa-save mr-1"></i> Save Material
-                            </button>
-                        </div>
-                    `;
-
-                    output.innerHTML = saveUI; 
-
-                    if (mode === 'recit') {
-                        output.innerHTML += `<h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2"><i class="fas fa-bolt text-amber-500"></i> Recit Flashcards (${parsedData.length})</h3>`;
-                        const grid = document.createElement('div');
-                        grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4 pb-8";
-                        
-                        parsedData.forEach((card, i) => {
-                            const el = document.createElement('div');
-                            el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective relative overflow-hidden";
-                            el.onclick = function() {
-                                this.querySelector('.card-inner').classList.toggle('hidden');
-                                this.querySelector('.card-back').classList.toggle('hidden');
-                            };
-                            el.innerHTML = `
-                                <div class="card-inner"><span class="text-[10px] text-blue-600 font-bold uppercase mb-3 block tracking-widest">Card ${i+1} / Question</span><p class="serif-text font-semibold text-slate-800 leading-snug">${card.front}</p><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-amber-600 transition">(Click to reveal answer)</p></div></div>
-                                <div class="card-back hidden animate-fade-in flex flex-col h-full justify-between"><div><span class="text-[10px] text-green-600 font-bold uppercase mb-3 block tracking-widest">Answer</span><p class="text-sm text-slate-700 leading-relaxed">${card.back}</p></div><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-blue-600 transition">(Click to flip back)</p></div></div>
-                            `;
-                            grid.appendChild(el);
-                        });
-                        output.appendChild(grid);
-
-                    } else {
-                        output.innerHTML += `<h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2"><i class="fas fa-balance-scale text-slate-800"></i> Mock Bar Examination</h3>`;
-                        const paper = document.createElement('div');
-                        paper.className = "bg-white p-8 rounded shadow-md border border-slate-300 min-h-[500px] serif-text mb-8";
-                        
-                        let html = `<div class="text-center border-b-2 border-black pb-4 mb-8"><h2 class="text-2xl font-bold uppercase tracking-widest">Mock Bar Examination</h2><p class="italic text-slate-600 mt-1">Focus: Issue Spotting & Application</p></div>`;
-
-                        parsedData.forEach((item, i) => {
-                            html += `
-                                <div class="mb-10">
-                                    <h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4>
-                                    <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${item.question}</p>
-                                    
-                                    <textarea id="live-exam-answer-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your legal analysis here..."></textarea>
-                                    
-                                    <div class="mt-4">
-                                        <button onclick="window.appHandlers.evaluateAnswer(${i}, null)" id="btn-eval-live-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check My Answer</button>
-                                    </div>
-                                    
-                                    <div id="eval-result-live-${i}" class="mt-4 hidden"></div>
-
-                                    <details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4">
-                                        <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary>
-                                        <div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${item.suggested_answer}</div>
-                                    </details>
-                                </div>
-                                ${i !== parsedData.length - 1 ? '<hr class="my-8 border-slate-200">' : ''}
-                            `;
-                        });
-                        paper.innerHTML = html;
-                        output.appendChild(paper);
-                    }
-
-                } catch (error) {
-                    console.error("Gemini failed:", error);
-                    output.innerHTML = `<div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 flex items-start gap-4 shadow-sm w-full max-w-lg mx-auto mt-10"><i class="fas fa-exclamation-triangle text-2xl mt-1"></i><div><p class="font-bold text-lg mb-1">Failed to generate review.</p><p class="text-sm opacity-90">${error.message}</p></div></div>`;
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = 'Generate AI Review';
-                    window.appHandlers.pdfText = ''; // Clear text after using it
-                }
-            },
-
-            // --- AI ANSWER GRADING ---
-            evaluateAnswer: async (index, docId) => {
-                const apiKey = localStorage.getItem('gemini_api_key');
-                if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; }
-                
-                const isLive = docId === null;
-                const answerId = isLive ? `live-exam-answer-${index}` : `saved-exam-answer-${docId}-${index}`;
-                const btnId = isLive ? `btn-eval-live-${index}` : `btn-eval-${docId}-${index}`;
-                const resultId = isLive ? `eval-result-live-${index}` : `eval-result-${docId}-${index}`;
-                
-                const answerEl = document.getElementById(answerId);
-                const userAnswer = answerEl.value.trim();
-                if (!userAnswer) { alert("Please type an answer first."); return; }
-
-                const btn = document.getElementById(btnId);
-                const resultDiv = document.getElementById(resultId);
-                
-                // Get the question data
-                let reviewData;
-                if (isLive && window.appHandlers.currentReviewData) {
-                    reviewData = window.appHandlers.currentReviewData.content[index];
-                } else if (!isLive && window.appHandlers.savedExamData[docId]) {
-                    reviewData = window.appHandlers.savedExamData[docId][index];
-                }
-                if(!reviewData) return;
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...';
-                resultDiv.classList.remove('hidden');
-                resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`;
-
-                try {
-                    const promptText = `
-                        You are a strict but fair law professor grading a student's answer to a Bar Exam question.
-                        
-                        Question:
-                        ${reviewData.question}
-                        
-                        Suggested Correct Answer / Rubric:
-                        ${reviewData.suggested_answer}
-                        
-                        Student's Answer:
-                        ${userAnswer}
-                        
-                        Task:
-                        Provide a brief, constructive evaluation of the student's answer. 
-                        1. Mention what they got right (Issue spotting, Rule application).
-                        2. Mention what they missed or got wrong.
-                        3. Give a final score out of 100%.
-                        
-                        Keep the feedback concise and format it with clean HTML tags (like <b>, <br>) for readability, but DO NOT wrap it in a code block or markdown.
-                    `;
-
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] })
-                    });
-
-                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                    const data = await response.json();
-                    let feedback = data.candidates[0].content.parts[0].text;
-                    
-                    resultDiv.innerHTML = `
-                        <div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans">
-                            <h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>
-                            ${feedback}
-                        </div>
-                    `;
-                } catch (error) {
-                    resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`;
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer';
-                }
-            },
-            
-            // --- NEW: Save and Delete Reviews Logic ---
-            saveCurrentReview: async () => {
-                const title = document.getElementById('save-review-title').value.trim();
-                if (!title) { alert('Please enter a title to save this review.'); return; }
-                if (!window.appHandlers.currentReviewData) return;
-
-                const { mode, content } = window.appHandlers.currentReviewData;
-                try {
-                    await AppDB.add('reviews', { title, type: mode, content: content, created: serverTimestamp() });
-                    alert('Review saved successfully to your Saved Reviews tab!');
-                    window.appHandlers.navigate('saved_reviews');
-                } catch (e) {
-                    console.error(e); alert('Failed to save review.');
-                }
-            },
-            deleteReview: (id) => {
-                Modal.show({ 
-                    title: '<i class="fas fa-trash text-red-500"></i> Delete Review', 
-                    content: '<p>Are you sure you want to delete this saved review?</p>', 
-                    submitText: 'Delete', 
-                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition shadow-sm', 
-                    onSubmit: async () => await AppDB.delete('reviews', id) 
-                });
-            }
-        };
-
-        // --- AUTHENTICATION LISTENER ---
-        onAuthStateChanged(auth, (user) => {
-            const loginScreen = document.getElementById('login-screen');
-            if (user) {
-                currentUser = user;
-                document.getElementById('user-display').innerText = user.displayName || "Counsel";
-                loginScreen.classList.add('opacity-0', 'pointer-events-none');
-                setTimeout(() => loginScreen.classList.add('hidden'), 300);
-                window.appHandlers.navigate('dashboard');
-            } else {
-                currentUser = null;
-                if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
-                loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
-            }
-        });
-    </script>
-</body>
-</html>
+                const output = document.
