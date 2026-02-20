@@ -916,7 +916,8 @@
                     btn.innerHTML = 'Generate AI Review';
                     window.appHandlers.pdfText = ''; // Clear text after using it
                 }
-            },
+            } // <-- 1. Closes the generateReview function
+        }; // <-- 2. THIS IS THE FIX! This closes the window.appHandlers object.
 
         // --- AUTHENTICATION LISTENER ---
         onAuthStateChanged(auth, (user) => {
