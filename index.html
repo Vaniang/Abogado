@@ -19,7 +19,6 @@
         body { font-family: 'Inter', sans-serif; }
         .serif-text { font-family: 'Merriweather', serif; }
         
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -48,7 +47,7 @@
             <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-xl font-bold font-serif shadow-inner">L</div>
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.1</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.3</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -371,7 +370,6 @@
                         <div class="flex justify-between items-center mb-6 flex-shrink-0">
                             <div>
                                 <h3 class="text-xl font-bold text-slate-700">Consolidated Case Digests</h3>
-                                <p class="text-xs text-slate-500 mt-1">If you see a blank digest from testing, click the trash can to delete it.</p>
                             </div>
                             <button onclick="window.appHandlers.addDigest()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md">
                                 <i class="fas fa-plus mr-2"></i>Manual Digest
@@ -466,8 +464,7 @@
             }
         }
 
-        // --- NEW: ReviewView Class Added Back ---
-      class ReviewView {
+        class ReviewView {
             constructor() {
                 this.generatedContent = null;
                 this.isProcessing = false;
@@ -489,7 +486,7 @@
                                 
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Paste Text <span class="text-xs text-slate-400 font-normal">(Best for Codals)</span></label>
-                                    <textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..."></textarea>
+                                    <textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..." oninput="document.getElementById('btn-generate').disabled = false;"></textarea>
                                 </div>
 
                                 <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-2">- OR -</div>
@@ -518,12 +515,111 @@
                                 <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
                                     <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
                                     <h4 class="text-lg font-semibold">AI Mock Review</h4>
-                                    <p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate practice questions based on your material.</p>
+                                    <p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate interactive practice questions based on your material.</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 `;
+            }
+        }
+
+        // --- NEW: Saved Reviews View ---
+        class SavedReviewsView {
+            constructor() { this.unsubscribe = null; }
+            render() {
+                return `
+                    <div class="max-w-5xl mx-auto h-full flex flex-col">
+                        <div class="flex justify-between items-center mb-6 flex-shrink-0">
+                            <h3 class="text-xl font-bold text-slate-700">My Saved Reviews</h3>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
+                            <div id="saved-reviews-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            init() {
+                this.unsubscribe = AppDB.subscribe('reviews', (snapshot) => {
+                    const list = document.getElementById('saved-reviews-list');
+                    if (!list) return;
+                    list.innerHTML = '';
+                    
+                    if (snapshot.empty) {
+                        list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-archive text-5xl mb-4 opacity-30"></i><p>No saved reviews yet.</p></div>`;
+                        return;
+                    }
+
+                    // Reset savedExamData mapping
+                    window.appHandlers.savedExamData = {};
+
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const row = document.createElement('div');
+                        row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
+
+                        let contentHtml = '';
+                        if (data.type === 'recit') {
+                            contentHtml = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
+                            data.content.forEach((c, i) => {
+                                contentHtml += `
+                                    <div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between group">
+                                        <div>
+                                            <p class="text-[10px] text-blue-600 font-bold uppercase mb-2 tracking-widest">Q${i+1}</p>
+                                            <p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${c.front}</p>
+                                        </div>
+                                        <details class="text-sm group-details cursor-pointer outline-none mt-auto border-t border-slate-100 pt-3">
+                                            <summary class="text-xs text-amber-600 font-bold hover:text-amber-700 outline-none list-none select-none">(Reveal Answer)</summary>
+                                            <div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200 text-slate-700 leading-relaxed shadow-inner">${c.back}</div>
+                                        </details>
+                                    </div>`;
+                            });
+                            contentHtml += `</div>`;
+                        } else {
+                            // Store the exam content so the evaluator can access it later
+                            window.appHandlers.savedExamData[doc.id] = data.content;
+                            data.content.forEach((c, i) => {
+                                contentHtml += `
+                                    <div class="mb-8 p-5 bg-white border border-slate-200 rounded-xl shadow-sm">
+                                        <h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4>
+                                        <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${c.question}</p>
+                                        
+                                        <textarea id="saved-exam-answer-${doc.id}-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your answer here..."></textarea>
+                                        
+                                        <div class="mt-4">
+                                            <button onclick="window.appHandlers.evaluateAnswer(${i}, '${doc.id}')" id="btn-eval-${doc.id}-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check Answer</button>
+                                        </div>
+                                        
+                                        <div id="eval-result-${doc.id}-${i}" class="mt-4 hidden"></div>
+
+                                        <details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4">
+                                            <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary>
+                                            <div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${c.suggested_answer}</div>
+                                        </details>
+                                    </div>`;
+                            });
+                        }
+
+                        row.innerHTML = `
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1 pr-4">
+                                    <h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4>
+                                    <span class="inline-block mt-2 ${data.type === 'recit' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.type === 'recit' ? 'Flashcards' : 'Mock Exam'}</span>
+                                </div>
+                                <button onclick="window.appHandlers.deleteReview('${doc.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <details class="mt-4 group cursor-pointer outline-none">
+                                <summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3">
+                                    <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Material
+                                </summary>
+                                <div class="mt-4 cursor-text border-t border-slate-200 pt-4">
+                                    ${contentHtml}
+                                </div>
+                            </details>
+                        `;
+                        list.appendChild(row);
+                    });
+                });
             }
         }
 
@@ -534,6 +630,7 @@
             digests: new DigestsView(),
             case_digester: new CaseDigesterView(), 
             review: new ReviewView(),
+            saved_reviews: new SavedReviewsView(),
             codals: { render: () => { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return `<div class="text-center mt-20 text-slate-500">Opening eCodal+ in a new tab...</div>`; } },
         };
 
@@ -547,7 +644,8 @@
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' },
             { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' },
             { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' },
-            { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }
+            { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' },
+            { id: 'saved_reviews', label: 'Saved Reviews', icon: 'fa-archive' }
         ];
 
         function renderSidebar() {
@@ -769,6 +867,9 @@
             // --- AI MOCK REVIEW LOGIC ---
             reviewMode: 'recit',
             pdfText: '',
+            currentReviewData: null,
+            savedExamData: {}, 
+            
             setMode: (mode) => {
                 window.appHandlers.reviewMode = mode;
                 document.getElementById('btn-recit').className = mode === 'recit' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
@@ -781,7 +882,6 @@
                 document.getElementById('file-name-display').innerText = file.name;
                 document.getElementById('file-name-display').classList.remove('hidden');
                 document.getElementById('btn-generate').innerText = "Processing PDF...";
-                // Clear text area if they upload a file
                 document.getElementById('review-textarea').value = '';
                 
                 try {
@@ -790,21 +890,17 @@
                     
                     let fullText = "";
                     const maxPages = Math.min(pdf.numPages, 10);
-                    
                     for (let i = 1; i <= maxPages; i++) {
                         const page = await pdf.getPage(i);
                         const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + "\n";
+                        fullText += textContent.items.map(item => item.str).join(' ') + "\n";
                     }
 
                     window.appHandlers.pdfText = fullText;
                     document.getElementById('btn-generate').disabled = false;
                     document.getElementById('btn-generate').innerText = "Generate AI Review";
                 } catch (e) {
-                    console.error(e);
-                    alert("Error reading PDF.");
-                    document.getElementById('btn-generate').innerText = "Error";
+                    console.error(e); alert("Error reading PDF."); document.getElementById('btn-generate').innerText = "Error";
                 }
             },
             
@@ -827,6 +923,7 @@
                 output.innerHTML = `<div class="flex justify-center flex-col items-center h-full p-10"><div class="loader mb-4"></div><p class="text-slate-500 font-medium">Gemini is designing your ${mode === 'recit' ? 'Flashcards' : 'Mock Bar Exam'}...</p></div>`;
 
                 try {
+                    // Generate 5 questions for Exam mode
                     let promptText = mode === 'recit' ? `
                         You are a strict law professor helping a student memorize key concepts. 
                         Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. 
@@ -835,22 +932,18 @@
                         Do NOT use markdown like \`\`\`json. Output raw JSON only.
                         Material: ${text.substring(0, 45000)}
                     ` : `
-                        You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 3 essay-type hypothetical legal problems.
+                        You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 5 essay-type hypothetical legal problems.
                         These problems must test issue spotting, critical thinking, and the direct application of the rules and jurisprudence found in the text.
                         Return ONLY a raw JSON array of objects, where each object has:
                         "question": (The hypothetical scenario and the specific question asked at the end).
-                        "guide": (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply).
+                        "suggested_answer": (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply).
                         Do NOT use markdown like \`\`\`json. Output raw JSON only.
                         Material: ${text.substring(0, 45000)}
                     `;
 
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ role: "user", parts: [{ text: promptText }] }],
-                            generationConfig: { responseMimeType: "application/json" }
-                        })
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } })
                     });
 
                     if (!response.ok) throw new Error(`API Error: ${response.status}`);
@@ -860,10 +953,22 @@
                     jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
                     const parsedData = JSON.parse(jsonString);
 
-                    output.innerHTML = ''; 
+                    // Save temporarily for the "Save to Reviews" button
+                    window.appHandlers.currentReviewData = { mode: mode, content: parsedData };
+
+                    const saveUI = `
+                        <div class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm mb-6 flex gap-3 items-center sticky top-0 z-20">
+                            <input type="text" id="save-review-title" placeholder="Name this review (e.g., Obicon Art 1156)" class="flex-1 p-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+                            <button onclick="window.appHandlers.saveCurrentReview()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition whitespace-nowrap">
+                                <i class="fas fa-save mr-1"></i> Save Material
+                            </button>
+                        </div>
+                    `;
+
+                    output.innerHTML = saveUI; 
 
                     if (mode === 'recit') {
-                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2 z-10 flex items-center gap-2"><i class="fas fa-bolt text-amber-500"></i> Recit Flashcards (${parsedData.length})</h3>`;
+                        output.innerHTML += `<h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2"><i class="fas fa-bolt text-amber-500"></i> Recit Flashcards (${parsedData.length})</h3>`;
                         const grid = document.createElement('div');
                         grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4 pb-8";
                         
@@ -883,7 +988,7 @@
                         output.appendChild(grid);
 
                     } else {
-                        output.innerHTML = `<h3 class="font-bold text-xl mb-4 sticky top-0 bg-slate-200 py-2 z-10 flex items-center gap-2"><i class="fas fa-balance-scale text-slate-800"></i> Mock Bar Examination</h3>`;
+                        output.innerHTML += `<h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2"><i class="fas fa-balance-scale text-slate-800"></i> Mock Bar Examination</h3>`;
                         const paper = document.createElement('div');
                         paper.className = "bg-white p-8 rounded shadow-md border border-slate-300 min-h-[500px] serif-text mb-8";
                         
@@ -892,13 +997,20 @@
                         parsedData.forEach((item, i) => {
                             html += `
                                 <div class="mb-10">
-                                    <h4 class="font-bold mb-3 text-lg font-sans">Question ${i+1}</h4>
+                                    <h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4>
                                     <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${item.question}</p>
-                                    <div class="bg-slate-50 p-3 border border-slate-200 rounded-t-lg"><label class="text-xs font-bold text-slate-500 uppercase font-sans tracking-wider">Your Answer</label></div>
-                                    <textarea class="w-full p-4 border-x border-b border-slate-200 rounded-b-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px]" placeholder="Type your legal analysis here (IRAC format recommended)..."></textarea>
-                                    <details class="mt-4 font-sans text-sm group">
-                                        <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Guide / Rubric</summary>
-                                        <div class="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-lg text-slate-800 leading-relaxed shadow-inner"><strong>Key Issues to Spot:</strong><br>${item.guide}</div>
+                                    
+                                    <textarea id="live-exam-answer-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your legal analysis here..."></textarea>
+                                    
+                                    <div class="mt-4">
+                                        <button onclick="window.appHandlers.evaluateAnswer(${i}, null)" id="btn-eval-live-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check My Answer</button>
+                                    </div>
+                                    
+                                    <div id="eval-result-live-${i}" class="mt-4 hidden"></div>
+
+                                    <details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4">
+                                        <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary>
+                                        <div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${item.suggested_answer}</div>
                                     </details>
                                 </div>
                                 ${i !== parsedData.length - 1 ? '<hr class="my-8 border-slate-200">' : ''}
@@ -916,8 +1028,109 @@
                     btn.innerHTML = 'Generate AI Review';
                     window.appHandlers.pdfText = ''; // Clear text after using it
                 }
-            } // <-- 1. Closes the generateReview function
-        }; // <-- 2. THIS IS THE FIX! This closes the window.appHandlers object.
+            },
+
+            // --- AI ANSWER GRADING ---
+            evaluateAnswer: async (index, docId) => {
+                const apiKey = localStorage.getItem('gemini_api_key');
+                if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; }
+                
+                const isLive = docId === null;
+                const answerId = isLive ? `live-exam-answer-${index}` : `saved-exam-answer-${docId}-${index}`;
+                const btnId = isLive ? `btn-eval-live-${index}` : `btn-eval-${docId}-${index}`;
+                const resultId = isLive ? `eval-result-live-${index}` : `eval-result-${docId}-${index}`;
+                
+                const answerEl = document.getElementById(answerId);
+                const userAnswer = answerEl.value.trim();
+                if (!userAnswer) { alert("Please type an answer first."); return; }
+
+                const btn = document.getElementById(btnId);
+                const resultDiv = document.getElementById(resultId);
+                
+                // Get the question data
+                let reviewData;
+                if (isLive && window.appHandlers.currentReviewData) {
+                    reviewData = window.appHandlers.currentReviewData.content[index];
+                } else if (!isLive && window.appHandlers.savedExamData[docId]) {
+                    reviewData = window.appHandlers.savedExamData[docId][index];
+                }
+                if(!reviewData) return;
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...';
+                resultDiv.classList.remove('hidden');
+                resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`;
+
+                try {
+                    const promptText = `
+                        You are a strict but fair law professor grading a student's answer to a Bar Exam question.
+                        
+                        Question:
+                        ${reviewData.question}
+                        
+                        Suggested Correct Answer / Rubric:
+                        ${reviewData.suggested_answer}
+                        
+                        Student's Answer:
+                        ${userAnswer}
+                        
+                        Task:
+                        Provide a brief, constructive evaluation of the student's answer. 
+                        1. Mention what they got right (Issue spotting, Rule application).
+                        2. Mention what they missed or got wrong.
+                        3. Give a final score out of 100%.
+                        
+                        Keep the feedback concise and format it with clean HTML tags (like <b>, <br>) for readability, but DO NOT wrap it in a code block or markdown.
+                    `;
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] })
+                    });
+
+                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                    const data = await response.json();
+                    let feedback = data.candidates[0].content.parts[0].text;
+                    
+                    resultDiv.innerHTML = `
+                        <div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans">
+                            <h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>
+                            ${feedback}
+                        </div>
+                    `;
+                } catch (error) {
+                    resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer';
+                }
+            },
+            
+            // --- NEW: Save and Delete Reviews Logic ---
+            saveCurrentReview: async () => {
+                const title = document.getElementById('save-review-title').value.trim();
+                if (!title) { alert('Please enter a title to save this review.'); return; }
+                if (!window.appHandlers.currentReviewData) return;
+
+                const { mode, content } = window.appHandlers.currentReviewData;
+                try {
+                    await AppDB.add('reviews', { title, type: mode, content: content, created: serverTimestamp() });
+                    alert('Review saved successfully to your Saved Reviews tab!');
+                    window.appHandlers.navigate('saved_reviews');
+                } catch (e) {
+                    console.error(e); alert('Failed to save review.');
+                }
+            },
+            deleteReview: (id) => {
+                Modal.show({ 
+                    title: '<i class="fas fa-trash text-red-500"></i> Delete Review', 
+                    content: '<p>Are you sure you want to delete this saved review?</p>', 
+                    submitText: 'Delete', 
+                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition shadow-sm', 
+                    onSubmit: async () => await AppDB.delete('reviews', id) 
+                });
+            }
+        };
 
         // --- AUTHENTICATION LISTENER ---
         onAuthStateChanged(auth, (user) => {
