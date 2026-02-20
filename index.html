@@ -467,44 +467,58 @@
         }
 
         // --- NEW: ReviewView Class Added Back ---
-        class ReviewView {
-            constructor() { this.generatedContent = null; this.isProcessing = false; }
+      class ReviewView {
+            constructor() {
+                this.generatedContent = null;
+                this.isProcessing = false;
+            }
             render() {
                 const savedKey = localStorage.getItem('gemini_api_key') || '';
                 return `
                     <div class="max-w-5xl mx-auto h-full flex flex-col">
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-y-auto">
                                 <h3 class="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
                                     <i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review
                                 </h3>
+
                                 <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
                                     <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
                                     <input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
                                 </div>
-                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Paste Text <span class="text-xs text-slate-400 font-normal">(Best for Codals)</span></label>
+                                    <textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..."></textarea>
+                                </div>
+
+                                <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-2">- OR -</div>
+
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
                                     <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
-                                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-3"></i>
-                                    <p class="text-sm font-medium text-slate-600">Click to upload PDF</p>
-                                    <p class="text-xs text-slate-400 mt-1">Lecture notes, reviewers, or codals</p>
+                                    <i class="fas fa-file-pdf text-2xl text-slate-400 mb-2"></i>
+                                    <p class="text-sm font-medium text-slate-600">Upload text-searchable PDF</p>
                                 </div>
                                 <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
-                                <div class="mt-6 space-y-3">
+
+                                <div class="mt-4 space-y-3">
                                     <label class="block text-sm font-medium text-slate-700">Review Mode</label>
                                     <div class="grid grid-cols-2 gap-2">
                                         <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Recit (Flashcards)</button>
                                         <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
                                     </div>
                                 </div>
-                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+
+                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                                     Generate AI Review
                                 </button>
                             </div>
+
                             <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
                                 <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
                                     <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
                                     <h4 class="text-lg font-semibold">AI Mock Review</h4>
-                                    <p class="text-sm max-w-xs mt-2">Upload a PDF to generate practice questions or flashcards based on your material.</p>
+                                    <p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate practice questions based on your material.</p>
                                 </div>
                             </div>
                         </div>
@@ -767,6 +781,8 @@
                 document.getElementById('file-name-display').innerText = file.name;
                 document.getElementById('file-name-display').classList.remove('hidden');
                 document.getElementById('btn-generate').innerText = "Processing PDF...";
+                // Clear text area if they upload a file
+                document.getElementById('review-textarea').value = '';
                 
                 try {
                     const arrayBuffer = await file.arrayBuffer();
@@ -791,8 +807,11 @@
                     document.getElementById('btn-generate').innerText = "Error";
                 }
             },
+            
             generateReview: async () => {
-                const text = window.appHandlers.pdfText;
+                const textAreaInput = document.getElementById('review-textarea').value.trim();
+                let text = textAreaInput || window.appHandlers.pdfText;
+                
                 const mode = window.appHandlers.reviewMode;
                 const output = document.getElementById('review-output');
                 const apiKey = document.getElementById('review-api-key').value.trim();
@@ -801,7 +820,7 @@
                 if (!apiKey) { alert("Please enter your Gemini API Key."); return; }
                 localStorage.setItem('gemini_api_key', apiKey);
 
-                if (!text) { alert("Please upload a PDF first."); return; }
+                if (!text) { alert("Please paste text or upload a text-searchable PDF first."); return; }
 
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
@@ -811,7 +830,7 @@
                     let promptText = mode === 'recit' ? `
                         You are a strict law professor helping a student memorize key concepts. 
                         Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. 
-                        Focus on definitions, elements of crimes/contracts, exceptions, and core doctrines.
+                        Focus on definitions, elements, exceptions, and core doctrines.
                         Return ONLY a raw JSON array of objects, where each object has a "front" (the question or term) and a "back" (the answer or definition). 
                         Do NOT use markdown like \`\`\`json. Output raw JSON only.
                         Material: ${text.substring(0, 45000)}
@@ -895,9 +914,9 @@
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = 'Generate AI Review';
+                    window.appHandlers.pdfText = ''; // Clear text after using it
                 }
-            }
-        };
+            },
 
         // --- AUTHENTICATION LISTENER ---
         onAuthStateChanged(auth, (user) => {
