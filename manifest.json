@@ -8,9 +8,10 @@
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "./LEX.png",
+      "src": "./LEX.png?v=2",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
