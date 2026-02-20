@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,13 +12,18 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => {
-                    console.log('Service Worker registered!', reg);
-                }).catch(err => console.log('Service Worker registration failed:', err));
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker registered!'))
+                    .catch(err => console.log('SW registration failed:', err));
             });
         }
     </script>
-
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
 
@@ -52,7 +59,7 @@
             <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-xl font-bold font-serif shadow-inner">L</div>
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.4</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.5 App</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -102,7 +109,6 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyDxKEf2v5P2LN_a2BcR_ODYDGINZMmVPWk",
             authDomain: "abogado-ea708.firebaseapp.com",
@@ -113,7 +119,6 @@
         };
         
         const appNamespace = 'law-companion-v1'; 
-        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
@@ -122,7 +127,6 @@
         let currentUser = null;
         let currentView = 'dashboard';
 
-        // --- DATABASE ADAPTER ---
         const AppDB = {
             subscribe: (collectionName, callback) => {
                 if (!currentUser) return () => {};
@@ -160,7 +164,6 @@
             }
         };
 
-        // --- CUSTOM MODAL CONTROLLER ---
         const Modal = {
             show: (options) => {
                 const modal = document.getElementById('app-modal');
@@ -181,7 +184,6 @@
             hide: () => document.getElementById('app-modal').classList.add('hidden')
         };
 
-        // --- VIEWS ---
         class DashboardView {
             constructor() { this.unsubscribe = null; }
             render() {
@@ -360,7 +362,11 @@
                             <span class="truncate pr-2 flex items-center gap-2"><i class="far fa-file-alt opacity-50"></i> ${data.title}</span>
                             <i class="fas fa-trash text-slate-300 hover:text-red-500 transition px-2 py-1 opacity-0 group-hover:opacity-100" onclick="event.stopPropagation(); window.appHandlers.deleteNote('${noteId}')"></i>
                         `;
-                        btn.onclick = () => window.appHandlers.openNote(noteId, data.title, data.content, btn);
+                        // Escape single quotes for strings passed into functions
+                        const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : '';
+                        const safeContent = data.content ? data.content.replace(/'/g, "\\'").replace(/\n/g, "\\n") : '';
+                        
+                        btn.onclick = () => window.appHandlers.openNote(noteId, safeTitle, safeContent, btn);
                         list.appendChild(btn);
                     });
                 });
@@ -399,20 +405,36 @@
                         const data = doc.data();
                         const row = document.createElement('div');
                         row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
+                        
+                        const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : '';
+                        const safeSubject = data.subject ? data.subject.replace(/'/g, "\\'") : '';
+                        
+                        // Create a clean block of text for downloading
+                        let downloadString = `Title: ${safeTitle}\\nSubject: ${safeSubject}\\n\\n`;
+                        if (data.facts) downloadString += `FACTS:\\n${data.facts.replace(/'/g, "\\'").replace(/\n/g, "\\n")}\\n\\n`;
+                        if (data.issue) downloadString += `ISSUE:\\n${data.issue.replace(/'/g, "\\'").replace(/\n/g, "\\n")}\\n\\n`;
+                        if (data.ruling) downloadString += `RULING:\\n${data.ruling.replace(/'/g, "\\'").replace(/\n/g, "\\n")}`;
+                        
+                        // Create HTML for printing
+                        let printString = `<h1>${safeTitle}</h1><p><strong>Subject:</strong> ${safeSubject}</p><br>`;
+                        if (data.facts) printString += `<h3>FACTS</h3><p>${data.facts.replace(/'/g, "\\'").replace(/\n/g, "<br>")}</p><br>`;
+                        if (data.issue) printString += `<h3>ISSUE</h3><p>${data.issue.replace(/'/g, "\\'").replace(/\n/g, "<br>")}</p><br>`;
+                        if (data.ruling) printString += `<h3>RULING</h3><p>${data.ruling.replace(/'/g, "\\'").replace(/\n/g, "<br>")}</p>`;
+
                         row.innerHTML = `
                             <div class="flex justify-between items-start">
                                 <div class="flex-1 pr-4">
                                     <h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4>
                                     <span class="inline-block mt-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.subject}</span>
                                 </div>
-                                <button onclick="window.appHandlers.deleteDigest('${doc.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button>
+                                <button onclick="window.appHandlers.deleteDigest('${doc.id}')" class="text-slate-400 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button>
                             </div>
                             <details class="mt-4 group cursor-pointer outline-none">
                                 <summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3">
                                     <div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest</div>
                                     <div class="flex gap-2">
-                                        <button onclick="event.stopPropagation(); window.appHandlers.printDigest('${data.title.replace(/'/g, "\\'")}', '${(data.facts + data.issue + data.ruling).replace(/'/g, "\\'").replace(/\n/g, "")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button>
-                                        <button onclick="event.stopPropagation(); window.appHandlers.downloadText('${data.title}.txt', \`Title: ${data.title}\\nSubject: ${data.subject}\\n\\nFACTS:\\n${data.facts}\\n\\nISSUE:\\n${data.issue}\\n\\nRULING:\\n${data.ruling}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button>
+                                        <button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '${printString}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button>
+                                        <button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}_Digest.txt', '${downloadString}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button>
                                     </div>
                                 </summary>
                                 <div class="mt-4 p-5 bg-white border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">
@@ -474,10 +496,7 @@
         }
 
         class ReviewView {
-            constructor() {
-                this.generatedContent = null;
-                this.isProcessing = false;
-            }
+            constructor() { this.generatedContent = null; this.isProcessing = false; }
             render() {
                 const savedKey = localStorage.getItem('gemini_api_key') || '';
                 return `
@@ -487,26 +506,21 @@
                                 <h3 class="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
                                     <i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review
                                 </h3>
-
                                 <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
                                     <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
                                     <input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
                                 </div>
-                                
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Paste Text <span class="text-xs text-slate-400 font-normal">(Best for Codals)</span></label>
                                     <textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..." oninput="document.getElementById('btn-generate').disabled = false;"></textarea>
                                 </div>
-
                                 <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-2">- OR -</div>
-
                                 <div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
                                     <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
                                     <i class="fas fa-file-pdf text-2xl text-slate-400 mb-2"></i>
                                     <p class="text-sm font-medium text-slate-600">Upload text-searchable PDF</p>
                                 </div>
                                 <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
-
                                 <div class="mt-4 space-y-3">
                                     <label class="block text-sm font-medium text-slate-700">Review Mode</label>
                                     <div class="grid grid-cols-2 gap-2">
@@ -514,17 +528,15 @@
                                         <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
                                     </div>
                                 </div>
-
                                 <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                                     Generate AI Review
                                 </button>
                             </div>
-
                             <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
                                 <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
                                     <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
                                     <h4 class="text-lg font-semibold">AI Mock Review</h4>
-                                    <p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate interactive practice questions based on your material.</p>
+                                    <p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate practice questions based on your material.</p>
                                 </div>
                             </div>
                         </div>
@@ -533,7 +545,6 @@
             }
         }
 
-        // --- Saved Reviews View ---
         class SavedReviewsView {
             constructor() { this.unsubscribe = null; }
             render() {
@@ -553,7 +564,6 @@
                     const list = document.getElementById('saved-reviews-list');
                     if (!list) return;
                     list.innerHTML = '';
-                    
                     if (snapshot.empty) {
                         list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-archive text-5xl mb-4 opacity-30"></i><p>No saved reviews yet.</p></div>`;
                         return;
@@ -568,17 +578,16 @@
 
                         let contentHtml = '';
                         let textForDownload = '';
+                        
+                        const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : 'Review';
 
                         if (data.type === 'recit') {
                             contentHtml = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
                             data.content.forEach((c, i) => {
-                                textForDownload += `Q${i+1}: ${c.front}\nA: ${c.back}\n\n`;
+                                textForDownload += `Q${i+1}: ${c.front}\\nA: ${c.back}\\n\\n`;
                                 contentHtml += `
                                     <div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between group">
-                                        <div>
-                                            <p class="text-[10px] text-blue-600 font-bold uppercase mb-2 tracking-widest">Q${i+1}</p>
-                                            <p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${c.front}</p>
-                                        </div>
+                                        <div><p class="text-[10px] text-blue-600 font-bold uppercase mb-2 tracking-widest">Q${i+1}</p><p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${c.front}</p></div>
                                         <details class="text-sm group-details cursor-pointer outline-none mt-auto border-t border-slate-100 pt-3">
                                             <summary class="text-xs text-amber-600 font-bold hover:text-amber-700 outline-none list-none select-none">(Reveal Answer)</summary>
                                             <div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200 text-slate-700 leading-relaxed shadow-inner">${c.back}</div>
@@ -589,15 +598,13 @@
                         } else {
                             window.appHandlers.savedExamData[doc.id] = data.content;
                             data.content.forEach((c, i) => {
-                                textForDownload += `Question ${i+1}:\n${c.question}\n\nSuggested Guide:\n${c.suggested_answer}\n\n-----------------\n\n`;
+                                textForDownload += `Question ${i+1}:\\n${c.question}\\n\\nSuggested Guide:\\n${c.suggested_answer}\\n\\n-----------------\\n\\n`;
                                 contentHtml += `
                                     <div class="mb-8 p-5 bg-white border border-slate-200 rounded-xl shadow-sm">
                                         <h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4>
                                         <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${c.question}</p>
                                         <textarea id="saved-exam-answer-${doc.id}-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your answer here..."></textarea>
-                                        <div class="mt-4">
-                                            <button onclick="window.appHandlers.evaluateAnswer(${i}, '${doc.id}')" id="btn-eval-${doc.id}-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check Answer</button>
-                                        </div>
+                                        <div class="mt-4"><button onclick="window.appHandlers.evaluateAnswer(${i}, '${doc.id}')" id="btn-eval-${doc.id}-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check Answer</button></div>
                                         <div id="eval-result-${doc.id}-${i}" class="mt-4 hidden"></div>
                                         <details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4">
                                             <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary>
@@ -619,8 +626,8 @@
                                 <summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3">
                                     <div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Material</div>
                                     <div class="flex gap-2">
-                                        <button onclick="event.stopPropagation(); window.appHandlers.printContent('${data.title.replace(/'/g, "\\'")}', '<h1>${data.title}</h1><br>${textForDownload.replace(/\n/g, '<br>')}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button>
-                                        <button onclick="event.stopPropagation(); window.appHandlers.downloadText('${data.title}.txt', \`${textForDownload.replace(/'/g, "\\'")}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button>
+                                        <button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '<h1>${safeTitle}</h1><br>${textForDownload.replace(/\\n/g, '<br>').replace(/'/g, "\\'")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button>
+                                        <button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}.txt', '${textForDownload.replace(/'/g, "\\'")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button>
                                     </div>
                                 </summary>
                                 <div class="mt-4 cursor-text border-t border-slate-200 pt-4">
@@ -670,21 +677,26 @@
             `).join('');
         }
 
+        // --- GLOBAL APP HANDLERS ---
         window.appHandlers = {
-            // --- PRINT & DOWNLOAD HELPERS ---
+            
+            // --- NEW: PRINT & DOWNLOAD HELPERS ---
             printContent: (title, htmlContent) => {
                 const printWindow = window.open('', '', 'height=600,width=800');
                 printWindow.document.write('<html><head><title>'+title+'</title>');
                 printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
-                printWindow.document.write('</head><body class="p-10 font-sans">');
+                printWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">');
+                printWindow.document.write('</head><body class="p-10 font-serif leading-relaxed text-slate-800">');
                 printWindow.document.write(htmlContent);
                 printWindow.document.write('</body></html>');
                 printWindow.document.close();
-                setTimeout(() => printWindow.print(), 500); // Small delay to load styles
+                setTimeout(() => printWindow.print(), 800); 
             },
             downloadText: (filename, textContent) => {
+                // Remove escaped newlines specifically for the downloaded file
+                const cleanText = textContent.replace(/\\n/g, '\n');
                 const element = document.createElement('a');
-                element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(textContent));
+                element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(cleanText));
                 element.setAttribute('download', filename);
                 element.style.display = 'none';
                 document.body.appendChild(element);
@@ -740,14 +752,15 @@
                     btnElement.classList.add('bg-blue-50', 'text-blue-700', 'border-l-blue-600');
                 }
 
+                const safeTitle = title.replace(/'/g, "\\'");
                 const area = document.getElementById('notebook-editor-area');
                 area.innerHTML = `
                     <div class="flex-1 flex flex-col p-8 bg-white m-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex justify-between items-center mb-6">
                             <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300 serif-text bg-transparent flex-1" value="${title}" placeholder="Page Title...">
                             <div class="flex gap-2">
-                                <button onclick="window.appHandlers.printContent('${title}', document.getElementById('note-content-editor').value.replace(/\\n/g, '<br>'))" class="text-slate-400 hover:text-blue-600 p-2"><i class="fas fa-print"></i></button>
-                                <button onclick="window.appHandlers.downloadText('${title}.txt', document.getElementById('note-content-editor').value)" class="text-slate-400 hover:text-blue-600 p-2"><i class="fas fa-download"></i></button>
+                                <button onclick="window.appHandlers.printContent('${safeTitle}', '<h1>${safeTitle}</h1><p>' + document.getElementById('note-content-editor').value.replace(/\\n/g, '<br>') + '</p>')" class="text-slate-400 hover:text-blue-600 p-2" title="Print / Save PDF"><i class="fas fa-print"></i></button>
+                                <button onclick="window.appHandlers.downloadText('${safeTitle}.txt', document.getElementById('note-content-editor').value)" class="text-slate-400 hover:text-blue-600 p-2" title="Download Text"><i class="fas fa-download"></i></button>
                             </div>
                         </div>
                         <textarea id="note-content-editor" class="flex-1 w-full border-none outline-none resize-none text-slate-700 leading-relaxed text-base font-sans placeholder-slate-300 focus:ring-0 bg-transparent" placeholder="Start typing your notes here...">${content || ''}</textarea>
@@ -796,9 +809,7 @@
                     }
                 });
             },
-            deleteReminder: (id) => {
-                Modal.show({ title: '<i class="fas fa-check text-green-500"></i> Complete Task', content: '<p>Mark reminder as complete?</p>', submitText: 'Complete', submitClass: 'px-4 py-2 bg-green-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('reminders', id) });
-            },
+            deleteReminder: (id) => { Modal.show({ title: '<i class="fas fa-check text-green-500"></i> Complete Task', content: '<p>Mark reminder as complete?</p>', submitText: 'Complete', submitClass: 'px-4 py-2 bg-green-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('reminders', id) }); },
             addSubject: () => {
                 Modal.show({
                     title: '<i class="fas fa-book text-blue-600"></i> New Subject',
@@ -809,9 +820,7 @@
                     }
                 });
             },
-            deleteSubject: (id) => {
-                Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete', content: '<p>Remove subject?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('subjects', id) });
-            },
+            deleteSubject: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete', content: '<p>Remove subject?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('subjects', id) }); },
             addDigest: () => {
                 Modal.show({
                     title: '<i class="fas fa-gavel text-amber-700"></i> Manual Digest',
@@ -963,7 +972,6 @@
                 output.innerHTML = `<div class="flex justify-center flex-col items-center h-full p-10"><div class="loader mb-4"></div><p class="text-slate-500 font-medium">Gemini is designing your ${mode === 'recit' ? 'Flashcards' : 'Mock Bar Exam'}...</p></div>`;
 
                 try {
-                    // UPDATED: Now generates 5 questions for Exam mode
                     let promptText = mode === 'recit' ? `
                         You are a strict law professor helping a student memorize key concepts. 
                         Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. 
@@ -1087,7 +1095,6 @@
                 const btn = document.getElementById(btnId);
                 const resultDiv = document.getElementById(resultId);
                 
-                // Get the question data
                 let reviewData;
                 if (isLive && window.appHandlers.currentReviewData) {
                     reviewData = window.appHandlers.currentReviewData.content[index];
