@@ -56,7 +56,7 @@
             <img src="./LEX.png" alt="Lex Logo" class="w-10 h-10 rounded-lg shadow-inner object-cover border border-slate-700">
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.8</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.9</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -87,10 +87,10 @@
         </div>
     </main>
 
-    <div id="pomodoro-widget" class="fixed bottom-6 right-8 bg-white rounded-2xl shadow-2xl border border-slate-200 w-64 flex flex-col z-50 overflow-hidden transition-all duration-300 transform translate-y-0">
+    <div id="pomodoro-widget" class="fixed bottom-6 right-8 bg-white rounded-2xl shadow-2xl border border-slate-200 w-64 flex flex-col z-50 overflow-hidden transition-all duration-300 transform translate-y-[calc(100%-48px)]">
         <div class="flex justify-between items-center px-4 py-3 bg-slate-800 text-white cursor-pointer select-none" onclick="window.appHandlers.togglePomoMinimize()">
             <span id="pomo-mode-label" class="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><i class="fas fa-brain text-amber-400"></i> Focus Mode</span>
-            <i id="pomo-min-icon" class="fas fa-chevron-down text-xs opacity-70"></i>
+            <i id="pomo-min-icon" class="fas fa-chevron-down text-xs opacity-70 rotate-180 transition-transform"></i>
         </div>
         <div id="pomo-main-content" class="p-5 flex flex-col items-center bg-slate-50 transition-all duration-300">
             <div class="text-5xl font-mono font-bold text-slate-800 text-center mb-4 tracking-tight" id="pomo-time">50:00</div>
@@ -146,7 +146,7 @@
         let currentPomoSeconds = POMO_FOCUS_MINS * 60;
         let pomoInterval = null;
         let isPomoRunning = false;
-        let currentPomoMode = 'focus'; // 'focus' or 'break'
+        let currentPomoMode = 'focus'; 
 
         const AppDB = {
             subscribe: (collectionName, callback) => {
@@ -211,7 +211,8 @@
             render() {
                 const verse = Utils.getDailyVerse();
                 return `
-                    <div class="max-w-6xl mx-auto pb-24"> <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="max-w-6xl mx-auto pb-24"> 
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div class="lg:col-span-2 space-y-6">
                                 <div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
                                     <i class="fas fa-balance-scale text-white opacity-5 text-9xl absolute -right-10 -bottom-10"></i>
@@ -326,25 +327,14 @@
                     });
                 });
 
-                // NEW: Load Pomodoro Stats
                 this.unsubscribePomoStats = AppDB.subscribe('focus_sessions', (snapshot) => {
                     const timeEl = document.getElementById('dash-study-time');
                     const sessionsEl = document.getElementById('dash-study-sessions');
                     if (!timeEl || !sessionsEl) return;
                     
-                    let totalMinutes = 0;
-                    let totalSessions = 0;
-                    
-                    if (!snapshot.empty) {
-                        snapshot.forEach(doc => {
-                            totalMinutes += doc.data().minutes;
-                            totalSessions++;
-                        });
-                    }
-                    
-                    const hours = Math.floor(totalMinutes / 60);
-                    const mins = totalMinutes % 60;
-                    
+                    let totalMinutes = 0; let totalSessions = 0;
+                    if (!snapshot.empty) { snapshot.forEach(doc => { totalMinutes += doc.data().minutes; totalSessions++; }); }
+                    const hours = Math.floor(totalMinutes / 60); const mins = totalMinutes % 60;
                     timeEl.innerHTML = `${hours}<span class="text-2xl text-slate-400">h</span> ${mins}<span class="text-2xl text-slate-400">m</span>`;
                     sessionsEl.innerText = `${totalSessions} Focus Sessions Logged`;
                 });
@@ -581,7 +571,10 @@
         }
 
         class ReviewView {
-            constructor() { this.generatedContent = null; this.isProcessing = false; }
+            constructor() {
+                this.generatedContent = null;
+                this.isProcessing = false;
+            }
             render() {
                 const savedKey = localStorage.getItem('gemini_api_key') || '';
                 return `
@@ -630,13 +623,14 @@
             }
         }
 
+        // --- NEW: SRS SAVED REVIEWS VIEW ---
         class SavedReviewsView {
             constructor() { this.unsubscribe = null; }
             render() {
                 return `
                     <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
                         <div class="flex justify-between items-center mb-6 flex-shrink-0">
-                            <h3 class="text-xl font-bold text-slate-700">My Saved Reviews</h3>
+                            <h3 class="text-xl font-bold text-slate-700">My Saved Reviews & SRS</h3>
                         </div>
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
                             <div id="saved-reviews-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div>
@@ -656,29 +650,70 @@
                     }
 
                     window.appHandlers.savedExamData = {};
+                    window.appHandlers.savedReviewData = {};
 
                     snapshot.forEach(doc => {
                         const data = doc.data();
+                        window.appHandlers.savedReviewData[doc.id] = data.content; // Save for SRS rating updates
+
                         const row = document.createElement('div');
                         row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
 
-                        let contentHtml = ''; let textForDownload = '';
+                        let contentHtml = '';
+                        let textForDownload = '';
                         const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : 'Review';
 
                         if (data.type === 'recit') {
-                            contentHtml = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
+                            const now = Date.now();
+                            let dueCards = [];
+                            let futureCards = [];
+
                             data.content.forEach((c, i) => {
                                 textForDownload += `Q${i+1}: ${c.front}\\nA: ${c.back}\\n\\n`;
+                                if (!c.nextReview || c.nextReview <= now) {
+                                    dueCards.push({card: c, index: i});
+                                } else {
+                                    futureCards.push({card: c, index: i});
+                                }
+                            });
+
+                            contentHtml = `
+                                <div class="mb-4 flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                    <span class="font-bold text-blue-800"><i class="fas fa-brain mr-2"></i> Spaced Repetition</span>
+                                    <span class="text-sm font-bold bg-white text-blue-600 px-3 py-1 rounded shadow-sm">${dueCards.length} Due Today</span>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            `;
+
+                            dueCards.forEach(({card, index}) => {
                                 contentHtml += `
                                     <div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between group">
-                                        <div><p class="text-[10px] text-blue-600 font-bold uppercase mb-2 tracking-widest">Q${i+1}</p><p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${c.front}</p></div>
+                                        <div><p class="text-[10px] text-red-600 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-exclamation-circle"></i> Due For Review</p><p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${card.front}</p></div>
                                         <details class="text-sm group-details cursor-pointer outline-none mt-auto border-t border-slate-100 pt-3">
                                             <summary class="text-xs text-amber-600 font-bold hover:text-amber-700 outline-none list-none select-none">(Reveal Answer)</summary>
-                                            <div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200 text-slate-700 leading-relaxed shadow-inner">${c.back}</div>
+                                            <div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200 text-slate-700 leading-relaxed shadow-inner mb-3">${card.back}</div>
+                                            <div class="grid grid-cols-3 gap-2 mt-2">
+                                                <button onclick="window.appHandlers.rateFlashcard('${doc.id}', ${index}, 'hard')" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold py-1.5 rounded transition">Hard (1d)</button>
+                                                <button onclick="window.appHandlers.rateFlashcard('${doc.id}', ${index}, 'good')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold py-1.5 rounded transition">Good (3d)</button>
+                                                <button onclick="window.appHandlers.rateFlashcard('${doc.id}', ${index}, 'easy')" class="bg-green-100 hover:bg-green-200 text-green-700 text-xs font-bold py-1.5 rounded transition">Easy (7d)</button>
+                                            </div>
                                         </details>
                                     </div>`;
                             });
+
+                            if(futureCards.length > 0) {
+                                contentHtml += `</div><h5 class="font-bold text-sm text-slate-500 mb-3 border-b border-slate-200 pb-2">Scheduled for Later (${futureCards.length})</h5><div class="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">`;
+                                futureCards.forEach(({card, index}) => {
+                                    const days = Math.ceil((card.nextReview - now) / (1000 * 60 * 60 * 24));
+                                    contentHtml += `
+                                        <div class="border border-slate-200 rounded-xl p-5 bg-slate-50 flex flex-col justify-between">
+                                            <div><p class="text-[10px] text-slate-500 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-clock mr-1"></i> Due in ${days} days</p><p class="text-sm font-semibold text-slate-600 mb-2">${card.front}</p></div>
+                                        </div>
+                                    `;
+                                });
+                            }
                             contentHtml += `</div>`;
+
                         } else {
                             window.appHandlers.savedExamData[doc.id] = data.content;
                             data.content.forEach((c, i) => {
@@ -761,8 +796,8 @@
             `).join('');
         }
 
+        // --- GLOBAL APP HANDLERS ---
         window.appHandlers = {
-            // --- PRINT & DOWNLOAD HELPERS ---
             printContent: (title, htmlContent) => {
                 const printWindow = window.open('', '', 'height=600,width=800');
                 printWindow.document.write('<html><head><title>'+title+'</title>');
@@ -790,18 +825,21 @@
                 document.body.removeChild(element);
             },
 
-            // --- AUTHENTICATION ---
             login: async () => { try { await signInWithPopup(auth, provider); } catch (e) { alert("Login failed. Check Authorized Domains in Firebase Console."); } },
             logout: async () => { try { await signOut(auth); } catch (e) {} },
 
-            // --- NAVIGATION ---
             navigate: (viewId) => {
                 if (viewId === 'codals') { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return; }
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
+                
                 currentView = viewId; renderSidebar();
                 const item = navItems.find(i => i.id === viewId);
                 pageTitle.innerText = item ? item.label : 'App';
-                if (views[viewId]) { contentArea.innerHTML = views[viewId].render(); if (views[viewId].init) views[viewId].init(); }
+                
+                if (views[viewId]) {
+                    contentArea.innerHTML = views[viewId].render();
+                    if (views[viewId].init) views[viewId].init();
+                }
             },
 
             // --- POMODORO TIMER LOGIC ---
@@ -829,10 +867,7 @@
                         document.getElementById('btn-pomo-pause').classList.add('hidden');
                         
                         if(currentPomoMode === 'focus') {
-                            // Log the completed session to the database
-                            if(currentUser) {
-                                AppDB.add('focus_sessions', { minutes: POMO_FOCUS_MINS, created: serverTimestamp() });
-                            }
+                            if(currentUser) { AppDB.add('focus_sessions', { minutes: POMO_FOCUS_MINS, created: serverTimestamp() }); }
                             alert("Great job! Focus session complete. Time for a break.");
                             window.appHandlers.setPomoMode('break');
                         } else {
@@ -843,8 +878,7 @@
                 }, 1000);
             },
             pausePomo: () => {
-                isPomoRunning = false;
-                clearInterval(pomoInterval);
+                isPomoRunning = false; clearInterval(pomoInterval);
                 document.getElementById('btn-pomo-start').classList.remove('hidden');
                 document.getElementById('btn-pomo-pause').classList.add('hidden');
             },
@@ -870,13 +904,10 @@
                 }
                 window.appHandlers.updatePomoUI();
             },
-            switchPomoMode: () => {
-                window.appHandlers.setPomoMode(currentPomoMode === 'focus' ? 'break' : 'focus');
-            },
+            switchPomoMode: () => { window.appHandlers.setPomoMode(currentPomoMode === 'focus' ? 'break' : 'focus'); },
             togglePomoMinimize: () => {
                 const widget = document.getElementById('pomodoro-widget');
                 const icon = document.getElementById('pomo-min-icon');
-                // The widget is 64px tall when collapsed (header only)
                 if (widget.classList.contains('translate-y-[calc(100%-48px)]')) {
                     widget.classList.remove('translate-y-[calc(100%-48px)]');
                     icon.classList.remove('rotate-180');
@@ -886,7 +917,26 @@
                 }
             },
             
-            // --- NOTEBOOK ROUTING & LOGIC ---
+            addClass: () => {
+                Modal.show({
+                    title: '<i class="fas fa-calendar-plus text-blue-600"></i> Add Class to Schedule',
+                    content: `
+                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><input type="text" id="cls-sub" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Obicon"></div>
+                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Day of Week</label><select id="cls-day" class="w-full p-2 border border-slate-300 rounded-lg outline-none"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select></div>
+                        <div class="mt-3 grid grid-cols-2 gap-3">
+                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Time</label><input type="text" id="cls-time" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. 5:30 PM"></div>
+                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Room</label><input type="text" id="cls-room" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Room 101"></div>
+                        </div>
+                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Professor</label><input type="text" id="cls-prof" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Atty. Mason"></div>
+                    `,
+                    onSubmit: async () => {
+                        const sub = document.getElementById('cls-sub').value.trim(); if (!sub) return;
+                        await AppDB.add('schedule', { subject: sub, day: document.getElementById('cls-day').value, time: document.getElementById('cls-time').value.trim(), room: document.getElementById('cls-room').value.trim(), professor: document.getElementById('cls-prof').value.trim() });
+                    }
+                });
+            },
+            deleteClass: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Remove Class', content: '<p>Remove this class from your schedule?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('schedule', id) }); },
+
             openSubject: (id, name) => {
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
                 currentView = 'subject_notebook'; renderSidebar(); pageTitle.innerText = 'Notebook'; views.subject_notebook.init(id, name);
@@ -903,14 +953,8 @@
             },
             openNote: (noteId, title, content, btnElement) => {
                 views.subject_notebook.activeNoteId = noteId;
-                document.querySelectorAll('#notebook-pages-list button').forEach(b => {
-                    b.classList.remove('bg-blue-50', 'text-blue-700', 'border-l-blue-600');
-                    b.classList.add('text-slate-600', 'border-l-transparent');
-                });
-                if(btnElement) {
-                    btnElement.classList.remove('text-slate-600', 'border-l-transparent');
-                    btnElement.classList.add('bg-blue-50', 'text-blue-700', 'border-l-blue-600');
-                }
+                document.querySelectorAll('#notebook-pages-list button').forEach(b => { b.classList.remove('bg-blue-50', 'text-blue-700', 'border-l-blue-600'); b.classList.add('text-slate-600', 'border-l-transparent'); });
+                if(btnElement) { btnElement.classList.remove('text-slate-600', 'border-l-transparent'); btnElement.classList.add('bg-blue-50', 'text-blue-700', 'border-l-blue-600'); }
 
                 const safeTitle = title ? title.replace(/'/g, "\\'") : 'Untitled Page';
                 const area = document.getElementById('notebook-editor-area');
@@ -938,8 +982,7 @@
                 const status = document.getElementById('note-save-status');
                 try {
                     await AppDB.update('notes', noteId, { title, content, updated: serverTimestamp() });
-                    status.classList.remove('opacity-0');
-                    setTimeout(() => status.classList.add('opacity-0'), 3000);
+                    status.classList.remove('opacity-0'); setTimeout(() => status.classList.add('opacity-0'), 3000);
                 } catch(e) { alert("Error saving note."); }
             },
             deleteNote: (noteId) => {
@@ -948,39 +991,12 @@
                     content: '<p class="text-slate-600">Are you sure you want to delete this page permanently?</p>',
                     submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700',
                     onSubmit: async () => {
-                        await AppDB.delete('notes', noteId);
-                        views.subject_notebook.activeNoteId = null;
+                        await AppDB.delete('notes', noteId); views.subject_notebook.activeNoteId = null;
                         document.getElementById('notebook-editor-area').innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-book-open text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Page deleted.</p></div>`;
                     }
                 });
             },
 
-            // --- DATABASE CRUD ---
-            addClass: () => {
-                Modal.show({
-                    title: '<i class="fas fa-calendar-plus text-blue-600"></i> Add Class to Schedule',
-                    content: `
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><input type="text" id="cls-sub" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Obicon"></div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Day of Week</label><select id="cls-day" class="w-full p-2 border border-slate-300 rounded-lg outline-none"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select></div>
-                        <div class="mt-3 grid grid-cols-2 gap-3">
-                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Time</label><input type="text" id="cls-time" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. 5:30 PM"></div>
-                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Room</label><input type="text" id="cls-room" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Room 101"></div>
-                        </div>
-                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Professor</label><input type="text" id="cls-prof" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Atty. Mason"></div>
-                    `,
-                    onSubmit: async () => {
-                        const sub = document.getElementById('cls-sub').value.trim(); if (!sub) return;
-                        await AppDB.add('schedule', { 
-                            subject: sub, day: document.getElementById('cls-day').value, 
-                            time: document.getElementById('cls-time').value.trim(), 
-                            room: document.getElementById('cls-room').value.trim(), 
-                            professor: document.getElementById('cls-prof').value.trim() 
-                        });
-                    }
-                });
-            },
-            deleteClass: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Remove Class', content: '<p>Remove this class from your schedule?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('schedule', id) }); },
-            
             addReminder: () => {
                 Modal.show({
                     title: '<i class="fas fa-bell text-amber-500"></i> New Reminder',
@@ -1015,7 +1031,6 @@
             },
             deleteDigest: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete', content: '<p>Delete case digest?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('digests', id) }); },
 
-            // --- AI CASE DIGESTER LOGIC ---
             digestText: '',
             handleDigestUpload: async (input) => {
                 const file = input.files[0]; if (!file) return;
@@ -1052,9 +1067,7 @@
                         Focus your extraction of the Facts, Issue, and Ruling strictly in relation to: "${subjectInput}".
                         Return the result STRICTLY as a raw JSON object with exactly three keys: "facts", "issue", and "ruling". 
                         Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.
-                        
-                        Case Text:
-                        ${textToDigest.substring(0, 50000)}
+                        Case Text: ${textToDigest.substring(0, 50000)}
                     `;
 
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
@@ -1086,18 +1099,15 @@
                             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Ruling</h4><p class="text-sm whitespace-pre-wrap">${ruling}</p></div>
                         </div>
                     `;
-                } catch (error) {
-                    area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${error.message}</div>`;
-                } finally {
-                    btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; window.appHandlers.digestText = '';
-                }
+                } catch (error) { area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${error.message}</div>`; } 
+                finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; window.appHandlers.digestText = ''; }
             },
 
-            // --- AI MOCK REVIEW LOGIC ---
             reviewMode: 'recit',
             pdfText: '',
             currentReviewData: null,
             savedExamData: {}, 
+            savedReviewData: {}, // NEW: Cache for SRS updates
             
             setMode: (mode) => {
                 window.appHandlers.reviewMode = mode;
@@ -1105,40 +1115,20 @@
                 document.getElementById('btn-exam').className = mode === 'exam' ? "px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition" : "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
             },
             handleFileUpload: async (input) => {
-                const file = input.files[0];
-                if (!file) return;
-
-                document.getElementById('file-name-display').innerText = file.name;
-                document.getElementById('file-name-display').classList.remove('hidden');
-                document.getElementById('btn-generate').innerText = "Processing PDF...";
-                document.getElementById('review-textarea').value = '';
-                
+                const file = input.files[0]; if (!file) return;
+                document.getElementById('file-name-display').innerText = file.name; document.getElementById('file-name-display').classList.remove('hidden');
+                document.getElementById('btn-generate').innerText = "Processing PDF..."; document.getElementById('review-textarea').value = '';
                 try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    let fullText = "";
-                    const maxPages = Math.min(pdf.numPages, 10);
-                    
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        fullText += textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + "\n";
-                    }
-
-                    window.appHandlers.pdfText = fullText;
-                    document.getElementById('btn-generate').disabled = false;
-                    document.getElementById('btn-generate').innerText = "Generate AI Review";
-                } catch (e) {
-                    console.error(e); alert("Error reading PDF."); document.getElementById('btn-generate').innerText = "Error";
-                }
+                    const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let fullText = ""; const maxPages = Math.min(pdf.numPages, 10);
+                    for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' ') + "\n"; }
+                    window.appHandlers.pdfText = fullText; document.getElementById('btn-generate').disabled = false; document.getElementById('btn-generate').innerText = "Generate AI Review";
+                } catch (e) { alert("Error reading PDF."); document.getElementById('btn-generate').innerText = "Error"; }
             },
             
             generateReview: async () => {
                 const textAreaInput = document.getElementById('review-textarea').value.trim();
                 let text = textAreaInput || window.appHandlers.pdfText;
-                
                 const mode = window.appHandlers.reviewMode;
                 const output = document.getElementById('review-output');
                 const apiKey = document.getElementById('review-api-key').value.trim();
@@ -1146,11 +1136,9 @@
                 
                 if (!apiKey) { alert("Please enter your Gemini API Key."); return; }
                 localStorage.setItem('gemini_api_key', apiKey);
-
                 if (!text) { alert("Please paste text or upload a text-searchable PDF first."); return; }
 
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
+                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
                 output.innerHTML = `<div class="flex justify-center flex-col items-center h-full p-10"><div class="loader mb-4"></div><p class="text-slate-500 font-medium">Gemini is designing your ${mode === 'recit' ? 'Flashcards' : 'Mock Bar Exam'}...</p></div>`;
 
                 try {
@@ -1181,7 +1169,12 @@
                     const data = await response.json();
                     let jsonString = data.candidates[0].content.parts[0].text;
                     jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-                    const parsedData = JSON.parse(jsonString);
+                    let parsedData = JSON.parse(jsonString);
+
+                    // NEW: Initialize SRS data for recit cards
+                    if (mode === 'recit') {
+                        parsedData = parsedData.map(c => ({...c, nextReview: Date.now(), interval: 0}));
+                    }
 
                     window.appHandlers.currentReviewData = { mode: mode, content: parsedData };
 
@@ -1193,7 +1186,6 @@
                             </button>
                         </div>
                     `;
-
                     output.innerHTML = saveUI; 
 
                     if (mode === 'recit') {
@@ -1204,10 +1196,7 @@
                         parsedData.forEach((card, i) => {
                             const el = document.createElement('div');
                             el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective relative overflow-hidden";
-                            el.onclick = function() {
-                                this.querySelector('.card-inner').classList.toggle('hidden');
-                                this.querySelector('.card-back').classList.toggle('hidden');
-                            };
+                            el.onclick = function() { this.querySelector('.card-inner').classList.toggle('hidden'); this.querySelector('.card-back').classList.toggle('hidden'); };
                             el.innerHTML = `
                                 <div class="card-inner"><span class="text-[10px] text-blue-600 font-bold uppercase mb-3 block tracking-widest">Card ${i+1} / Question</span><p class="serif-text font-semibold text-slate-800 leading-snug">${card.front}</p><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-amber-600 transition">(Click to reveal answer)</p></div></div>
                                 <div class="card-back hidden animate-fade-in flex flex-col h-full justify-between"><div><span class="text-[10px] text-green-600 font-bold uppercase mb-3 block tracking-widest">Answer</span><p class="text-sm text-slate-700 leading-relaxed">${card.back}</p></div><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-blue-600 transition">(Click to flip back)</p></div></div>
@@ -1215,12 +1204,10 @@
                             grid.appendChild(el);
                         });
                         output.appendChild(grid);
-
                     } else {
                         output.innerHTML += `<h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2"><i class="fas fa-balance-scale text-slate-800"></i> Mock Bar Examination</h3>`;
                         const paper = document.createElement('div');
                         paper.className = "bg-white p-8 rounded shadow-md border border-slate-300 min-h-[500px] serif-text mb-8";
-                        
                         let html = `<div class="text-center border-b-2 border-black pb-4 mb-8"><h2 class="text-2xl font-bold uppercase tracking-widest">Mock Bar Examination</h2><p class="italic text-slate-600 mt-1">Focus: Issue Spotting & Application</p></div>`;
 
                         parsedData.forEach((item, i) => {
@@ -1228,15 +1215,9 @@
                                 <div class="mb-10">
                                     <h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4>
                                     <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${item.question}</p>
-                                    
                                     <textarea id="live-exam-answer-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your legal analysis here..."></textarea>
-                                    
-                                    <div class="mt-4">
-                                        <button onclick="window.appHandlers.evaluateAnswer(${i}, null)" id="btn-eval-live-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check My Answer</button>
-                                    </div>
-                                    
+                                    <div class="mt-4"><button onclick="window.appHandlers.evaluateAnswer(${i}, null)" id="btn-eval-live-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check My Answer</button></div>
                                     <div id="eval-result-live-${i}" class="mt-4 hidden"></div>
-
                                     <details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4">
                                         <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary>
                                         <div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${item.suggested_answer}</div>
@@ -1248,14 +1229,10 @@
                         paper.innerHTML = html;
                         output.appendChild(paper);
                     }
-
                 } catch (error) {
-                    console.error("Gemini failed:", error);
-                    output.innerHTML = `<div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 flex items-start gap-4 shadow-sm w-full max-w-lg mx-auto mt-10"><i class="fas fa-exclamation-triangle text-2xl mt-1"></i><div><p class="font-bold text-lg mb-1">Failed to generate review.</p><p class="text-sm opacity-90">${error.message}</p></div></div>`;
+                    output.innerHTML = `<div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200"><i class="fas fa-exclamation-triangle text-2xl mt-1"></i><div><p class="font-bold text-lg mb-1">Failed to generate review.</p><p class="text-sm opacity-90">${error.message}</p></div></div>`;
                 } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = 'Generate AI Review';
-                    window.appHandlers.pdfText = ''; 
+                    btn.disabled = false; btn.innerHTML = 'Generate AI Review'; window.appHandlers.pdfText = ''; 
                 }
             },
 
@@ -1283,38 +1260,23 @@
                 }
                 if(!reviewData) return;
 
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...';
+                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...';
                 resultDiv.classList.remove('hidden');
                 resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`;
 
                 try {
                     const promptText = `
                         You are a strict but fair law professor grading a student's answer to a Bar Exam question.
-                        
-                        Question:
-                        ${reviewData.question}
-                        
-                        Suggested Correct Answer / Rubric:
-                        ${reviewData.suggested_answer}
-                        
-                        Student's Answer:
-                        ${userAnswer}
-                        
-                        Task:
-                        Provide a brief, constructive evaluation of the student's answer. 
-                        1. Mention what they got right (Issue spotting, Rule application).
-                        2. Mention what they missed or got wrong.
-                        3. Give a final score out of 100%.
-                        
-                        Keep the feedback concise and format it with clean HTML tags (like <b>, <br>) for readability, but DO NOT wrap it in a code block or markdown.
+                        Question: ${reviewData.question}
+                        Suggested Correct Answer / Rubric: ${reviewData.suggested_answer}
+                        Student's Answer: ${userAnswer}
+                        Task: Provide a brief, constructive evaluation. Mention what they got right (Issue spotting, Rule application). Mention what they missed. Give a final score out of 100%. Keep formatting clean using basic HTML tags like <b> and <br>, do NOT use code blocks or markdown backticks.
                     `;
 
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] })
                     });
-
                     if (!response.ok) throw new Error(`API Error: ${response.status}`);
                     const data = await response.json();
                     let feedback = data.candidates[0].content.parts[0].text;
@@ -1325,11 +1287,35 @@
                             ${feedback}
                         </div>
                     `;
-                } catch (error) {
-                    resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`;
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer';
+                } catch (error) { resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`; } 
+                finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer'; }
+            },
+
+            // --- NEW: SRS FLASHCARD GRADING LOGIC ---
+            rateFlashcard: async (reviewId, cardIndex, rating) => {
+                try {
+                    const reviewContent = window.appHandlers.savedReviewData[reviewId];
+                    if (!reviewContent) return;
+
+                    let card = reviewContent[cardIndex];
+                    const now = Date.now();
+                    
+                    let newInterval = card.interval || 0;
+                    if (rating === 'hard') {
+                        newInterval = 1; // 1 day
+                    } else if (rating === 'good') {
+                        newInterval = newInterval === 0 ? 3 : newInterval * 2;
+                    } else if (rating === 'easy') {
+                        newInterval = newInterval === 0 ? 7 : newInterval * 3;
+                    }
+                    
+                    card.interval = newInterval;
+                    card.nextReview = now + (newInterval * 24 * 60 * 60 * 1000);
+                    
+                    reviewContent[cardIndex] = card;
+                    await AppDB.update('reviews', reviewId, { content: reviewContent });
+                } catch(e) {
+                    console.error("Error updating flashcard:", e); alert("Failed to save flashcard rating.");
                 }
             },
             
@@ -1343,18 +1329,10 @@
                     await AppDB.add('reviews', { title, type: mode, content: content, created: serverTimestamp() });
                     alert('Review saved successfully to your Saved Reviews tab!');
                     window.appHandlers.navigate('saved_reviews');
-                } catch (e) {
-                    console.error(e); alert('Failed to save review.');
-                }
+                } catch (e) { console.error(e); alert('Failed to save review.'); }
             },
             deleteReview: (id) => {
-                Modal.show({ 
-                    title: '<i class="fas fa-trash text-red-500"></i> Delete Review', 
-                    content: '<p>Are you sure you want to delete this saved review?</p>', 
-                    submitText: 'Delete', 
-                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition shadow-sm', 
-                    onSubmit: async () => await AppDB.delete('reviews', id) 
-                });
+                Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete Review', content: '<p>Are you sure you want to delete this saved review?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition shadow-sm', onSubmit: async () => await AppDB.delete('reviews', id) });
             }
         };
 
@@ -1366,8 +1344,6 @@
                 loginScreen.classList.add('opacity-0', 'pointer-events-none');
                 setTimeout(() => loginScreen.classList.add('hidden'), 300);
                 window.appHandlers.navigate('dashboard');
-                
-                // Set default UI state for pomo timer
                 window.appHandlers.updatePomoUI();
             } else {
                 currentUser = null;
