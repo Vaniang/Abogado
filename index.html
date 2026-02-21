@@ -32,16 +32,11 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .serif-text { font-family: 'Merriweather', serif; }
-        
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-        .loader {
-            border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #2563eb;
-            width: 24px; height: 24px; animation: spin 1s linear infinite;
-        }
+        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #2563eb; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -49,9 +44,8 @@
 
     <div id="login-screen" class="fixed inset-0 bg-slate-900 z-[100] flex flex-col items-center justify-center text-white transition-opacity duration-300">
         <img src="./LEX.png" alt="Lex Logo" class="w-24 h-24 rounded-2xl mb-6 shadow-2xl object-cover border border-slate-700">
-        
         <h1 class="text-3xl font-bold mb-2 tracking-wide">LEX COMPANION</h1>
-        <p class="text-slate-400 mb-8">Your Law Journey, Synced Anywhere.</p>
+        <p class="text-slate-400 mb-8">Your 2L Journey, Synced Anywhere.</p>
         <button onclick="window.appHandlers.login()" class="bg-white text-slate-900 px-6 py-3 rounded-lg font-bold flex items-center gap-3 hover:bg-slate-100 transition shadow-xl">
             <i class="fab fa-google text-red-500"></i> Sign in with Google
         </button>
@@ -60,10 +54,9 @@
     <aside class="w-64 bg-slate-900 text-white flex flex-col shadow-xl flex-shrink-0 transition-all duration-300" id="sidebar">
         <div class="p-6 border-b border-slate-800 flex items-center gap-3">
             <img src="./LEX.png" alt="Lex Logo" class="w-10 h-10 rounded-lg shadow-inner object-cover border border-slate-700">
-            
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">"Aja, Future Attorney!"</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 3.8</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -81,7 +74,7 @@
         </div>
     </aside>
 
-    <main class="flex-1 flex flex-col min-w-0 bg-slate-50 relative">
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-50 relative z-0">
         <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 flex-shrink-0">
             <h2 id="page-title" class="text-2xl font-bold text-slate-800 serif-text">Dashboard</h2>
             <div class="flex items-center gap-4">
@@ -93,6 +86,22 @@
             <div class="flex items-center justify-center h-full"><div class="loader"></div></div>
         </div>
     </main>
+
+    <div id="pomodoro-widget" class="fixed bottom-6 right-8 bg-white rounded-2xl shadow-2xl border border-slate-200 w-64 flex flex-col z-50 overflow-hidden transition-all duration-300 transform translate-y-0">
+        <div class="flex justify-between items-center px-4 py-3 bg-slate-800 text-white cursor-pointer select-none" onclick="window.appHandlers.togglePomoMinimize()">
+            <span id="pomo-mode-label" class="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><i class="fas fa-brain text-amber-400"></i> Focus Mode</span>
+            <i id="pomo-min-icon" class="fas fa-chevron-down text-xs opacity-70"></i>
+        </div>
+        <div id="pomo-main-content" class="p-5 flex flex-col items-center bg-slate-50 transition-all duration-300">
+            <div class="text-5xl font-mono font-bold text-slate-800 text-center mb-4 tracking-tight" id="pomo-time">50:00</div>
+            <div class="flex justify-center gap-3 w-full">
+                <button onclick="window.appHandlers.startPomo()" id="btn-pomo-start" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-blue-700 transition"><i class="fas fa-play"></i> Start</button>
+                <button onclick="window.appHandlers.pausePomo()" id="btn-pomo-pause" class="flex-1 bg-amber-500 text-white py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-amber-600 transition hidden"><i class="fas fa-pause"></i> Pause</button>
+                <button onclick="window.appHandlers.resetPomo()" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-slate-300 transition" title="Reset Timer"><i class="fas fa-redo"></i></button>
+                <button onclick="window.appHandlers.switchPomoMode()" class="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-slate-900 transition" title="Switch to Break"><i class="fas fa-mug-hot"></i></button>
+            </div>
+        </div>
+    </div>
 
     <div id="app-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] hidden flex items-center justify-center p-4 transition-all duration-200">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all duration-200" id="app-modal-card">
@@ -130,6 +139,14 @@
         
         let currentUser = null;
         let currentView = 'dashboard';
+
+        // --- POMODORO TIMER STATE ---
+        const POMO_FOCUS_MINS = 50;
+        const POMO_BREAK_MINS = 10;
+        let currentPomoSeconds = POMO_FOCUS_MINS * 60;
+        let pomoInterval = null;
+        let isPomoRunning = false;
+        let currentPomoMode = 'focus'; // 'focus' or 'break'
 
         const AppDB = {
             subscribe: (collectionName, callback) => {
@@ -188,13 +205,13 @@
             hide: () => document.getElementById('app-modal').classList.add('hidden')
         };
 
+        // --- VIEWS ---
         class DashboardView {
-            constructor() { this.unsubscribe = null; }
+            constructor() { this.unsubscribeReminders = null; this.unsubscribeSchedule = null; this.unsubscribePomoStats = null; }
             render() {
                 const verse = Utils.getDailyVerse();
                 return `
-                    <div class="max-w-6xl mx-auto">
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="max-w-6xl mx-auto pb-24"> <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div class="lg:col-span-2 space-y-6">
                                 <div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
                                     <i class="fas fa-balance-scale text-white opacity-5 text-9xl absolute -right-10 -bottom-10"></i>
@@ -206,23 +223,34 @@
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                                        <div class="flex items-center justify-between mb-4"><h4 class="font-bold text-slate-700">Upcoming</h4><i class="fas fa-calendar-alt text-blue-600"></i></div>
-                                        <div id="dashboard-schedule-list" class="space-y-3"><p class="text-sm text-slate-400 italic">Loading schedule...</p></div>
+                                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <h4 class="font-bold text-slate-700"><i class="fas fa-calendar-week text-blue-600 mr-2"></i> Schedule</h4>
+                                            <button onclick="window.appHandlers.addClass()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition font-bold"><i class="fas fa-plus"></i></button>
+                                        </div>
+                                        <div id="dashboard-schedule-list" class="space-y-3 flex-1 overflow-y-auto max-h-[250px] pr-2">
+                                            <div class="text-center py-8 text-slate-400 text-sm"><div class="loader mx-auto mb-2"></div>Loading...</div>
+                                        </div>
                                     </div>
-                                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                                        <div class="flex items-center justify-between mb-4"><h4 class="font-bold text-slate-700">Study Streak</h4><i class="fas fa-fire text-amber-500"></i></div>
-                                        <div class="text-center py-2"><span class="text-4xl font-bold text-slate-800">Active</span><p class="text-xs text-slate-500 mt-1">Keep pushing forward</p></div>
+                                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center items-center h-full">
+                                        <div class="w-full flex items-center justify-between mb-2">
+                                            <h4 class="font-bold text-slate-700"><i class="fas fa-stopwatch text-amber-500 mr-2"></i> Study Tracker</h4>
+                                        </div>
+                                        <div class="text-center mt-4">
+                                            <span id="dash-study-time" class="text-5xl font-bold text-slate-800 font-mono">0<span class="text-2xl text-slate-400">h</span> 0<span class="text-2xl text-slate-400">m</span></span>
+                                            <p id="dash-study-sessions" class="text-sm font-medium text-blue-600 mt-3 bg-blue-50 px-4 py-1.5 rounded-full inline-block">0 Focus Sessions Logged</p>
+                                            <p class="text-xs text-slate-400 mt-4 leading-relaxed max-w-[200px] mx-auto">Use the floating timer in the bottom right to track your deep work.</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="lg:col-span-1">
                                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col">
-                                    <div class="p-5 border-b border-slate-100 flex justify-between items-center">
-                                        <h4 class="font-bold text-slate-700">Reminders</h4>
-                                        <button onclick="window.appHandlers.addReminder()" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition"><i class="fas fa-plus mr-1"></i> Add</button>
+                                    <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                                        <h4 class="font-bold text-slate-700"><i class="fas fa-tasks text-amber-500 mr-2"></i> Reminders</h4>
+                                        <button onclick="window.appHandlers.addReminder()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-200 transition font-bold"><i class="fas fa-plus mr-1"></i> Add Task</button>
                                     </div>
-                                    <div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]"></div>
+                                    <div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[600px]"></div>
                                 </div>
                             </div>
                         </div>
@@ -239,30 +267,86 @@
                         if (dateEl) dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
                     }, 1000);
                 }
-                this.unsubscribe = AppDB.subscribe('reminders', (snapshot) => {
+
+                this.unsubscribeReminders = AppDB.subscribe('reminders', (snapshot) => {
                     const list = document.getElementById('reminder-list');
-                    const schedList = document.getElementById('dashboard-schedule-list');
                     if (!list) return;
-                    list.innerHTML = ''; schedList.innerHTML = '';
+                    list.innerHTML = ''; 
                     if (snapshot.empty) {
-                        list.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">No reminders set.</div>`;
-                        schedList.innerHTML = `<div class="text-slate-400 text-sm">No upcoming events.</div>`;
+                        list.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">No pending tasks. Great job!</div>`;
                         return;
                     }
                     snapshot.forEach(doc => {
                         const data = doc.data(); const id = doc.id;
                         const date = data.date ? new Date(data.date).toLocaleDateString() : 'No Date';
                         const item = document.createElement('div');
-                        item.className = `p-3 rounded-lg border-l-4 ${data.type === 'Quiz' ? 'border-red-500 bg-red-50' : 'border-blue-500 bg-blue-50'} flex justify-between items-start group`;
-                        item.innerHTML = `<div><p class="text-sm font-semibold text-slate-800">${data.title}</p><p class="text-xs text-slate-500">${data.type} • ${date}</p></div><button onclick="window.appHandlers.deleteReminder('${id}')" class="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i class="fas fa-times"></i></button>`;
+                        item.className = `p-4 rounded-xl border-l-4 shadow-sm ${data.type === 'Quiz' ? 'border-red-500 bg-red-50' : 'border-amber-500 bg-amber-50'} flex justify-between items-start group`;
+                        item.innerHTML = `<div><p class="text-sm font-bold text-slate-800">${data.title}</p><p class="text-xs text-slate-600 mt-1">${data.type} • ${date}</p></div><button onclick="window.appHandlers.deleteReminder('${id}')" class="text-slate-300 hover:text-green-600 bg-white p-1.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition" title="Mark Complete"><i class="fas fa-check"></i></button>`;
                         list.appendChild(item);
-                        if (schedList.children.length < 3) {
-                            const schedItem = document.createElement('div');
-                            schedItem.className = "flex items-center gap-3 text-sm";
-                            schedItem.innerHTML = `<div class="w-2 h-2 rounded-full ${data.type === 'Quiz' ? 'bg-red-500' : 'bg-blue-500'}"></div><span class="flex-1 truncate">${data.title}</span><span class="text-slate-400 text-xs">${date}</span>`;
-                            schedList.appendChild(schedItem);
-                        }
                     });
+                });
+
+                this.unsubscribeSchedule = AppDB.subscribe('schedule', (snapshot) => {
+                    const schedList = document.getElementById('dashboard-schedule-list');
+                    if (!schedList) return;
+                    schedList.innerHTML = '';
+                    if (snapshot.empty) {
+                        schedList.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">Your schedule is empty.<br>Click '+' to add a class.</div>`;
+                        return;
+                    }
+                    
+                    const classes = [];
+                    snapshot.forEach(doc => classes.push({ id: doc.id, ...doc.data() }));
+                    
+                    const dayOrder = { "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6, "Sunday": 7 };
+                    classes.sort((a, b) => {
+                        if (dayOrder[a.day] !== dayOrder[b.day]) return dayOrder[a.day] - dayOrder[b.day];
+                        return a.time.localeCompare(b.time);
+                    });
+
+                    let currentDay = "";
+                    classes.forEach(cls => {
+                        if (cls.day !== currentDay) {
+                            schedList.innerHTML += `<div class="font-bold text-slate-500 text-xs mt-4 mb-2 uppercase tracking-wider border-b border-slate-100 pb-1">${cls.day}</div>`;
+                            currentDay = cls.day;
+                        }
+                        const item = document.createElement('div');
+                        item.className = "flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg mb-2 group hover:border-blue-200 transition";
+                        item.innerHTML = `
+                            <div class="flex items-center gap-3">
+                                <div class="bg-blue-100 text-blue-800 font-bold text-xs py-1 px-2 rounded min-w-[70px] text-center">${cls.time}</div>
+                                <div>
+                                    <p class="font-bold text-slate-800 text-sm">${cls.subject}</p>
+                                    <p class="text-[10px] text-slate-500 mt-0.5"><i class="fas fa-map-marker-alt"></i> ${cls.room} • <i class="fas fa-user-tie"></i> ${cls.professor}</p>
+                                </div>
+                            </div>
+                            <button onclick="window.appHandlers.deleteClass('${cls.id}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i class="fas fa-times"></i></button>
+                        `;
+                        schedList.appendChild(item);
+                    });
+                });
+
+                // NEW: Load Pomodoro Stats
+                this.unsubscribePomoStats = AppDB.subscribe('focus_sessions', (snapshot) => {
+                    const timeEl = document.getElementById('dash-study-time');
+                    const sessionsEl = document.getElementById('dash-study-sessions');
+                    if (!timeEl || !sessionsEl) return;
+                    
+                    let totalMinutes = 0;
+                    let totalSessions = 0;
+                    
+                    if (!snapshot.empty) {
+                        snapshot.forEach(doc => {
+                            totalMinutes += doc.data().minutes;
+                            totalSessions++;
+                        });
+                    }
+                    
+                    const hours = Math.floor(totalMinutes / 60);
+                    const mins = totalMinutes % 60;
+                    
+                    timeEl.innerHTML = `${hours}<span class="text-2xl text-slate-400">h</span> ${mins}<span class="text-2xl text-slate-400">m</span>`;
+                    sessionsEl.innerText = `${totalSessions} Focus Sessions Logged`;
                 });
             }
         }
@@ -271,7 +355,7 @@
             constructor() { this.unsubscribe = null; }
             render() {
                 return `
-                    <div class="max-w-5xl mx-auto">
+                    <div class="max-w-5xl mx-auto pb-24">
                         <div class="flex justify-between items-center mb-6">
                             <h3 class="text-xl font-bold text-slate-700">My Subjects</h3>
                             <button onclick="window.appHandlers.addSubject()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition shadow-md">
@@ -294,7 +378,7 @@
                     snapshot.forEach(doc => {
                         const data = doc.data();
                         const card = document.createElement('div');
-                        card.onclick = () => window.appHandlers.openSubject(doc.id, data.name);
+                        card.onclick = () => window.appHandlers.openSubject(doc.id, data.name.replace(/'/g, "\\'"));
                         card.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md hover:border-blue-300 transition cursor-pointer group relative flex flex-col h-full";
                         card.innerHTML = `
                             <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition z-10">
@@ -318,7 +402,7 @@
             constructor() { this.unsubscribe = null; this.subjectId = null; this.subjectName = ""; this.activeNoteId = null; }
             render() {
                 return `
-                    <div class="h-[calc(100vh-4rem)] flex flex-col -m-8">
+                    <div class="h-[calc(100vh-4rem)] flex flex-col -m-8 pb-10">
                         <div class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center flex-shrink-0 shadow-sm z-10">
                             <div class="flex items-center gap-4">
                                 <button onclick="window.appHandlers.navigate('subjects')" class="text-slate-400 hover:text-blue-600 transition flex items-center gap-2 font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200"><i class="fas fa-arrow-left"></i> Back to Subjects</button>
@@ -366,7 +450,10 @@
                             <span class="truncate pr-2 flex items-center gap-2"><i class="far fa-file-alt opacity-50"></i> ${data.title}</span>
                             <i class="fas fa-trash text-slate-300 hover:text-red-500 transition px-2 py-1 opacity-0 group-hover:opacity-100" onclick="event.stopPropagation(); window.appHandlers.deleteNote('${noteId}')"></i>
                         `;
-                        btn.onclick = () => window.appHandlers.openNote(noteId, data.title, data.content, btn);
+                        const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : '';
+                        const safeContent = data.content ? data.content.replace(/'/g, "\\'").replace(/\n/g, "\\n") : '';
+                        
+                        btn.onclick = () => window.appHandlers.openNote(noteId, safeTitle, safeContent, btn);
                         list.appendChild(btn);
                     });
                 });
@@ -377,7 +464,7 @@
             constructor() { this.unsubscribe = null; }
             render() {
                 return `
-                    <div class="max-w-5xl mx-auto h-full flex flex-col">
+                    <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
                         <div class="flex justify-between items-center mb-6 flex-shrink-0">
                             <div>
                                 <h3 class="text-xl font-bold text-slate-700">Consolidated Case Digests</h3>
@@ -448,11 +535,106 @@
             }
         }
 
+        class CaseDigesterView {
+            constructor() { this.digestedData = null; }
+            render() {
+                const savedKey = localStorage.getItem('gemini_api_key') || '';
+                return `
+                    <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xl font-bold text-slate-700 flex items-center gap-2">
+                                <i class="fas fa-magic text-amber-500"></i> AI Case Digester
+                            </h3>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
+                            <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4">
+                                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
+                                    <input type="password" id="gemini-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
+                                </div>
+                                <div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+                                <div><label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter <span class="text-red-500">*</span></label><input type="text" id="digest-subject" placeholder="e.g. Crim 1" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+                                <div class="border-t border-slate-100 pt-4"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Full Text</label><textarea id="digest-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Paste case text here..."></textarea></div>
+                                <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label>
+                                    <div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative">
+                                        <input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)">
+                                        <i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i>
+                                        <p class="text-xs text-slate-500">Click to upload PDF</p>
+                                    </div>
+                                    <div id="digest-filename" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div>
+                                </div>
+                                <button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-3 rounded-lg text-sm font-bold hover:bg-slate-700 transition shadow-md mt-auto"><i class="fas fa-robot mr-1"></i> Digest & Auto-Save</button>
+                            </div>
+                            <div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area">
+                                <div class="h-full flex flex-col items-center justify-center text-slate-400 text-center">
+                                    <i class="fas fa-brain text-5xl mb-4 opacity-20"></i>
+                                    <p class="text-sm font-medium">Provide the case text and your API key.</p>
+                                    <p class="text-xs mt-1">Gemini will read it, extract the core elements, and automatically save it.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        class ReviewView {
+            constructor() { this.generatedContent = null; this.isProcessing = false; }
+            render() {
+                const savedKey = localStorage.getItem('gemini_api_key') || '';
+                return `
+                    <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-y-auto">
+                                <h3 class="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+                                    <i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review
+                                </h3>
+                                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
+                                    <input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Paste Text <span class="text-xs text-slate-400 font-normal">(Best for Codals)</span></label>
+                                    <textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..." oninput="document.getElementById('btn-generate').disabled = false;"></textarea>
+                                </div>
+                                <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-2">- OR -</div>
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
+                                    <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
+                                    <i class="fas fa-file-pdf text-2xl text-slate-400 mb-2"></i>
+                                    <p class="text-sm font-medium text-slate-600">Upload text-searchable PDF</p>
+                                </div>
+                                <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
+                                <div class="mt-4 space-y-3">
+                                    <label class="block text-sm font-medium text-slate-700">Review Mode</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Recit (Flashcards)</button>
+                                        <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
+                                    </div>
+                                </div>
+                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    Generate AI Review
+                                </button>
+                            </div>
+                            <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
+                                    <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
+                                    <h4 class="text-lg font-semibold">AI Mock Review</h4>
+                                    <p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate interactive practice questions based on your material.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
         class SavedReviewsView {
             constructor() { this.unsubscribe = null; }
             render() {
                 return `
-                    <div class="max-w-5xl mx-auto h-full flex flex-col">
+                    <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
                         <div class="flex justify-between items-center mb-6 flex-shrink-0">
                             <h3 class="text-xl font-bold text-slate-700">My Saved Reviews</h3>
                         </div>
@@ -480,9 +662,7 @@
                         const row = document.createElement('div');
                         row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
 
-                        let contentHtml = '';
-                        let textForDownload = '';
-                        
+                        let contentHtml = ''; let textForDownload = '';
                         const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : 'Review';
 
                         if (data.type === 'recit') {
@@ -542,104 +722,6 @@
                         list.appendChild(row);
                     });
                 });
-            }
-        }
-
-        class CaseDigesterView {
-            constructor() { this.digestedData = null; }
-            render() {
-                const savedKey = localStorage.getItem('gemini_api_key') || '';
-                return `
-                    <div class="max-w-5xl mx-auto h-full flex flex-col">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-xl font-bold text-slate-700 flex items-center gap-2">
-                                <i class="fas fa-magic text-amber-500"></i> AI Case Digester
-                            </h3>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
-                            <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4">
-                                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
-                                    <input type="password" id="gemini-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
-                                </div>
-                                <div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
-                                <div><label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter <span class="text-red-500">*</span></label><input type="text" id="digest-subject" placeholder="e.g. Crim 1" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
-                                <div class="border-t border-slate-100 pt-4"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Full Text</label><textarea id="digest-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Paste case text here..."></textarea></div>
-                                <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label>
-                                    <div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative">
-                                        <input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)">
-                                        <i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i>
-                                        <p class="text-xs text-slate-500">Click to upload PDF</p>
-                                    </div>
-                                    <div id="digest-filename" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div>
-                                </div>
-                                <button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-3 rounded-lg text-sm font-bold hover:bg-slate-700 transition shadow-md mt-auto"><i class="fas fa-robot mr-1"></i> Digest & Auto-Save</button>
-                            </div>
-                            <div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area">
-                                <div class="h-full flex flex-col items-center justify-center text-slate-400 text-center">
-                                    <i class="fas fa-brain text-5xl mb-4 opacity-20"></i>
-                                    <p class="text-sm font-medium">Provide the case text and your API key.</p>
-                                    <p class="text-xs mt-1">Gemini will read it, extract the core elements, and automatically save it.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-        }
-
-        class ReviewView {
-            constructor() {
-                this.generatedContent = null;
-                this.isProcessing = false;
-            }
-            render() {
-                const savedKey = localStorage.getItem('gemini_api_key') || '';
-                return `
-                    <div class="max-w-5xl mx-auto h-full flex flex-col">
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-y-auto">
-                                <h3 class="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                                    <i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review
-                                </h3>
-                                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
-                                    <input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Paste Text <span class="text-xs text-slate-400 font-normal">(Best for Codals)</span></label>
-                                    <textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..." oninput="document.getElementById('btn-generate').disabled = false;"></textarea>
-                                </div>
-                                <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-2">- OR -</div>
-                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
-                                    <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
-                                    <i class="fas fa-file-pdf text-2xl text-slate-400 mb-2"></i>
-                                    <p class="text-sm font-medium text-slate-600">Upload text-searchable PDF</p>
-                                </div>
-                                <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
-                                <div class="mt-4 space-y-3">
-                                    <label class="block text-sm font-medium text-slate-700">Review Mode</label>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Recit (Flashcards)</button>
-                                        <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
-                                    </div>
-                                </div>
-                                <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                    Generate AI Review
-                                </button>
-                            </div>
-                            <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
-                                <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
-                                    <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
-                                    <h4 class="text-lg font-semibold">AI Mock Review</h4>
-                                    <p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate practice questions based on your material.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
             }
         }
 
@@ -716,24 +798,98 @@
             navigate: (viewId) => {
                 if (viewId === 'codals') { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return; }
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
-                
                 currentView = viewId; renderSidebar();
                 const item = navItems.find(i => i.id === viewId);
                 pageTitle.innerText = item ? item.label : 'App';
+                if (views[viewId]) { contentArea.innerHTML = views[viewId].render(); if (views[viewId].init) views[viewId].init(); }
+            },
+
+            // --- POMODORO TIMER LOGIC ---
+            updatePomoUI: () => {
+                const mins = Math.floor(currentPomoSeconds / 60).toString().padStart(2, '0');
+                const secs = (currentPomoSeconds % 60).toString().padStart(2, '0');
+                const el = document.getElementById('pomo-time');
+                if(el) el.innerText = `${mins}:${secs}`;
+            },
+            startPomo: () => {
+                if(isPomoRunning) return;
+                isPomoRunning = true;
+                document.getElementById('btn-pomo-start').classList.add('hidden');
+                document.getElementById('btn-pomo-pause').classList.remove('hidden');
                 
-                if (views[viewId]) {
-                    contentArea.innerHTML = views[viewId].render();
-                    if (views[viewId].init) views[viewId].init();
+                if(pomoInterval) clearInterval(pomoInterval);
+                pomoInterval = setInterval(() => {
+                    currentPomoSeconds--;
+                    window.appHandlers.updatePomoUI();
+                    
+                    if(currentPomoSeconds <= 0) {
+                        clearInterval(pomoInterval);
+                        isPomoRunning = false;
+                        document.getElementById('btn-pomo-start').classList.remove('hidden');
+                        document.getElementById('btn-pomo-pause').classList.add('hidden');
+                        
+                        if(currentPomoMode === 'focus') {
+                            // Log the completed session to the database
+                            if(currentUser) {
+                                AppDB.add('focus_sessions', { minutes: POMO_FOCUS_MINS, created: serverTimestamp() });
+                            }
+                            alert("Great job! Focus session complete. Time for a break.");
+                            window.appHandlers.setPomoMode('break');
+                        } else {
+                            alert("Break is over! Time to get back to the grind.");
+                            window.appHandlers.setPomoMode('focus');
+                        }
+                    }
+                }, 1000);
+            },
+            pausePomo: () => {
+                isPomoRunning = false;
+                clearInterval(pomoInterval);
+                document.getElementById('btn-pomo-start').classList.remove('hidden');
+                document.getElementById('btn-pomo-pause').classList.add('hidden');
+            },
+            resetPomo: () => {
+                window.appHandlers.pausePomo();
+                currentPomoSeconds = currentPomoMode === 'focus' ? POMO_FOCUS_MINS * 60 : POMO_BREAK_MINS * 60;
+                window.appHandlers.updatePomoUI();
+            },
+            setPomoMode: (mode) => {
+                window.appHandlers.pausePomo();
+                currentPomoMode = mode;
+                currentPomoSeconds = mode === 'focus' ? POMO_FOCUS_MINS * 60 : POMO_BREAK_MINS * 60;
+                
+                const label = document.getElementById('pomo-mode-label');
+                if(mode === 'focus') {
+                    label.innerHTML = `<i class="fas fa-brain text-amber-400"></i> Focus Mode`;
+                    document.getElementById('pomo-main-content').classList.remove('bg-green-50');
+                    document.getElementById('pomo-main-content').classList.add('bg-slate-50');
+                } else {
+                    label.innerHTML = `<i class="fas fa-mug-hot text-green-400"></i> Break Time`;
+                    document.getElementById('pomo-main-content').classList.remove('bg-slate-50');
+                    document.getElementById('pomo-main-content').classList.add('bg-green-50');
+                }
+                window.appHandlers.updatePomoUI();
+            },
+            switchPomoMode: () => {
+                window.appHandlers.setPomoMode(currentPomoMode === 'focus' ? 'break' : 'focus');
+            },
+            togglePomoMinimize: () => {
+                const widget = document.getElementById('pomodoro-widget');
+                const icon = document.getElementById('pomo-min-icon');
+                // The widget is 64px tall when collapsed (header only)
+                if (widget.classList.contains('translate-y-[calc(100%-48px)]')) {
+                    widget.classList.remove('translate-y-[calc(100%-48px)]');
+                    icon.classList.remove('rotate-180');
+                } else {
+                    widget.classList.add('translate-y-[calc(100%-48px)]');
+                    icon.classList.add('rotate-180');
                 }
             },
             
             // --- NOTEBOOK ROUTING & LOGIC ---
             openSubject: (id, name) => {
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
-                currentView = 'subject_notebook';
-                renderSidebar(); 
-                pageTitle.innerText = 'Notebook';
-                views.subject_notebook.init(id, name);
+                currentView = 'subject_notebook'; renderSidebar(); pageTitle.innerText = 'Notebook'; views.subject_notebook.init(id, name);
             },
             addNote: (subjectId) => {
                 Modal.show({
@@ -794,16 +950,37 @@
                     onSubmit: async () => {
                         await AppDB.delete('notes', noteId);
                         views.subject_notebook.activeNoteId = null;
-                        document.getElementById('notebook-editor-area').innerHTML = `
-                            <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-                                <i class="fas fa-book-open text-6xl mb-4 opacity-20"></i>
-                                <p class="font-medium text-slate-500">Page deleted.</p>
-                            </div>`;
+                        document.getElementById('notebook-editor-area').innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-book-open text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Page deleted.</p></div>`;
                     }
                 });
             },
 
-            // --- DATABASE CRUD (MODALS) ---
+            // --- DATABASE CRUD ---
+            addClass: () => {
+                Modal.show({
+                    title: '<i class="fas fa-calendar-plus text-blue-600"></i> Add Class to Schedule',
+                    content: `
+                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><input type="text" id="cls-sub" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Obicon"></div>
+                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Day of Week</label><select id="cls-day" class="w-full p-2 border border-slate-300 rounded-lg outline-none"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select></div>
+                        <div class="mt-3 grid grid-cols-2 gap-3">
+                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Time</label><input type="text" id="cls-time" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. 5:30 PM"></div>
+                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Room</label><input type="text" id="cls-room" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Room 101"></div>
+                        </div>
+                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Professor</label><input type="text" id="cls-prof" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Atty. Mason"></div>
+                    `,
+                    onSubmit: async () => {
+                        const sub = document.getElementById('cls-sub').value.trim(); if (!sub) return;
+                        await AppDB.add('schedule', { 
+                            subject: sub, day: document.getElementById('cls-day').value, 
+                            time: document.getElementById('cls-time').value.trim(), 
+                            room: document.getElementById('cls-room').value.trim(), 
+                            professor: document.getElementById('cls-prof').value.trim() 
+                        });
+                    }
+                });
+            },
+            deleteClass: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Remove Class', content: '<p>Remove this class from your schedule?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('schedule', id) }); },
+            
             addReminder: () => {
                 Modal.show({
                     title: '<i class="fas fa-bell text-amber-500"></i> New Reminder',
@@ -814,9 +991,7 @@
                     }
                 });
             },
-            deleteReminder: (id) => {
-                Modal.show({ title: '<i class="fas fa-check text-green-500"></i> Complete Task', content: '<p>Mark reminder as complete?</p>', submitText: 'Complete', submitClass: 'px-4 py-2 bg-green-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('reminders', id) });
-            },
+            deleteReminder: (id) => { Modal.show({ title: '<i class="fas fa-check text-green-500"></i> Complete Task', content: '<p>Mark reminder as complete?</p>', submitText: 'Complete', submitClass: 'px-4 py-2 bg-green-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('reminders', id) }); },
             addSubject: () => {
                 Modal.show({
                     title: '<i class="fas fa-book text-blue-600"></i> New Subject',
@@ -827,9 +1002,7 @@
                     }
                 });
             },
-            deleteSubject: (id) => {
-                Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete', content: '<p>Remove subject?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('subjects', id) });
-            },
+            deleteSubject: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete', content: '<p>Remove subject?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('subjects', id) }); },
             addDigest: () => {
                 Modal.show({
                     title: '<i class="fas fa-gavel text-amber-700"></i> Manual Digest',
@@ -908,9 +1081,9 @@
                                 <div class="flex-1"><p class="font-bold">Successfully Digested by Gemini!</p><p class="text-xs opacity-80">Saved to Cons. Digests.</p></div>
                                 <button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View</button>
                             </div>
-                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm">${facts}</p></div>
-                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Issue</h4><p class="text-sm font-medium">${issue}</p></div>
-                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Ruling</h4><p class="text-sm">${ruling}</p></div>
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm whitespace-pre-wrap">${facts}</p></div>
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Issue</h4><p class="text-sm font-medium whitespace-pre-wrap">${issue}</p></div>
+                            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Ruling</h4><p class="text-sm whitespace-pre-wrap">${ruling}</p></div>
                         </div>
                     `;
                 } catch (error) {
@@ -1010,7 +1183,6 @@
                     jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
                     const parsedData = JSON.parse(jsonString);
 
-                    // Save temporarily for the "Save to Reviews" button
                     window.appHandlers.currentReviewData = { mode: mode, content: parsedData };
 
                     const saveUI = `
@@ -1083,11 +1255,10 @@
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = 'Generate AI Review';
-                    window.appHandlers.pdfText = ''; // Clear text after using it
+                    window.appHandlers.pdfText = ''; 
                 }
             },
 
-            // --- AI ANSWER GRADING ---
             evaluateAnswer: async (index, docId) => {
                 const apiKey = localStorage.getItem('gemini_api_key');
                 if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; }
@@ -1149,7 +1320,7 @@
                     let feedback = data.candidates[0].content.parts[0].text;
                     
                     resultDiv.innerHTML = `
-                        <div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans">
+                        <div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans mt-2">
                             <h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>
                             ${feedback}
                         </div>
@@ -1162,7 +1333,6 @@
                 }
             },
             
-            // --- NEW: Save and Delete Reviews Logic ---
             saveCurrentReview: async () => {
                 const title = document.getElementById('save-review-title').value.trim();
                 if (!title) { alert('Please enter a title to save this review.'); return; }
@@ -1188,7 +1358,6 @@
             }
         };
 
-        // --- AUTHENTICATION LISTENER ---
         onAuthStateChanged(auth, (user) => {
             const loginScreen = document.getElementById('login-screen');
             if (user) {
@@ -1197,6 +1366,9 @@
                 loginScreen.classList.add('opacity-0', 'pointer-events-none');
                 setTimeout(() => loginScreen.classList.add('hidden'), 300);
                 window.appHandlers.navigate('dashboard');
+                
+                // Set default UI state for pomo timer
+                window.appHandlers.updatePomoUI();
             } else {
                 currentUser = null;
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe();
