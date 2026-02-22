@@ -48,7 +48,7 @@
     <div id="login-screen" class="fixed inset-0 bg-slate-900 z-[100] flex flex-col items-center justify-center text-white transition-opacity duration-300">
         <img src="./LEX.png" alt="Lex Logo" class="w-24 h-24 rounded-2xl mb-6 shadow-2xl object-cover border border-slate-700">
         <h1 class="text-3xl font-bold mb-2 tracking-wide">LEX COMPANION</h1>
-        <p class="text-slate-400 mb-8">Your 2L Journey, Synced Anywhere.</p>
+        <p class="text-slate-400 mb-8">Your Buddy for you Law Journey.</p>
         <button onclick="window.appHandlers.login()" class="bg-white text-slate-900 px-6 py-3 rounded-lg font-bold flex items-center gap-3 hover:bg-slate-100 transition shadow-xl">
             <i class="fab fa-google text-red-500"></i> Sign in with Google
         </button>
@@ -59,7 +59,7 @@
             <img src="./LEX.png" alt="Lex Logo" class="w-10 h-10 rounded-lg shadow-inner object-cover border border-slate-700">
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 4.5</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">"AJA, FUTURE ATTORNEY!</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -235,7 +235,19 @@
         class DigestsView {
             constructor() { this.unsubscribe = null; }
             render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6 flex-shrink-0"><div><h3 class="text-xl font-bold text-slate-700">Consolidated Case Digests</h3></div><button onclick="window.appHandlers.addDigest()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>Manual Digest</button></div><div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col"><div id="digest-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div></div></div>`; }
-            init() { this.unsubscribe = AppDB.subscribe('digests', (snapshot) => { const list = document.getElementById('digest-list'); if (!list) return; list.innerHTML = ''; if(snapshot.empty) { list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests found.</p></div>`; return; } snapshot.forEach(doc => { const data = doc.data(); const row = document.createElement('div'); row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm"; const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : ''; const safeSubject = data.subject ? data.subject.replace(/'/g, "\\'") : ''; let downloadString = `Title: ${safeTitle}\nSubject: ${safeSubject}\n\n`; if (data.facts) downloadString += `FACTS:\n${data.facts}\n\n`; if (data.issue) downloadString += `ISSUE:\n${data.issue}\n\n`; if (data.ruling) downloadString += `RULING:\n${data.ruling}`; let printString = `<h1>${safeTitle}</h1><p><strong>Subject:</strong> ${safeSubject}</p><br>`; if (data.facts) printString += `<h3>FACTS</h3><p>${data.facts.replace(/\n/g, "<br>")}</p><br>`; if (data.issue) printString += `<h3>ISSUE</h3><p>${data.issue.replace(/\n/g, "<br>")}</p><br>`; if (data.ruling) printString += `<h3>RULING</h3><p>${data.ruling.replace(/\n/g, "<br>")}</p>`; row.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1 pr-4"><h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4><span class="inline-block mt-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.subject}</span></div><button onclick="window.appHandlers.deleteDigest('${doc.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button></div><details class="mt-4 group cursor-pointer outline-none"><summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3"><div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest</div><div class="flex gap-2"><button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '${printString.replace(/'/g, "\\'")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button><button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}_Digest.txt', \`${downloadString.replace(/`/g, "'")}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button></div></summary><div class="mt-4 p-5 bg-white border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">${data.facts ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Facts</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.facts}</p></div>` : ''}${data.issue ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Issue</h5><p class="text-slate-800 font-semibold leading-relaxed whitespace-pre-wrap">${data.issue}</p></div>` : ''}<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Ruling</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.ruling || 'No ruling extracted.'}</p></div></div></details>`; list.appendChild(row); }); }); }
+            init() {
+                this.unsubscribe = AppDB.subscribe('digests', (snapshot) => {
+                    const list = document.getElementById('digest-list'); if (!list) return; list.innerHTML = '';
+                    if(snapshot.empty) { list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests found.</p></div>`; return; }
+                    snapshot.forEach(doc => {
+                        const data = doc.data(); const row = document.createElement('div'); row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
+                        const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : ''; const safeSubject = data.subject ? data.subject.replace(/'/g, "\\'") : '';
+                        let downloadString = `Title: ${safeTitle}\nSubject: ${safeSubject}\n\n`; if (data.facts) downloadString += `FACTS:\n${data.facts}\n\n`; if (data.issue) downloadString += `ISSUE:\n${data.issue}\n\n`; if (data.ruling) downloadString += `RULING:\n${data.ruling}`;
+                        let printString = `<h1>${safeTitle}</h1><p><strong>Subject:</strong> ${safeSubject}</p><br>`; if (data.facts) printString += `<h3>FACTS</h3><p>${data.facts.replace(/\n/g, "<br>")}</p><br>`; if (data.issue) printString += `<h3>ISSUE</h3><p>${data.issue.replace(/\n/g, "<br>")}</p><br>`; if (data.ruling) printString += `<h3>RULING</h3><p>${data.ruling.replace(/\n/g, "<br>")}</p>`;
+                        row.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1 pr-4"><h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4><span class="inline-block mt-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.subject}</span></div><button onclick="window.appHandlers.deleteDigest('${doc.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button></div><details class="mt-4 group cursor-pointer outline-none"><summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3"><div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest</div><div class="flex gap-2"><button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '${printString.replace(/'/g, "\\'")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button><button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}_Digest.txt', \`${downloadString.replace(/`/g, "'")}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button></div></summary><div class="mt-4 p-5 bg-white border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">${data.facts ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Facts</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.facts}</p></div>` : ''}${data.issue ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Issue</h5><p class="text-slate-800 font-semibold leading-relaxed whitespace-pre-wrap">${data.issue}</p></div>` : ''}<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Ruling</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.ruling || 'No ruling extracted.'}</p></div></div></details>`; list.appendChild(row);
+                    });
+                });
+            }
         }
 
         class CaseDigesterView {
@@ -263,10 +275,7 @@
 
                         if (data.type === 'recit') {
                             const now = Date.now(); let dueCards = []; let futureCards = [];
-                            data.content.forEach((c, i) => {
-                                textForDownload += `Q${i+1}: ${c.front}\nA: ${c.back}\n\n`;
-                                if (!c.nextReview || c.nextReview <= now) { dueCards.push({card: c, index: i}); } else { futureCards.push({card: c, index: i}); }
-                            });
+                            data.content.forEach((c, i) => { textForDownload += `Q${i+1}: ${c.front}\nA: ${c.back}\n\n`; if (!c.nextReview || c.nextReview <= now) { dueCards.push({card: c, index: i}); } else { futureCards.push({card: c, index: i}); } });
                             contentHtml = `<div class="mb-4 flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100"><span class="font-bold text-blue-800"><i class="fas fa-brain mr-2"></i> Spaced Repetition</span><span class="text-sm font-bold bg-white text-blue-600 px-3 py-1 rounded shadow-sm">${dueCards.length} Due Today</span></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">`;
                             dueCards.forEach(({card, index}) => { contentHtml += `<div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between group"><div><p class="text-[10px] text-red-600 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-exclamation-circle"></i> Due For Review</p><p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${card.front}</p></div><details class="text-sm group-details cursor-pointer outline-none mt-auto border-t border-slate-100 pt-3"><summary class="text-xs text-amber-600 font-bold hover:text-amber-700 outline-none list-none select-none">(Reveal Answer)</summary><div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200 text-slate-700 leading-relaxed shadow-inner mb-3">${card.back}</div><div class="grid grid-cols-3 gap-2 mt-2"><button onclick="window.appHandlers.rateFlashcard('${doc.id}', ${index}, 'hard')" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold py-1.5 rounded transition">Hard (1d)</button><button onclick="window.appHandlers.rateFlashcard('${doc.id}', ${index}, 'good')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold py-1.5 rounded transition">Good (3d)</button><button onclick="window.appHandlers.rateFlashcard('${doc.id}', ${index}, 'easy')" class="bg-green-100 hover:bg-green-200 text-green-700 text-xs font-bold py-1.5 rounded transition">Easy (7d)</button></div></details></div>`; });
                             if(futureCards.length > 0) {
@@ -291,11 +300,14 @@
         const views = {
             dashboard: new DashboardView(), subjects: new SubjectsView(), subject_notebook: new SubjectNotebookView(), matrix: new DoctrineMatrixView(),
             codal_trainer: new CodalTrainerView(), mnemonic: new MnemonicView(), issue_tree: new IssueTreeView(), digests: new DigestsView(),
-            case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView(),
-            codals: { render: () => { window.open('https://www.ecodalplus.com/ecodals', '_blank'); return `<div class="text-center mt-20 text-slate-500">Opening eCodal+ in a new tab...</div>`; } },
+            case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView()
+            // Note: Codals is handled natively in renderSidebar now!
         };
 
         const sidebarNav = document.querySelector('nav'); const contentArea = document.getElementById('content-area'); const pageTitle = document.getElementById('page-title');
+        
+        // --- NEW SIDEBAR RENDER LOGIC ---
+        // We handle 'codals' completely outside of the SPA router so it opens safely in a new tab without throwing a 404.
         const navItems = [
             { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' }, { id: 'subjects', label: 'Subjects', icon: 'fa-book' }, { id: 'matrix', label: 'Doctrine Matrix', icon: 'fa-table' },
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' }, { id: 'codal_trainer', label: 'Codal Trainer', icon: 'fa-eye-slash' }, { id: 'mnemonic', label: 'Mnemonic Maker', icon: 'fa-lightbulb' },
@@ -304,8 +316,14 @@
         ];
 
         function renderSidebar() {
-            // FIXED: Added event.preventDefault() to stop 404 navigation errors
-            sidebarNav.innerHTML = navItems.map(item => `<a href="#" onclick="event.preventDefault(); window.appHandlers.navigate('${item.id}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 ${currentView === item.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}"><i class="fas ${item.icon} w-5 text-center"></i>${item.label}</a>`).join('');
+            sidebarNav.innerHTML = navItems.map(item => {
+                if (item.id === 'codals') {
+                    // Safe external link bypassing the router entirely
+                    return `<a href="https://www.ecodalplus.com/ecodals" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 text-slate-300 hover:bg-slate-800 hover:text-white"><i class="fas ${item.icon} w-5 text-center"></i>${item.label}</a>`;
+                } else {
+                    return `<a href="#" onclick="event.preventDefault(); window.appHandlers.navigate('${item.id}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 ${currentView === item.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}"><i class="fas ${item.icon} w-5 text-center"></i>${item.label}</a>`;
+                }
+            }).join('');
         }
 
         window.appHandlers = {
@@ -349,10 +367,20 @@
                 const difficulty = parseFloat(document.getElementById('codal-difficulty').value); const stopWords = ['a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'to', 'in', 'of', 'for', 'by', 'with', 'on', 'at', 'as', 'it']; const tokens = text.split(/([a-zA-Z0-9]+)/); let eligibleIndices = [];
                 tokens.forEach((tok, index) => { if (/[a-zA-Z0-9]+/.test(tok)) { if (tok.length > 3 || !stopWords.includes(tok.toLowerCase())) { eligibleIndices.push(index); } } });
                 eligibleIndices.sort(() => Math.random() - 0.5); const blanksCount = Math.floor(eligibleIndices.length * difficulty); const selectedIndices = eligibleIndices.slice(0, blanksCount); let html = '';
-                tokens.forEach((tok, index) => { if (selectedIndices.includes(index)) { const width = Math.max(tok.length * 12 + 10, 40); html += `<input type="text" data-answer="${tok}" class="codal-blank border-b-2 border-slate-400 focus:border-blue-600 outline-none text-center bg-slate-50 text-blue-700 mx-1 font-bold font-sans transition-colors" style="width: ${width}px" oninput="window.appHandlers.checkCodalInput(this)">`; } else { html += tok; } });
+                tokens.forEach((tok, index) => {
+                    if (selectedIndices.includes(index)) { const width = Math.max(tok.length * 12 + 10, 40); html += `<input type="text" data-answer="${tok}" class="codal-blank border-b-2 border-slate-400 focus:border-blue-600 outline-none text-center bg-slate-50 text-blue-700 mx-1 font-bold font-sans transition-colors" style="width: ${width}px" oninput="window.appHandlers.checkCodalInput(this)">`; } 
+                    else { html += tok; }
+                });
                 html = html.replace(/\n/g, '<br>'); document.getElementById('codal-workspace').classList.remove('hidden'); document.getElementById('codal-test-area').innerHTML = html; const firstBlank = document.querySelector('.codal-blank'); if (firstBlank) firstBlank.focus();
             },
-            checkCodalInput: (input) => { const answer = input.getAttribute('data-answer'); if (input.value.toLowerCase().trim() === answer.toLowerCase()) { input.value = answer; input.classList.remove('border-slate-400', 'focus:border-blue-600', 'text-blue-700', 'bg-slate-50'); input.classList.add('border-green-500', 'text-green-700', 'bg-green-50', 'pointer-events-none'); input.readOnly = true; const blanks = Array.from(document.querySelectorAll('.codal-blank:not([readonly])')); if (blanks.length > 0) blanks[0].focus(); else { setTimeout(() => alert("Perfect! You've mastered this provision."), 100); } } },
+            checkCodalInput: (input) => {
+                const answer = input.getAttribute('data-answer');
+                if (input.value.toLowerCase().trim() === answer.toLowerCase()) {
+                    input.value = answer; input.classList.remove('border-slate-400', 'focus:border-blue-600', 'text-blue-700', 'bg-slate-50'); input.classList.add('border-green-500', 'text-green-700', 'bg-green-50', 'pointer-events-none'); input.readOnly = true;
+                    const blanks = Array.from(document.querySelectorAll('.codal-blank:not([readonly])'));
+                    if (blanks.length > 0) blanks[0].focus(); else { setTimeout(() => alert("Perfect! You've mastered this provision."), 100); }
+                }
+            },
             revealCodal: () => { document.querySelectorAll('.codal-blank').forEach(input => { if (!input.readOnly) { input.value = input.getAttribute('data-answer'); input.classList.remove('border-slate-400', 'focus:border-blue-600', 'text-blue-700', 'bg-slate-50'); input.classList.add('border-red-400', 'text-red-600', 'bg-red-50'); input.readOnly = true; } }); },
             resetCodal: () => { window.appHandlers.generateBlindCodal(); },
 
@@ -367,7 +395,11 @@
             
             login: async () => { try { await signInWithPopup(auth, provider); } catch (e) { alert("Login failed. Check Authorized Domains in Firebase Console."); } },
             logout: async () => { try { await signOut(auth); } catch (e) {} },
-            navigate: (viewId) => { if (viewId === 'codals') { window.open('[https://www.ecodalplus.com/ecodals](https://www.ecodalplus.com/ecodals)', '_blank'); return; } if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe(); currentView = viewId; renderSidebar(); const item = navItems.find(i => i.id === viewId); pageTitle.innerText = item ? item.label : 'App'; if (views[viewId]) { contentArea.innerHTML = views[viewId].render(); if (views[viewId].init) views[viewId].init(); } },
+            navigate: (viewId) => { 
+                if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe(); 
+                currentView = viewId; renderSidebar(); const item = navItems.find(i => i.id === viewId); pageTitle.innerText = item ? item.label : 'App'; 
+                if (views[viewId]) { contentArea.innerHTML = views[viewId].render(); if (views[viewId].init) views[viewId].init(); } 
+            },
             
             updatePomoUI: () => { const mins = Math.floor(currentPomoSeconds / 60).toString().padStart(2, '0'); const secs = (currentPomoSeconds % 60).toString().padStart(2, '0'); const el = document.getElementById('pomo-time'); if(el) el.innerText = `${mins}:${secs}`; },
             startPomo: () => { if(isPomoRunning) return; isPomoRunning = true; document.getElementById('btn-pomo-start').classList.add('hidden'); document.getElementById('btn-pomo-pause').classList.remove('hidden'); if(pomoInterval) clearInterval(pomoInterval); pomoInterval = setInterval(() => { currentPomoSeconds--; window.appHandlers.updatePomoUI(); if(currentPomoSeconds <= 0) { clearInterval(pomoInterval); isPomoRunning = false; document.getElementById('btn-pomo-start').classList.remove('hidden'); document.getElementById('btn-pomo-pause').classList.add('hidden'); if(currentPomoMode === 'focus') { if(currentUser) { AppDB.add('focus_sessions', { minutes: POMO_FOCUS_MINS, created: serverTimestamp() }); } alert("Great job! Focus session complete. Time for a break."); window.appHandlers.setPomoMode('break'); } else { alert("Break is over! Time to get back to the grind."); window.appHandlers.setPomoMode('focus'); } } }, 1000); },
@@ -382,13 +414,12 @@
             openSubject: (id, name) => { if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe(); currentView = 'subject_notebook'; renderSidebar(); pageTitle.innerText = 'Notebook'; views.subject_notebook.init(id, name); },
             addNote: (subjectId) => { Modal.show({ title: '<i class="fas fa-file-alt text-blue-600"></i> New Page', content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Page Title</label><input type="text" id="note-title" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., Article 1156"></div>`, onSubmit: async () => { const title = document.getElementById('note-title').value.trim() || 'Untitled Page'; await AppDB.add('notes', { subjectId, title, content: '', created: serverTimestamp() }); } }); },
             
-            // FIXED THE NOTEBOOK \N FORMATTING HERE
             openNote: (noteId, title, content, btnElement) => {
                 views.subject_notebook.activeNoteId = noteId;
                 document.querySelectorAll('#notebook-pages-list button').forEach(b => { b.classList.remove('bg-blue-50', 'text-blue-700', 'border-l-blue-600'); b.classList.add('text-slate-600', 'border-l-transparent'); });
                 if(btnElement) { btnElement.classList.remove('text-slate-600', 'border-l-transparent'); btnElement.classList.add('bg-blue-50', 'text-blue-700', 'border-l-blue-600'); }
                 
-                // AUTO-CLEAN OLD FORMATTING
+                // FIXED PARAGRAPH FORMATTING 
                 let displayTitle = title ? title.replace(/\\'/g, "'") : 'Untitled Page';
                 let displayContent = content ? content.replace(/\\n/g, '\n').replace(/\\'/g, "'") : '';
                 const safeTitleForPrint = displayTitle.replace(/'/g, "\\'");
