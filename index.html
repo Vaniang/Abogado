@@ -59,7 +59,7 @@
             <img src="./LEX.png" alt="Lex Logo" class="w-10 h-10 rounded-lg shadow-inner object-cover border border-slate-700">
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 5.1</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 5.2 ALAC</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -171,7 +171,6 @@
             hide: () => document.getElementById('app-modal').classList.add('hidden')
         };
 
-        // --- VIEWS ---
         class DashboardView {
             constructor() { this.unsubscribeReminders = null; this.unsubscribeSchedule = null; this.unsubscribePomoStats = null; }
             render() {
@@ -241,7 +240,7 @@
 
         class AiSearchView {
             constructor() { this.unsubscribe = null; this.lastQuery = ""; this.lastResponse = ""; this.subjects = []; }
-            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-search text-blue-600"></i> AI Legal Search</h3><p class="text-xs text-slate-500 mt-1">Ask Gemini any legal question during class and save the answer directly to your notes.</p></div></div><div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="search-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div class="flex-1 flex flex-col"><label class="block text-sm font-medium text-slate-700 mb-2">Your Question / Topic</label><textarea id="search-query" rows="6" class="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500 flex-1" placeholder="e.g., What are the exceptions to the rule that delay requires demand under Article 1169?"></textarea></div><button onclick="window.appHandlers.performAiSearch()" id="btn-ai-search" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-search mr-1"></i> Ask Gemini</button></div><div class="lg:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="search-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-robot text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Ask a question to see the AI response here.</p></div></div></div></div>`; }
+            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-search text-blue-600"></i> AI Legal Search</h3><p class="text-xs text-slate-500 mt-1">Ask Gemini any legal question and save the ALAC-formatted answer directly to your notes.</p></div></div><div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="search-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div class="flex-1 flex flex-col"><label class="block text-sm font-medium text-slate-700 mb-1">Your Question or Scenario</label><textarea id="search-query" rows="10" class="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500 flex-1" placeholder="Ask a general rule, OR paste a full Bar Exam hypothetical scenario here..."></textarea></div><button onclick="window.appHandlers.performAiSearch()" id="btn-ai-search" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-search mr-1"></i> Ask Gemini</button></div><div class="lg:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="search-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-robot text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Ask a question to see the AI response here.</p></div></div></div></div>`; }
             init() { this.unsubscribe = AppDB.subscribe('subjects', (snapshot) => { this.subjects = []; if (!snapshot.empty) { snapshot.forEach(doc => this.subjects.push({ id: doc.id, ...doc.data() })); } const select = document.getElementById('search-subject-select'); if (select) { const currentVal = select.value; select.innerHTML = '<option value="">Select Notebook to Save...</option>' + this.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join(''); select.value = currentVal; } }); }
         }
 
@@ -329,8 +328,7 @@
         const views = {
             dashboard: new DashboardView(), subjects: new SubjectsView(), subject_notebook: new SubjectNotebookView(), matrix: new DoctrineMatrixView(),
             codal_trainer: new CodalTrainerView(), mnemonic: new MnemonicView(), issue_tree: new IssueTreeView(), ai_search: new AiSearchView(), digests: new DigestsView(),
-            case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView(),
-            codals: { render: () => { return `<div class="text-center mt-20 text-slate-500">Opening eCodal+ in a new tab...</div>`; }, init: () => {} }
+            case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView()
         };
 
         const sidebarNav = document.querySelector('nav'); const contentArea = document.getElementById('content-area'); const pageTitle = document.getElementById('page-title');
@@ -354,14 +352,33 @@
 
         window.appHandlers = {
 
+            // --- UPDATED: AI LEGAL SEARCH WITH ALAC LOGIC ---
             performAiSearch: async () => {
                 const apiKey = document.getElementById('search-api-key').value.trim(); const query = document.getElementById('search-query').value.trim(); const output = document.getElementById('search-output-area'); const btn = document.getElementById('btn-ai-search');
                 if (!apiKey) { alert("Please enter your Gemini API Key."); return; } localStorage.setItem('gemini_api_key', apiKey); if (!query) { alert("Please enter a question or topic to search."); return; }
+                
                 btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Searching...'; output.innerHTML = `<div class="flex justify-center flex-col items-center h-full"><div class="loader mb-4"></div><p class="text-slate-500 font-medium animate-pulse">Gemini is researching...</p></div>`;
+                
                 try {
-                    const promptText = `You are a brilliant and highly accurate Philippine Law Professor and legal researcher. Answer the following legal question clearly, comprehensively, and cite relevant legal provisions (like the Civil Code) or jurisprudence where applicable.\n\nQuestion: ${query}\n\nPlease format your response cleanly using HTML tags like <b>, <i>, <p>, <ul>, <li>, <br> for readability. Do NOT use markdown code blocks like \`\`\`html.`;
+                    // NEW: ALAC-focused Prompt
+                    const promptText = `
+                        You are a brilliant and highly accurate Philippine Law Professor and Bar Reviewer. 
+                        Analyze the following query: "${query}"
+                        
+                        If the query is a factual scenario, a problem-solving question, or a hypothetical case, you MUST format your response strictly using the ALAC Method. Use these exact bolded headings:
+                        <p><b>ANSWER:</b> [Provide a direct, one-sentence categorical answer (e.g., Yes, No) followed by a brief reason.]</p>
+                        <p><b>LEGAL BASIS:</b> [Cite the specific Philippine law, codal provision, or jurisprudence that governs the issue.]</p>
+                        <p><b>APPLICATION:</b> [Apply the legal basis directly to the specific facts provided in the scenario. Explain the "why".]</p>
+                        <p><b>CONCLUSION:</b> [Provide a brief, final conclusion resolving the issue.]</p>
+                        
+                        If the query is just a general question or definition (not a scenario), provide a comprehensive and structured explanation citing relevant Philippine laws or jurisprudence.
+                        
+                        Format your entire response cleanly using HTML tags like <b>, <i>, <p>, <ul>, <li> for readability. Do NOT use markdown code blocks like \`\`\`html.
+                    `;
+                    
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] }) });
                     if (!response.ok) throw new Error("API Error"); const data = await response.json(); let answerHtml = data.candidates[0].content.parts[0].text.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+                    
                     views.ai_search.lastQuery = query; views.ai_search.lastResponse = answerHtml;
                     output.innerHTML = `<div class="mb-6 flex gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm sticky top-0 z-10"><select id="search-subject-select" class="flex-1 p-2 rounded-lg border border-slate-300 text-sm outline-none focus:ring-2 focus:ring-blue-500"><option value="">Select Notebook to Save...</option>${views.ai_search.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}</select><button onclick="window.appHandlers.saveAiSearch()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition whitespace-nowrap"><i class="fas fa-save mr-1"></i> Save to Notebook</button></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-4"><h4 class="font-bold text-slate-500 text-xs uppercase tracking-wider mb-2"><i class="fas fa-question-circle mr-1"></i> Your Query</h4><p class="text-slate-800 font-medium">${query.replace(/\n/g, '<br>')}</p></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 text-slate-800 leading-relaxed font-serif"><h4 class="font-bold text-blue-600 text-xs uppercase tracking-wider mb-4 border-b border-slate-100 pb-2"><i class="fas fa-robot mr-1"></i> Gemini's Answer</h4>${answerHtml}</div>`;
                 } catch (error) { output.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 shadow-sm">Failed to search: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search mr-1"></i> Ask Gemini'; }
@@ -442,7 +459,7 @@
             login: async () => { try { await signInWithPopup(auth, provider); } catch (e) { alert("Login failed. Check Authorized Domains in Firebase Console."); } },
             logout: async () => { try { await signOut(auth); } catch (e) {} },
             navigate: (viewId) => { 
-                if (viewId === 'codals') return; // Handled natively
+                if (viewId === 'codals') return;
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe(); 
                 currentView = viewId; renderSidebar(); const item = navItems.find(i => i.id === viewId); pageTitle.innerText = item ? item.label : 'App'; 
                 if (views[viewId]) { contentArea.innerHTML = views[viewId].render(); if (views[viewId].init) views[viewId].init(); } 
@@ -465,28 +482,11 @@
                 views.subject_notebook.activeNoteId = noteId;
                 document.querySelectorAll('#notebook-pages-list button').forEach(b => { b.classList.remove('bg-blue-50', 'text-blue-700', 'border-l-blue-600'); b.classList.add('text-slate-600', 'border-l-transparent'); });
                 if(btnElement) { btnElement.classList.remove('text-slate-600', 'border-l-transparent'); btnElement.classList.add('bg-blue-50', 'text-blue-700', 'border-l-blue-600'); }
-                
                 let displayTitle = title ? title.replace(/\\'/g, "'") : 'Untitled Page';
                 let displayContent = content ? content.replace(/\\n/g, '\n').replace(/\\'/g, "'") : '';
                 const safeTitleForPrint = displayTitle.replace(/'/g, "\\'");
-
                 const area = document.getElementById('notebook-editor-area');
-                area.innerHTML = `
-                    <div class="flex-1 flex flex-col p-8 bg-white m-6 rounded-2xl shadow-sm border border-slate-200">
-                        <div class="flex justify-between items-center mb-6">
-                            <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300 serif-text bg-transparent flex-1" value="${displayTitle.replace(/"/g, '&quot;')}" placeholder="Page Title...">
-                            <div class="flex gap-2">
-                                <button onclick="window.appHandlers.printNote('${safeTitleForPrint}')" class="text-slate-400 hover:text-blue-600 p-2" title="Print / Save PDF"><i class="fas fa-print"></i></button>
-                                <button onclick="window.appHandlers.downloadText('${safeTitleForPrint}.txt', document.getElementById('note-content-editor').value)" class="text-slate-400 hover:text-blue-600 p-2" title="Download Text"><i class="fas fa-download"></i></button>
-                            </div>
-                        </div>
-                        <textarea id="note-content-editor" class="flex-1 w-full border-none outline-none resize-none text-slate-700 leading-relaxed text-base font-sans placeholder-slate-300 focus:ring-0 bg-transparent" placeholder="Start typing your notes here..."></textarea>
-                        <div class="mt-4 flex justify-end items-center gap-4 pt-4 border-t border-slate-100">
-                            <span id="note-save-status" class="text-sm font-bold text-green-500 opacity-0 transition-opacity"><i class="fas fa-check-circle mr-1"></i> Saved to Cloud</span>
-                            <button onclick="window.appHandlers.saveNote('${noteId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-save mr-2"></i> Save Page</button>
-                        </div>
-                    </div>
-                `;
+                area.innerHTML = `<div class="flex-1 flex flex-col p-8 bg-white m-6 rounded-2xl shadow-sm border border-slate-200"><div class="flex justify-between items-center mb-6"><input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300 serif-text bg-transparent flex-1" value="${displayTitle.replace(/"/g, '&quot;')}" placeholder="Page Title..."><div class="flex gap-2"><button onclick="window.appHandlers.printNote('${safeTitleForPrint}')" class="text-slate-400 hover:text-blue-600 p-2" title="Print / Save PDF"><i class="fas fa-print"></i></button><button onclick="window.appHandlers.downloadText('${safeTitleForPrint}.txt', document.getElementById('note-content-editor').value)" class="text-slate-400 hover:text-blue-600 p-2" title="Download Text"><i class="fas fa-download"></i></button></div></div><textarea id="note-content-editor" class="flex-1 w-full border-none outline-none resize-none text-slate-700 leading-relaxed text-base font-sans placeholder-slate-300 focus:ring-0 bg-transparent" placeholder="Start typing your notes here..."></textarea><div class="mt-4 flex justify-end items-center gap-4 pt-4 border-t border-slate-100"><span id="note-save-status" class="text-sm font-bold text-green-500 opacity-0 transition-opacity"><i class="fas fa-check-circle mr-1"></i> Saved to Cloud</span><button onclick="window.appHandlers.saveNote('${noteId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-save mr-2"></i> Save Page</button></div></div>`;
                 document.getElementById('note-content-editor').value = displayContent;
             },
             saveNote: async (noteId) => { const title = document.getElementById('note-title-editor').value.trim() || 'Untitled Page'; const content = document.getElementById('note-content-editor').value; const status = document.getElementById('note-save-status'); try { await AppDB.update('notes', noteId, { title, content, updated: serverTimestamp() }); status.classList.remove('opacity-0'); setTimeout(() => status.classList.add('opacity-0'), 3000); } catch(e) { alert("Error saving note."); } },
