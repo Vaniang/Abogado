@@ -59,7 +59,7 @@
             <img src="./LEX.png" alt="Lex Logo" class="w-10 h-10 rounded-lg shadow-inner object-cover border border-slate-700">
             <div>
                 <h1 class="font-bold text-lg tracking-wide">LEX</h1>
-                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 5.3</p>
+                <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">Version 5.4 ALAC</p>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
@@ -229,7 +229,7 @@
 
         class MnemonicView {
             constructor() { this.unsubscribe = null; this.generatedTitle = ""; this.generatedContent = ""; this.subjects = []; }
-            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-lightbulb text-amber-500"></i> AI Mnemonic Maker</h3><p class="text-xs text-slate-500 mt-1">Turn boring legal elements into unforgettable stories and acronyms.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="mnem-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Concept / Topic</label><input type="text" id="mnem-topic" placeholder="e.g., Requisites of Fortuitous Event" class="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Elements to Memorize</label><textarea id="mnem-elements" rows="5" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-amber-500" placeholder="1. Independent of human will\n2. Unforeseeable or unavoidable..."></textarea></div><button onclick="window.appHandlers.generateMnemonic()" id="btn-generate-mnem" class="mt-auto w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Create Mnemonic</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="mnem-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-brain text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Enter your elements on the left.</p></div></div></div></div>`; }
+            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-lightbulb text-amber-500"></i> AI Mnemonic Maker</h3><p class="text-xs text-slate-500 mt-1">Turn boring legal elements into unforgettable stories and acronyms.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="mnem-api-key" class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Concept / Topic</label><input type="text" id="mnem-topic" placeholder="e.g., Requisites of Fortuitous Event" class="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Elements to Memorize</label><textarea id="mnem-elements" rows="5" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-amber-500" placeholder="1. Independent of human will\n2. Unforeseeable or unavoidable..."></textarea></div><button onclick="window.appHandlers.generateMnemonic()" id="btn-generate-mnem" class="mt-auto w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Create Mnemonic</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="mnem-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-brain text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Enter your elements on the left.</p></div></div></div></div>`; }
             init() { this.unsubscribe = AppDB.subscribe('subjects', (snapshot) => { this.subjects = []; if (!snapshot.empty) { snapshot.forEach(doc => this.subjects.push({ id: doc.id, ...doc.data() })); } const select = document.getElementById('mnem-subject-select'); if (select) { const currentVal = select.value; select.innerHTML = '<option value="">Select Notebook to Save...</option>' + this.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join(''); select.value = currentVal; } }); }
         }
 
@@ -238,24 +238,24 @@
             render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-project-diagram text-blue-600"></i> AI Issue Trees</h3><p class="text-xs text-slate-500 mt-1">Generate visual mental maps of rules, elements, and exceptions.</p></div></div><div class="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="tree-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Topic to Map</label><textarea id="tree-topic" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Article 1170 (Breach of Obligations)"></textarea></div><button onclick="window.appHandlers.generateTree()" id="btn-generate-tree" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-sitemap mr-1"></i> Draw Visual Tree</button></div><div class="md:col-span-3 bg-white border border-slate-200 rounded-xl p-6 overflow-auto relative shadow-inner" id="tree-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-project-diagram text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide a topic on the left to map it out.</p></div></div></div></div>`; }
         }
 
-        // --- UPDATED AI SEARCH VIEW (CHAT HISTORY) ---
+        // --- AI SEARCH VIEW (WITH SCROLL FIX) ---
         class AiSearchView {
             constructor() { this.unsubscribe = null; this.searchHistory = []; this.chatHistory = []; this.subjects = []; }
             render() {
                 const savedKey = localStorage.getItem('gemini_api_key') || '';
                 return `
-                    <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
+                    <div class="max-w-5xl mx-auto h-[calc(100vh-8rem)] flex flex-col pb-4">
                         <div class="flex justify-between items-center mb-6 flex-shrink-0">
                             <div>
                                 <h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-search text-blue-600"></i> AI Legal Search</h3>
-                                <p class="text-xs text-slate-500 mt-1">Chat with Gemini about Philippine law. Ask questions or paste scenarios for ALAC formatting.</p>
+                                <p class="text-xs text-slate-500 mt-1">Chat with Gemini. Paste scenarios for Bar-style ALAC answers.</p>
                             </div>
                             <button onclick="window.appHandlers.clearAiSearch()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
                                 <i class="fas fa-broom mr-1"></i> Clear Chat
                             </button>
                         </div>
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden">
-                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
+                            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 h-full overflow-y-auto">
                                 <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg flex-shrink-0">
                                     <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
                                     <input type="password" id="search-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
@@ -268,7 +268,7 @@
                                     <i class="fas fa-paper-plane mr-1"></i> Send to Gemini
                                 </button>
                             </div>
-                            <div class="lg:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="search-output-area">
+                            <div class="lg:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 flex flex-col relative h-full overflow-y-auto" id="search-output-area">
                                 <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400" id="search-placeholder">
                                     <i class="fas fa-robot text-6xl mb-4 opacity-20"></i>
                                     <p class="font-medium text-slate-500">Send a message to start the conversation.</p>
@@ -316,8 +316,8 @@
                     sortedDigests.forEach(data => {
                         const row = document.createElement('div'); row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
                         const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : ''; const safeSubject = data.subject ? data.subject.replace(/'/g, "\\'") : '';
-                        let downloadString = `Title: ${safeTitle}\nSubject: ${safeSubject}\n\n`; if (data.facts) downloadString += `FACTS:\n${data.facts}\n\n`; if (data.issue) downloadString += `ISSUE:\n${data.issue}\n\n`; if (data.ruling) downloadString += `RULING:\n${data.ruling}`;
-                        let printString = `<h1>${safeTitle}</h1><p><strong>Subject:</strong> ${safeSubject}</p><br>`; if (data.facts) printString += `<h3>FACTS</h3><p>${data.facts.replace(/\n/g, "<br>")}</p><br>`; if (data.issue) printString += `<h3>ISSUE</h3><p>${data.issue.replace(/\n/g, "<br>")}</p><br>`; if (data.ruling) printString += `<h3>RULING</h3><p>${data.ruling.replace(/\n/g, "<br>")}</p>`;
+                        let downloadString = `Title: ${safeTitle}\nSubject: ${safeSubject}\n\n`; if (data.facts) downloadString += `FACTS:\n${data.facts.replace(/'/g, "\\'").replace(/\n/g, "\\n")}\n\n`; if (data.issue) downloadString += `ISSUE:\n${data.issue.replace(/'/g, "\\'").replace(/\n/g, "\\n")}\n\n`; if (data.ruling) downloadString += `RULING:\n${data.ruling.replace(/'/g, "\\'").replace(/\n/g, "\\n")}`;
+                        let printString = `<h1>${safeTitle}</h1><p><strong>Subject:</strong> ${safeSubject}</p><br>`; if (data.facts) printString += `<h3>FACTS</h3><p>${data.facts.replace(/'/g, "\\'").replace(/\n/g, "<br>")}</p><br>`; if (data.issue) printString += `<h3>ISSUE</h3><p>${data.issue.replace(/'/g, "\\'").replace(/\n/g, "<br>")}</p><br>`; if (data.ruling) printString += `<h3>RULING</h3><p>${data.ruling.replace(/'/g, "\\'").replace(/\n/g, "<br>")}</p>`;
                         row.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1 pr-4"><h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4><span class="inline-block mt-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.subject}</span></div><button onclick="window.appHandlers.deleteDigest('${data.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button></div><details class="mt-4 group cursor-pointer outline-none"><summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3"><div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest</div><div class="flex gap-2"><button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '${printString.replace(/'/g, "\\'")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button><button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}_Digest.txt', \`${downloadString.replace(/`/g, "'")}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button></div></summary><div class="mt-4 p-5 bg-white border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">${data.facts ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Facts</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.facts}</p></div>` : ''}${data.issue ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Issue</h5><p class="text-slate-800 font-semibold leading-relaxed whitespace-pre-wrap">${data.issue}</p></div>` : ''}<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Ruling</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${data.ruling || 'No ruling extracted.'}</p></div></div></details>`; list.appendChild(row);
                     });
                 });
@@ -332,44 +332,6 @@
         class ReviewView {
             constructor() { this.generatedContent = null; this.isProcessing = false; }
             render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full"><div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-y-auto"><h3 class="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review</h3><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Paste Text <span class="text-xs text-slate-400 font-normal">(Best for Codals)</span></label><textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..." oninput="document.getElementById('btn-generate').disabled = false;"></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-2">- OR -</div><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone"><input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)"><i class="fas fa-file-pdf text-2xl text-slate-400 mb-2"></i><p class="text-sm font-medium text-slate-600">Upload text-searchable PDF</p></div><div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div><div class="mt-4 space-y-3"><label class="block text-sm font-medium text-slate-700">Review Mode</label><div class="grid grid-cols-2 gap-2"><button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Recit (Flashcards)</button><button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button></div></div><button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Generate AI Review</button></div><div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center"><i class="fas fa-brain text-4xl mb-4 opacity-50"></i><h4 class="text-lg font-semibold">AI Mock Review</h4><p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate interactive practice questions based on your material.</p></div></div></div></div>`; }
-        }
-
-        class SavedReviewsView {
-            constructor() { this.unsubscribe = null; }
-            render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6 flex-shrink-0"><h3 class="text-xl font-bold text-slate-700">My Saved Reviews & SRS</h3></div><div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col"><div id="saved-reviews-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div></div></div>`; }
-            init() {
-                this.unsubscribe = AppDB.subscribe('reviews', (snapshot) => {
-                    const list = document.getElementById('saved-reviews-list'); if (!list) return; list.innerHTML = '';
-                    if (snapshot.empty) { list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-archive text-5xl mb-4 opacity-30"></i><p>No saved reviews yet.</p></div>`; return; }
-                    window.appHandlers.savedExamData = {}; window.appHandlers.savedReviewData = {};
-                    const sortedReviews = []; snapshot.forEach(doc => sortedReviews.push({ id: doc.id, ...doc.data() })); sortedReviews.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-                    sortedReviews.forEach(data => {
-                        window.appHandlers.savedReviewData[data.id] = data.content; 
-                        const row = document.createElement('div'); row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
-                        let contentHtml = ''; let textForDownload = ''; const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : 'Review';
-
-                        if (data.type === 'recit') {
-                            const now = Date.now(); let dueCards = []; let futureCards = [];
-                            data.content.forEach((c, i) => { textForDownload += `Q${i+1}: ${c.front}\nA: ${c.back}\n\n`; if (!c.nextReview || c.nextReview <= now) { dueCards.push({card: c, index: i}); } else { futureCards.push({card: c, index: i}); } });
-                            contentHtml = `<div class="mb-4 flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100"><span class="font-bold text-blue-800"><i class="fas fa-brain mr-2"></i> Spaced Repetition</span><span class="text-sm font-bold bg-white text-blue-600 px-3 py-1 rounded shadow-sm">${dueCards.length} Due Today</span></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">`;
-                            dueCards.forEach(({card, index}) => { contentHtml += `<div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between group"><div><p class="text-[10px] text-red-600 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-exclamation-circle"></i> Due For Review</p><p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${card.front}</p></div><details class="text-sm group-details cursor-pointer outline-none mt-auto border-t border-slate-100 pt-3"><summary class="text-xs text-amber-600 font-bold hover:text-amber-700 outline-none list-none select-none">(Reveal Answer)</summary><div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200 text-slate-700 leading-relaxed shadow-inner mb-3">${card.back}</div><div class="grid grid-cols-3 gap-2 mt-2"><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 'hard')" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold py-1.5 rounded transition">Hard (1d)</button><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 'good')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold py-1.5 rounded transition">Good (3d)</button><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 'easy')" class="bg-green-100 hover:bg-green-200 text-green-700 text-xs font-bold py-1.5 rounded transition">Easy (7d)</button></div></details></div>`; });
-                            if(futureCards.length > 0) {
-                                contentHtml += `</div><h5 class="font-bold text-sm text-slate-500 mb-3 border-b border-slate-200 pb-2">Scheduled for Later (${futureCards.length})</h5><div class="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">`;
-                                futureCards.forEach(({card, index}) => { const days = Math.ceil((card.nextReview - now) / (1000 * 60 * 60 * 24)); contentHtml += `<div class="border border-slate-200 rounded-xl p-5 bg-slate-50 flex flex-col justify-between"><div><p class="text-[10px] text-slate-500 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-clock mr-1"></i> Due in ${days} days</p><p class="text-sm font-semibold text-slate-600 mb-2">${card.front}</p></div></div>`; });
-                            }
-                            contentHtml += `</div>`;
-                        } else {
-                            window.appHandlers.savedExamData[data.id] = data.content;
-                            data.content.forEach((c, i) => {
-                                textForDownload += `Question ${i+1}:\n${c.question}\n\nSuggested Guide:\n${c.suggested_answer}\n\n-----------------\n\n`;
-                                contentHtml += `<div class="mb-8 p-5 bg-white border border-slate-200 rounded-xl shadow-sm"><h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4><p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${c.question}</p><textarea id="saved-exam-answer-${data.id}-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your answer here..."></textarea><div class="mt-4"><button onclick="window.appHandlers.evaluateAnswer(${i}, '${data.id}')" id="btn-eval-${data.id}-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check Answer</button></div><div id="eval-result-${data.id}-${i}" class="mt-4 hidden"></div><details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4"><summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary><div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${c.suggested_answer}</div></details></div>`;
-                            });
-                        }
-                        row.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1 pr-4"><h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4><span class="inline-block mt-2 ${data.type === 'recit' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.type === 'recit' ? 'Flashcards' : 'Mock Exam'}</span></div><button onclick="window.appHandlers.deleteReview('${data.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button></div><details class="mt-4 group cursor-pointer outline-none"><summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3"><div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Material</div><div class="flex gap-2"><button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '<h1>${safeTitle}</h1><br>${textForDownload.replace(/\n/g, '<br>').replace(/'/g, "\\'")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button><button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}.txt', \`${textForDownload.replace(/`/g, "'")}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button></div></summary><div class="mt-4 cursor-text border-t border-slate-200 pt-4">${contentHtml}</div></details>`;
-                        list.appendChild(row);
-                    });
-                });
-            }
         }
 
         const views = {
@@ -399,8 +361,8 @@
         }
 
         window.appHandlers = {
-            
-            // --- NEW: CHAT HISTORY LOGIC FOR AI SEARCH ---
+
+            // --- AI LEGAL SEARCH (ALAC FORMAT & CHAT UI) ---
             clearAiSearch: () => {
                 views.ai_search.searchHistory = [];
                 views.ai_search.chatHistory = [];
@@ -443,15 +405,15 @@
                         You are a brilliant and highly accurate Philippine Law Professor and Bar Reviewer. 
                         Analyze the following query: "${query}"
                         
-                        If the query is a factual scenario, a problem-solving question, or a hypothetical case, you MUST format your response strictly using the ALAC Method. Use these exact bolded headings:
-                        <p><b>ANSWER:</b> [Provide a direct, one-sentence categorical answer (e.g., Yes, No) followed by a brief reason.]</p>
-                        <p><b>LEGAL BASIS:</b> [Cite the specific Philippine law, codal provision, or jurisprudence that governs the issue.]</p>
-                        <p><b>APPLICATION:</b> [Apply the legal basis directly to the specific facts provided in the scenario. Explain the "why".]</p>
-                        <p><b>CONCLUSION:</b> [Provide a brief, final conclusion resolving the issue.]</p>
+                        If the query is a factual scenario, a problem-solving question, or a hypothetical case, you MUST format your response strictly using the ALAC Method in PARAGRAPH FORM (Do not use bullet points or strict headings). 
+                        Write exactly 3 to 4 flowing paragraphs:
+                        1. First paragraph (Answer): A categorical Yes or No, followed by a brief reason.
+                        2. Second paragraph (Legal Basis & Application): State the law or jurisprudence. You MUST **bold** the name of the legal basis (e.g., **Article 1169 of the Civil Code** or **Negotiorum Gestio**). Then, seamlessly apply this law to the specific facts of the scenario.
+                        3. Third paragraph (Conclusion): A brief, final conclusion resolving the issue.
                         
                         If the query is just a general question or definition (not a scenario), provide a comprehensive and structured explanation citing relevant Philippine laws or jurisprudence.
                         
-                        Format your entire response cleanly using HTML tags like <b>, <i>, <p>, <ul>, <li> for readability. Do NOT use markdown code blocks like \`\`\`html.
+                        Format your response cleanly using HTML tags like <p> and <b> for readability. Do NOT use markdown code blocks like \`\`\`html.
                     `;
                     
                     let currentContext = [...views.ai_search.chatHistory];
@@ -522,6 +484,7 @@
                 } catch(e) { alert("Error saving to notebook."); console.error(e); }
             },
 
+            // --- ALL OTHER EXISTING HANDLERS ---
             generateTree: async () => {
                 const apiKey = document.getElementById('tree-api-key').value.trim(); const topic = document.getElementById('tree-topic').value.trim(); const outputArea = document.getElementById('tree-output-area'); const btn = document.getElementById('btn-generate-tree');
                 if (!apiKey) { alert("Please enter your Gemini API Key."); return; } localStorage.setItem('gemini_api_key', apiKey); if (!topic) { alert("Please enter a legal topic."); return; }
@@ -590,7 +553,7 @@
             login: async () => { try { await signInWithPopup(auth, provider); } catch (e) { alert("Login failed. Check Authorized Domains in Firebase Console."); } },
             logout: async () => { try { await signOut(auth); } catch (e) {} },
             navigate: (viewId) => { 
-                if (viewId === 'codals') return; 
+                if (viewId === 'codals') return;
                 if(views[currentView] && views[currentView].unsubscribe) views[currentView].unsubscribe(); 
                 currentView = viewId; renderSidebar(); const item = navItems.find(i => i.id === viewId); pageTitle.innerText = item ? item.label : 'App'; 
                 if (views[viewId]) { contentArea.innerHTML = views[viewId].render(); if (views[viewId].init) views[viewId].init(); } 
