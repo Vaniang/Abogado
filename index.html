@@ -456,10 +456,10 @@
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${groqApiKey}`
                         }, 
-                        body: JSON.stringify({ 
-                            model: "llama3-8b-8192",
+                       body: JSON.stringify({ 
+                            model: "llama-3.1-8b-instant", // Updated model name
                             messages: groqMessages
-                        }) 
+                        })
                     });
                     
                     if (!response.ok) { 
