@@ -175,7 +175,7 @@
         };
 
         // --- View Classes ---
-        class DashboardView {
+       class DashboardView {
             constructor() { this.unsubscribeReminders = null; this.unsubscribeSchedule = null; this.unsubscribePomoStats = null; }
             render() {
                 const verse = Utils.getDailyVerse();
@@ -184,7 +184,31 @@
             async init() {
                 const clockEl = document.getElementById('header-clock');
                 if (clockEl) { setInterval(() => { const now = new Date(); clockEl.innerText = now.toLocaleTimeString('en-US', { hour12: true }); const dateEl = document.getElementById('header-date-display'); if (dateEl) dateEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }, 1000); }
-                this.unsubscribeReminders = AppDB.subscribe('reminders', (snapshot) => { const list = document.getElementById('reminder-list'); if (!list) return; list.innerHTML = ''; if (snapshot.empty) { list.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">No pending tasks. Great job!</div>`; return; } snapshot.forEach(doc => { const data = doc.data(); const item = document.createElement('div'); item.className = `p-4 rounded-xl border-l-4 shadow-sm ${data.type === 'Quiz' ? 'border-red-500 bg-red-50' : 'border-amber-500 bg-amber-50'} flex justify-between items-start group`; item.innerHTML = `<div><p class="text-sm font-bold text-slate-800">${data.title}</p><p class="text-xs text-slate-600 mt-1">${data.type} • ${data.date ? new Date(data.date).toLocaleDateString() : 'No Date'}</p></div><button onclick="window.appHandlers.deleteReminder('${doc.id}')" class="text-slate-300 hover:text-green-600 bg-white p-1.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition" title="Mark Complete"><i class="fas fa-check"></i></button>`; list.appendChild(item); }); });
+                
+                this.unsubscribeReminders = AppDB.subscribe('reminders', (snapshot) => { 
+                    const list = document.getElementById('reminder-list'); if (!list) return; list.innerHTML = ''; 
+                    if (snapshot.empty) { list.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">No pending tasks. Great job!</div>`; return; } 
+                    
+                    snapshot.forEach(doc => { 
+                        const data = doc.data(); 
+                        const item = document.createElement('div'); 
+                        
+                        // Determine colors based on task type
+                        let colorClass = 'border-amber-500 bg-amber-50'; // Default
+                        let textClass = 'text-slate-600';
+                        if (data.type === 'Quiz') {
+                            colorClass = 'border-red-500 bg-red-50';
+                        } else if (data.type === 'Exam Week') {
+                            colorClass = 'border-purple-600 bg-purple-50';
+                            textClass = 'text-purple-700 font-bold uppercase tracking-wide';
+                        }
+                        
+                        item.className = `p-4 rounded-xl border-l-4 shadow-sm ${colorClass} flex justify-between items-start group`; 
+                        item.innerHTML = `<div><p class="text-sm font-bold text-slate-800">${data.title}</p><p class="text-xs mt-1"><span class="${textClass}">${data.type}</span> <span class="text-slate-600">• ${data.date ? new Date(data.date).toLocaleDateString() : 'No Date'}</span></p></div><button onclick="window.appHandlers.deleteReminder('${doc.id}')" class="text-slate-300 hover:text-green-600 bg-white p-1.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition" title="Mark Complete"><i class="fas fa-check"></i></button>`; 
+                        list.appendChild(item); 
+                    }); 
+                });
+                
                 this.unsubscribeSchedule = AppDB.subscribe('schedule', (snapshot) => { const schedList = document.getElementById('dashboard-schedule-list'); if (!schedList) return; schedList.innerHTML = ''; if (snapshot.empty) { schedList.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">Your schedule is empty.<br>Click '+' to add a class.</div>`; return; } const classes = []; snapshot.forEach(doc => classes.push({ id: doc.id, ...doc.data() })); const dayOrder = { "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6, "Sunday": 7 }; classes.sort((a, b) => { if (dayOrder[a.day] !== dayOrder[b.day]) return dayOrder[a.day] - dayOrder[b.day]; return a.time.localeCompare(b.time); }); let currentDay = ""; classes.forEach(cls => { if (cls.day !== currentDay) { schedList.innerHTML += `<div class="font-bold text-slate-500 text-xs mt-4 mb-2 uppercase tracking-wider border-b border-slate-100 pb-1">${cls.day}</div>`; currentDay = cls.day; } const item = document.createElement('div'); item.className = "flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg mb-2 group hover:border-blue-200 transition"; item.innerHTML = `<div class="flex items-center gap-3"><div class="bg-blue-100 text-blue-800 font-bold text-xs py-1 px-2 rounded min-w-[70px] text-center">${cls.time}</div><div><p class="font-bold text-slate-800 text-sm">${cls.subject}</p><p class="text-[10px] text-slate-500 mt-0.5"><i class="fas fa-map-marker-alt"></i> ${cls.room} • <i class="fas fa-user-tie"></i> ${cls.professor}</p></div></div><button onclick="window.appHandlers.deleteClass('${cls.id}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i class="fas fa-times"></i></button>`; schedList.appendChild(item); }); });
                 this.unsubscribePomoStats = AppDB.subscribe('focus_sessions', (snapshot) => { const timeEl = document.getElementById('dash-study-time'); const sessionsEl = document.getElementById('dash-study-sessions'); if (!timeEl || !sessionsEl) return; let totalMinutes = 0; let totalSessions = 0; if (!snapshot.empty) { snapshot.forEach(doc => { totalMinutes += doc.data().minutes; totalSessions++; }); } const hours = Math.floor(totalMinutes / 60); const mins = totalMinutes % 60; timeEl.innerHTML = `${hours}<span class="text-2xl text-slate-400">h</span> ${mins}<span class="text-2xl text-slate-400">m</span>`; sessionsEl.innerText = `${totalSessions} Focus Sessions Logged`; });
             }
@@ -687,7 +711,7 @@
                 Modal.show({
                     title: 'Add Reminder',
                     content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Task</label><input type="text" id="rem-title" class="w-full border border-slate-300 rounded-lg p-2 outline-none"></div>
-                              <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Type</label><select id="rem-type" class="w-full border border-slate-300 rounded-lg p-2 outline-none"><option>Quiz</option><option>Assignment</option><option>Readings</option></select></div>
+                              <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Type</label><select id="rem-type" class="w-full border border-slate-300 rounded-lg p-2 outline-none"><option>Quiz</option><option>Assignment</option><option>Readings</option><option>Exam Week</option></select></div>
                               <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" id="rem-date" class="w-full border border-slate-300 rounded-lg p-2 outline-none"></div>`,
                     onSubmit: async () => {
                         const title = document.getElementById('rem-title').value.trim();
