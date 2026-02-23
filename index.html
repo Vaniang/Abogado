@@ -494,7 +494,7 @@
                 try { await AppDB.add('notes', { subjectId: subjectId, title: title, content: content, created: serverTimestamp() }); alert("Search result successfully saved to your notebook!"); const subjectName = subjectSelect.options[subjectSelect.selectedIndex].text; window.appHandlers.openSubject(subjectId, subjectName); } catch(e) { alert("Error saving to notebook."); console.error(e); }
             },
 
-            generateTree: async () => {
+          generateTree: async () => {
                 const topic = document.getElementById('tree-topic').value.trim(); 
                 const outputArea = document.getElementById('tree-output-area'); 
                 const btn = document.getElementById('btn-generate-tree');
@@ -508,22 +508,27 @@
                 try {
                     const promptText = `You are a law professor. Create a Mermaid.js flowchart mapping out the general rule, elements, and exceptions for the legal topic: "${topic}". Use a top-down flowchart format starting with "graph TD". Keep nodes short and concise. IMPORTANT: To prevent text from being cut off, use <br> tags to wrap long text inside nodes into multiple lines, and YOU MUST WRAP EVERY NODE TEXT IN DOUBLE QUOTES if it contains spaces or <br> tags (e.g., C["4. No Legal Excuse<br>for Non-compliance"]). Output ONLY the raw Mermaid syntax. Do NOT use markdown backticks like \`\`\`mermaid. Just output the code.`;
 
-                    // FIX: Replaced markdown link with standard URL string
-                    const response = await fetch('[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)', { 
+                    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                         method: 'POST', 
                         headers: { 
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${groqApiKey}`
                         }, 
                         body: JSON.stringify({ 
-                            model: "llama3-8b-8192",
+                            model: "llama-3.1-8b-instant", // FIXED: Updated to the active model
                             messages: [{ role: "user", content: promptText }] 
                         }) 
                     });
                                         
                     if (!response.ok) { 
-                        const errData = await response.json(); 
-                        throw new Error(errData.error?.message || "API Error"); 
+                        // Safety check to handle HTML error pages gracefully
+                        const contentType = response.headers.get("content-type");
+                        if (contentType && contentType.indexOf("application/json") !== -1) {
+                            const errData = await response.json(); 
+                            throw new Error(errData.error?.message || "API Error"); 
+                        } else {
+                            throw new Error("Server returned an invalid response (Likely a model or API issue).");
+                        }
                     }
                     
                     const data = await response.json(); 
@@ -533,7 +538,10 @@
                     const { svg } = await mermaid.render('mermaid-graph-generated', mermaidSyntax);
                     
                     outputArea.innerHTML = `<div class="w-full flex justify-between items-center mb-4"><h4 class="font-bold text-slate-800 text-sm tracking-wider uppercase">Visual Map: ${topic}</h4><button onclick="window.appHandlers.printContent('Issue Tree: ${topic.replace(/'/g, "\\'")}', document.getElementById('rendered-tree-container').innerHTML)" class="text-xs bg-slate-100 text-slate-600 hover:text-blue-600 px-3 py-1.5 rounded transition font-bold"><i class="fas fa-print mr-1"></i> Print / PDF</button></div><div id="rendered-tree-container" class="mermaid w-full flex justify-center bg-white p-4 rounded border border-slate-100 overflow-x-auto">${svg}</div>`;
-                } catch(e) { outputArea.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-red-500"><i class="fas fa-exclamation-triangle text-4xl mb-4"></i><p class="font-bold">Failed to draw map.</p><p class="text-xs mt-2 text-slate-500">${e.message}</p></div>`; console.error(e); } 
+                } catch(e) { 
+                    outputArea.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-red-500"><i class="fas fa-exclamation-triangle text-4xl mb-4"></i><p class="font-bold">Failed to draw map.</p><p class="text-xs mt-2 text-slate-500">${e.message}</p></div>`; 
+                    console.error(e); 
+                } 
                 finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sitemap mr-1"></i> Draw Visual Tree'; }
             },
 
