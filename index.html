@@ -544,29 +544,64 @@
             },
 
             generateTree: async () => {
-                const apiKey = document.getElementById('tree-api-key').value.trim(); const topic = document.getElementById('tree-topic').value.trim(); const outputArea = document.getElementById('tree-output-area'); const btn = document.getElementById('btn-generate-tree');
-                if (!apiKey) { alert("Please enter your Gemini API Key."); return; } localStorage.setItem('gemini_api_key', apiKey); if (!topic) { alert("Please enter a legal topic."); return; }
-                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Mapping...'; outputArea.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><div class="loader mb-4"></div><p class="text-sm font-medium animate-pulse">Gemini is structuring the rules...</p></div>`;
+                const apiKey = document.getElementById('tree-api-key').value.trim(); 
+                const topic = document.getElementById('tree-topic').value.trim(); 
+                const outputArea = document.getElementById('tree-output-area'); 
+                const btn = document.getElementById('btn-generate-tree');
+                
+                if (!apiKey) { alert("Please enter your Gemini API Key."); return; } 
+                localStorage.setItem('gemini_api_key', apiKey); 
+                if (!topic) { alert("Please enter a legal topic."); return; }
+                
+                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Mapping...'; 
+                outputArea.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><div class="loader mb-4"></div><p class="text-sm font-medium animate-pulse">Gemini is structuring the rules...</p></div>`;
+                
                 try {
-                    const promptText = `You are a law professor. Create a Mermaid.js flowchart mapping out the general rule, elements, and exceptions for the legal topic: "${topic}". Use a top-down flowchart format starting with "graph TD". Keep nodes short and concise. IMPORTANT: To prevent text from being cut off, use <br> tags to wrap long text inside nodes into multiple lines, and YOU MUST WRAP EVERY NODE TEXT IN DOUBLE QUOTES if it contains spaces or <br> tags (e.g., C["4. No Legal Excuse<br>for Non-compliance"]). Output ONLY the raw Mermaid syntax. Do NOT use markdown backticks like \`\`\`mermaid. Just output the code.`;
+                    const promptText = `Create a Mermaid.js flowchart mapping out the general rule, elements, and exceptions for the Philippine legal topic: "${topic}". 
+                    RULES:
+                    1. Start with "graph TD".
+                    2. Keep nodes short and concise.
+                    3. You MUST enclose EVERY node's text in double quotes to prevent syntax errors (e.g., A["General Rule"]).
+                    4. Use <br> tags inside the quotes for line breaks if the text is long.
+                    5. Output ONLY the raw Mermaid code. Do not include markdown backticks (\`\`\`) or any conversational text.`;
 
-                    // SECURE URL: Split to prevent Markdown conversion during copy-paste
-                    const apiUrl = 'https://' + '[generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=)' + apiKey;
+                    // Safe URL assembly to prevent copy-paste bugs
+                    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
 
                     const response = await fetch(apiUrl, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] }) 
                     });
                                         
-                    if (!response.ok) { const errData = await response.json(); throw new Error(errData.error?.message || "API Error"); }
+                    if (!response.ok) { 
+                        const errData = await response.json(); 
+                        throw new Error(errData.error?.message || "API Error"); 
+                    }
                     
-                    const data = await response.json(); let mermaidSyntax = data.candidates[0].content.parts[0].text;
-                    mermaidSyntax = mermaidSyntax.replace(/^```mermaid\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
-                    const { svg } = await mermaid.render('mermaid-graph-generated', mermaidSyntax);
+                    const data = await response.json(); 
+                    let mermaidSyntax = data.candidates[0].content.parts[0].text;
+                    
+                    // AGGRESSIVE CLEANUP: Detects and isolates the code even if Gemini adds conversation
+                    const match = mermaidSyntax.match(/```(?:mermaid)?([\s\S]*?)```/);
+                    if (match) {
+                        mermaidSyntax = match[1].trim();
+                    } else {
+                        mermaidSyntax = mermaidSyntax.replace(/^```mermaid\s*/i, '').replace(/```\s*$/i, '').trim();
+                    }
+                    
+                    // FIXED: Generate a unique ID every time so Mermaid doesn't crash on multiple searches
+                    const uniqueId = 'mermaid-' + Date.now();
+                    const { svg } = await mermaid.render(uniqueId, mermaidSyntax);
                     
                     outputArea.innerHTML = `<div class="w-full flex justify-between items-center mb-4"><h4 class="font-bold text-slate-800 text-sm tracking-wider uppercase">Visual Map: ${topic}</h4><button onclick="window.appHandlers.printContent('Issue Tree: ${topic.replace(/'/g, "\\'")}', document.getElementById('rendered-tree-container').innerHTML)" class="text-xs bg-slate-100 text-slate-600 hover:text-blue-600 px-3 py-1.5 rounded transition font-bold"><i class="fas fa-print mr-1"></i> Print / PDF</button></div><div id="rendered-tree-container" class="mermaid w-full flex justify-center bg-white p-4 rounded border border-slate-100 overflow-x-auto">${svg}</div>`;
-                } catch(e) { outputArea.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-red-500"><i class="fas fa-exclamation-triangle text-4xl mb-4"></i><p class="font-bold">Failed to draw map.</p><p class="text-xs mt-2 text-slate-500">${e.message}</p></div>`; console.error(e); } 
-                finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sitemap mr-1"></i> Draw Visual Tree'; }
+                } catch(e) { 
+                    outputArea.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-red-500"><i class="fas fa-exclamation-triangle text-4xl mb-4"></i><p class="font-bold">Failed to draw map.</p><p class="text-xs mt-2 text-slate-500">${e.message}</p></div>`; 
+                    console.error(e); 
+                } finally { 
+                    btn.disabled = false; 
+                    btn.innerHTML = '<i class="fas fa-sitemap mr-1"></i> Draw Visual Tree'; 
+                }
             },
 
             generateMnemonic: async () => {
