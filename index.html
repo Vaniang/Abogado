@@ -419,17 +419,68 @@
             }
         }
 
-        const views = {
+        class LexVocabView {
+            constructor() { this.unsubscribe = null; this.vocabData = []; }
+            render() { 
+                return `
+                <div class="max-w-6xl mx-auto pb-24 h-full flex flex-col">
+                    <div class="flex justify-between items-center mb-6 flex-shrink-0">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-700">Lex-Vocab</h3>
+                            <p class="text-xs text-slate-500 mt-1">Master Latin legal maxims and terminology.</p>
+                        </div>
+                        <button onclick="window.appHandlers.addVocab()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>Add Word</button>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
+                        <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center gap-4">
+                            <div class="relative flex-1">
+                                <i class="fas fa-search absolute left-3 top-2.5 text-slate-400"></i>
+                                <input type="text" id="vocab-search" placeholder="Search Latin words, meanings, or applications..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterVocab()">
+                            </div>
+                            <button onclick="window.appHandlers.printAllVocab()" class="text-slate-500 hover:text-blue-600 px-3 py-2 rounded border border-slate-200 bg-white shadow-sm transition text-sm font-bold flex items-center flex-shrink-0"><i class="fas fa-print mr-2"></i> Print List</button>
+                        </div>
+                        <div class="flex-1 overflow-auto">
+                            <table class="w-full text-left border-collapse" id="vocab-table">
+                                <thead class="bg-slate-50 sticky top-0 shadow-sm z-10">
+                                    <tr>
+                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-1/4">Latin Word / Maxim</th>
+                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-1/3">Meaning</th>
+                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-1/3">Application / Context</th>
+                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vocab-list" class="text-sm divide-y divide-slate-100">
+                                    <tr><td colspan="4" class="p-8 text-center text-slate-400"><div class="loader mx-auto"></div></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>`; 
+            }
+            init() { 
+                this.unsubscribe = AppDB.subscribe('lex_vocab', (snapshot) => { 
+                    const list = document.getElementById('vocab-list'); if (!list) return; this.vocabData = []; 
+                    if (snapshot.empty) { list.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-400"><i class="fas fa-language text-4xl mb-3 opacity-30"></i><br>No vocabulary entries yet.</td></tr>`; return; } 
+                    snapshot.forEach(doc => this.vocabData.push({ id: doc.id, ...doc.data() })); 
+                    this.vocabData.sort((a, b) => (a.word || '').localeCompare(b.word || '', undefined, { numeric: true, sensitivity: 'base' })); 
+                    window.appHandlers.renderVocabRows(this.vocabData); 
+                }); 
+            }
+        }
+        
+       const views = {
             dashboard: new DashboardView(), subjects: new SubjectsView(), subject_notebook: new SubjectNotebookView(), matrix: new DoctrineMatrixView(),
+            lex_vocab: new LexVocabView(), // <-- ADD THIS LINE HERE
             codal_trainer: new CodalTrainerView(), mnemonic: new MnemonicView(), issue_tree: new IssueTreeView(), ai_search: new AiSearchView(), digests: new DigestsView(),
             case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView(),
             codals: { render: () => { return `<div class="text-center mt-20 text-slate-500">Opening eCodal+ in a new tab...</div>`; }, init: () => {} }
         };
-
+        
         const sidebarNav = document.querySelector('nav'); const contentArea = document.getElementById('content-area'); const pageTitle = document.getElementById('page-title');
         
-        const navItems = [
+       const navItems = [
             { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' }, { id: 'subjects', label: 'Subjects', icon: 'fa-book' }, { id: 'matrix', label: 'Doctrine Matrix', icon: 'fa-table' },
+            { id: 'lex_vocab', label: 'Lex-Vocab', icon: 'fa-language' }, // <-- ADD THIS LINE HERE
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' }, { id: 'codal_trainer', label: 'Codal Trainer', icon: 'fa-eye-slash' }, { id: 'mnemonic', label: 'Mnemonic Maker', icon: 'fa-lightbulb' },
             { id: 'issue_tree', label: 'Issue Trees', icon: 'fa-project-diagram' }, { id: 'ai_search', label: 'AI Legal Search', icon: 'fa-search' }, { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' }, 
             { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }, { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }, { id: 'saved_reviews', label: 'Saved Reviews', icon: 'fa-archive' }
@@ -451,6 +502,101 @@
             clearAiSearch: () => {
                 views.ai_search.searchHistory = []; views.ai_search.chatHistory = []; const output = document.getElementById('search-output-area');
                 output.innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400" id="search-placeholder"><i class="fas fa-robot text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Send a message to start the conversation.</p></div>`;
+            },
+
+            // --- LEX-VOCAB HANDLERS ---
+            addVocab: () => { 
+                Modal.show({ 
+                    title: '<i class="fas fa-language text-blue-600"></i> Add Lex-Vocab', 
+                    content: `
+                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Latin Word / Maxim</label><input type="text" id="voc-word" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Ignorantia legis non excusat"></div>
+                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Meaning</label><textarea id="voc-mean" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Ignorance of the law excuses no one..."></textarea></div>
+                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Application / Context</label><textarea id="voc-app" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Applies to all laws; conclusive presumption..."></textarea></div>`, 
+                    onSubmit: async () => { 
+                        const word = document.getElementById('voc-word').value.trim(); 
+                        const meaning = document.getElementById('voc-mean').value.trim(); 
+                        const application = document.getElementById('voc-app').value.trim(); 
+                        if (!word || !meaning) { alert("Word and Meaning are required."); throw new Error("Validation failed"); } 
+                        await AppDB.add('lex_vocab', { word, meaning, application, created: serverTimestamp() }); 
+                    } 
+                }); 
+            },
+            editVocab: (id, word, meaning, application) => {
+                const decodeHtml = (html) => { const txt = document.createElement("textarea"); txt.innerHTML = html; return txt.value; };
+                Modal.show({ 
+                    title: '<i class="fas fa-edit text-amber-500"></i> Edit Lex-Vocab', 
+                    content: `
+                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Latin Word / Maxim</label><input type="text" id="voc-word" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value="${word.replace(/"/g, '&quot;')}"></div>
+                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Meaning</label><textarea id="voc-mean" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 resize-none">${decodeHtml(meaning)}</textarea></div>
+                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Application / Context</label><textarea id="voc-app" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 resize-none">${decodeHtml(application)}</textarea></div>`, 
+                    submitText: 'Update',
+                    submitClass: 'px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-medium transition shadow-sm',
+                    onSubmit: async () => { 
+                        const updatedWord = document.getElementById('voc-word').value.trim(); 
+                        const updatedMeaning = document.getElementById('voc-mean').value.trim(); 
+                        const updatedApplication = document.getElementById('voc-app').value.trim(); 
+                        if (!updatedWord || !updatedMeaning) { alert("Word and Meaning are required."); throw new Error("Validation failed"); } 
+                        await AppDB.update('lex_vocab', id, { word: updatedWord, meaning: updatedMeaning, application: updatedApplication, updated: serverTimestamp() }); 
+                    } 
+                }); 
+            },
+            deleteVocab: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete Entry', content: '<p>Are you sure you want to remove this vocabulary entry?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('lex_vocab', id) }); },
+            printVocab: (word, meaning, application) => {
+                const html = `<div style="font-family: serif; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+                    <h1 style="color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 28px;">${word}</h1>
+                    <div style="margin-top: 20px;">
+                        <h3 style="color: #475569; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Meaning</h3>
+                        <p style="font-size: 18px; color: #334155; margin-top: 5px;">${meaning}</p>
+                    </div>
+                    ${application ? `<div style="margin-top: 25px;"><h3 style="color: #475569; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Application / Context</h3><p style="font-size: 16px; color: #475569; margin-top: 5px; font-style: italic;">${application.replace(/\n/g, '<br>')}</p></div>` : ''}
+                </div>`;
+                window.appHandlers.printContent(`LexVocab - ${word}`, html);
+            },
+            printAllVocab: () => {
+                if (!views.lex_vocab || views.lex_vocab.vocabData.length === 0) { alert("No vocabulary to print."); return; }
+                let html = `<div style="font-family: serif; max-width: 900px; margin: 0 auto; line-height: 1.6;">
+                    <h1 style="text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 30px;">Lex-Vocab: Legal Maxims & Terminology</h1>`;
+                
+                views.lex_vocab.vocabData.forEach(d => {
+                    html += `
+                    <div style="margin-bottom: 30px; page-break-inside: avoid;">
+                        <h2 style="color: #1e3a8a; margin-bottom: 5px; font-size: 20px;">${d.word}</h2>
+                        <p style="margin: 0 0 10px 0;"><strong>Meaning:</strong> ${d.meaning}</p>
+                        ${d.application ? `<p style="margin: 0; color: #475569; font-style: italic;"><strong>Context:</strong> ${d.application.replace(/\n/g, '<br>')}</p>` : ''}
+                    </div><hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 30px;">`;
+                });
+                html += `</div>`;
+                window.appHandlers.printContent('Lex-Vocab Dictionary', html);
+            },
+            renderVocabRows: (data) => {
+                const list = document.getElementById('vocab-list'); if (!list) return;
+                if (data.length === 0) { list.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-400"><i class="fas fa-language text-4xl mb-3 opacity-30"></i><br>No vocabulary entries found.</td></tr>`; return; }
+                
+                list.innerHTML = data.map(d => {
+                    const safeWord = d.word ? d.word.replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
+                    const safeMeaning = d.meaning ? d.meaning.replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
+                    const safeApplication = d.application ? d.application.replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
+                    
+                    return `<tr class="hover:bg-slate-50 transition group">
+                        <td class="p-3 align-top font-bold text-blue-800 serif-text text-base">${d.word}</td>
+                        <td class="p-3 align-top text-slate-700">${d.meaning}</td>
+                        <td class="p-3 align-top text-slate-600 italic whitespace-pre-wrap">${d.application || '-'}</td>
+                        <td class="p-3 align-top text-center space-x-2 whitespace-nowrap">
+                            <button onclick="window.appHandlers.printVocab('${safeWord}', '${safeMeaning}', '${safeApplication}')" class="text-slate-400 hover:text-blue-600 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Print"><i class="fas fa-print"></i></button>
+                            <button onclick="window.appHandlers.editVocab('${d.id}', '${safeWord}', '${safeMeaning}', '${safeApplication}')" class="text-slate-400 hover:text-amber-500 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Edit"><i class="fas fa-edit"></i></button>
+                            <button onclick="window.appHandlers.deleteVocab('${d.id}')" class="text-slate-400 hover:text-red-500 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Delete"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>`;
+                }).join('');
+            },
+            filterVocab: () => { 
+                const term = document.getElementById('vocab-search').value.toLowerCase(); 
+                const filtered = views.lex_vocab.vocabData.filter(d => 
+                    (d.word && d.word.toLowerCase().includes(term)) || 
+                    (d.meaning && d.meaning.toLowerCase().includes(term)) || 
+                    (d.application && d.application.toLowerCase().includes(term))
+                ); 
+                window.appHandlers.renderVocabRows(filtered); 
             },
             
             performAiSearch: async () => {
