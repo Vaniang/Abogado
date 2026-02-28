@@ -44,6 +44,11 @@
         /* Style for the AI highlighting */
         mark { background-color: #fde68a; padding: 0.1rem 0.25rem; border-radius: 0.25rem; font-weight: 600; color: #1e293b; }
         [contenteditable]:empty:before { content: "Start typing your notes here..."; color: #cbd5e1; cursor: text; }
+        
+        /* NEW: Restore Bullet Points and Numbers inside the Note Editor */
+        #note-content-editor ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-bottom: 0.5rem !important; }
+        #note-content-editor ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-bottom: 0.5rem !important; }
+        #note-content-editor li { margin-bottom: 0.25rem !important; display: list-item !important; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex overflow-hidden">
@@ -1139,8 +1144,12 @@
                 const area = document.getElementById('notebook-editor-area');
                 
                 area.innerHTML = `
-                    <div class="flex-1 flex flex-col p-8 bg-white m-6 rounded-2xl shadow-sm border border-slate-200 flex-shrink-0 min-h-0">
-                        <div class="flex justify-between items-center mb-4">
+                    <div class="flex-1 flex flex-col p-8 bg-white m-6 rounded-2xl shadow-sm border border-slate-200 flex-shrink-0 min-h-0 relative">
+                        <div class="absolute top-6 right-8 flex items-center gap-2">
+                            <span id="note-save-status" class="text-xs font-bold text-slate-400 opacity-0 transition-opacity duration-300"><i class="fas fa-cloud-upload-alt mr-1"></i> Auto-saved</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center mb-4 mt-2 pr-28">
                             <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300 serif-text bg-transparent flex-1" value="${displayTitle.replace(/"/g, '&quot;')}" placeholder="Page Title...">
                             <div class="flex gap-2">
                                 <button onclick="window.appHandlers.printNote('${safeTitleForPrint}')" class="text-slate-400 hover:text-blue-600 p-2" title="Print / Save PDF"><i class="fas fa-print"></i></button>
@@ -1148,35 +1157,97 @@
                             </div>
                         </div>
                         
-                        <div class="flex gap-2 mb-4 pb-3 border-b border-slate-100 items-center">
+                        <div class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-100 items-center">
+                            <select onchange="window.appHandlers.formatText('fontName', this.value); this.selectedIndex=0;" class="h-8 rounded border border-slate-200 text-slate-600 text-sm focus:outline-none px-1 bg-slate-50 cursor-pointer" title="Font Style">
+                                <option value="" disabled selected>Font</option>
+                                <option value="Inter, sans-serif">Modern</option>
+                                <option value="Merriweather, serif">Classic</option>
+                                <option value="Courier New, monospace">Typewriter</option>
+                            </select>
+                            <select onchange="window.appHandlers.formatText('fontSize', this.value); this.selectedIndex=0;" class="h-8 rounded border border-slate-200 text-slate-600 text-sm focus:outline-none px-1 bg-slate-50 cursor-pointer" title="Font Size">
+                                <option value="" disabled selected>Size</option>
+                                <option value="1">Small</option>
+                                <option value="3">Normal</option>
+                                <option value="5">Large</option>
+                                <option value="7">Huge</option>
+                            </select>
+                            
+                            <div class="w-px h-5 bg-slate-300 mx-1"></div>
+                            
+                            <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded px-1 h-8" title="Text Color">
+                                <i class="fas fa-font text-slate-500 text-xs pl-1"></i>
+                                <input type="color" oninput="window.appHandlers.formatText('foreColor', this.value)" class="w-5 h-5 p-0 border-0 rounded cursor-pointer bg-transparent">
+                            </div>
+                            <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded px-1 h-8" title="Highlight Color">
+                                <i class="fas fa-highlighter text-slate-500 text-xs pl-1"></i>
+                                <input type="color" value="#fde68a" oninput="window.appHandlers.formatText('hiliteColor', this.value)" class="w-5 h-5 p-0 border-0 rounded cursor-pointer bg-transparent">
+                            </div>
+
+                            <div class="w-px h-5 bg-slate-300 mx-1"></div>
+
                             <button onclick="window.appHandlers.formatText('bold')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 font-bold transition" title="Bold (Ctrl+B)"><i class="fas fa-bold"></i></button>
                             <button onclick="window.appHandlers.formatText('italic')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 italic transition" title="Italic (Ctrl+I)"><i class="fas fa-italic"></i></button>
                             <button onclick="window.appHandlers.formatText('underline')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 underline transition" title="Underline (Ctrl+U)"><i class="fas fa-underline"></i></button>
+                            
                             <div class="w-px h-5 bg-slate-300 mx-1"></div>
-                            <button onclick="window.appHandlers.highlightText()" class="w-8 h-8 rounded hover:bg-amber-100 text-amber-600 transition" title="Highlight"><i class="fas fa-highlighter"></i></button>
-                            <div class="w-px h-5 bg-slate-300 mx-1"></div>
+                            
                             <button onclick="window.appHandlers.formatText('insertUnorderedList')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Bullet List"><i class="fas fa-list-ul"></i></button>
                             <button onclick="window.appHandlers.formatText('insertOrderedList')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Numbered List"><i class="fas fa-list-ol"></i></button>
                         </div>
 
                         <div id="note-content-editor" contenteditable="true" class="flex-1 w-full border-none outline-none overflow-y-auto text-slate-700 leading-relaxed text-base font-sans focus:ring-0 bg-transparent" style="min-height: 200px;"></div>
                         
-                        <div class="mt-4 flex justify-end items-center gap-4 pt-4 border-t border-slate-100">
-                            <span id="note-save-status" class="text-sm font-bold text-green-500 opacity-0 transition-opacity"><i class="fas fa-check-circle mr-1"></i> Saved to Cloud</span>
-                            <button onclick="window.appHandlers.saveNote('${noteId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-save mr-2"></i> Save Page</button>
+                        <div class="mt-4 flex justify-between items-center pt-4 border-t border-slate-100">
+                            <p class="text-xs text-slate-400 italic">Changes are saved automatically.</p>
+                            <button onclick="window.appHandlers.saveNote('${noteId}', false)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-2 rounded-lg text-sm font-bold transition shadow-sm"><i class="fas fa-save mr-2"></i> Force Save</button>
                         </div>
                     </div>`;
                 
-                document.getElementById('note-content-editor').innerHTML = displayContent;
+                const editor = document.getElementById('note-content-editor');
+                const titleEditor = document.getElementById('note-title-editor');
+                editor.innerHTML = displayContent;
+
+                // --- AUTO-SAVE LOGIC ---
+                let typingTimer;
+                const doneTypingInterval = 1000; // Auto-saves 1 second after you stop typing
+                
+                const triggerAutoSave = () => {
+                    clearTimeout(typingTimer);
+                    const status = document.getElementById('note-save-status');
+                    status.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Saving...';
+                    status.classList.remove('opacity-0', 'text-green-500');
+                    status.classList.add('text-amber-500', 'opacity-100');
+                    
+                    typingTimer = setTimeout(() => {
+                        window.appHandlers.saveNote(noteId, true);
+                    }, doneTypingInterval);
+                };
+
+                editor.addEventListener('input', triggerAutoSave);
+                titleEditor.addEventListener('input', triggerAutoSave);
             },
-            saveNote: async (noteId) => { 
-                const title = document.getElementById('note-title-editor').value.trim() || 'Untitled Page'; 
-                const content = document.getElementById('note-content-editor').innerHTML; 
+
+            saveNote: async (noteId, isAutoSave = false) => { 
+                const titleEl = document.getElementById('note-title-editor');
+                const contentEl = document.getElementById('note-content-editor');
+                if(!titleEl || !contentEl) return; // Prevent crashes if user navigates away while saving
+
+                const title = titleEl.value.trim() || 'Untitled Page'; 
+                const content = contentEl.innerHTML; 
                 const status = document.getElementById('note-save-status'); 
+                
                 try { 
                     await AppDB.update('notes', noteId, { title, content, updated: serverTimestamp() }); 
-                    status.classList.remove('opacity-0'); setTimeout(() => status.classList.add('opacity-0'), 3000); 
-                } catch(e) { alert("Error saving note."); } 
+                    if (status) {
+                        status.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Saved to Cloud';
+                        status.classList.remove('text-amber-500');
+                        status.classList.add('text-green-500');
+                        setTimeout(() => status.classList.remove('opacity-100'), 2000); 
+                    }
+                } catch(e) { 
+                    console.error("Save error:", e);
+                    if (!isAutoSave) alert("Error saving note."); 
+                } 
             },
             printNote: (title) => { 
                 const contentHtml = document.getElementById('note-content-editor').innerHTML; 
