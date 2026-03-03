@@ -317,9 +317,51 @@
             }
         }
 
-        class CodalTrainerView {
+       class CodalTrainerView {
             constructor() { this.unsubscribe = null; }
-            render() { return `<div class="max-w-4xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-eye-slash text-blue-600"></i> Blind Codal Trainer</h3><p class="text-xs text-slate-500 mt-1">Paste a legal provision. We'll blank out the crucial terms to test your active recall.</p></div></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 mb-6"><label class="block text-sm font-medium text-slate-700">Paste Legal Provision</label><textarea id="codal-input" rows="4" class="w-full p-4 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none leading-relaxed shadow-inner bg-slate-50" placeholder="e.g. Art. 1156. An obligation is a juridical necessity to give, to do or not to do."></textarea><div class="flex justify-between items-center mt-2 border-t border-slate-100 pt-4"><div class="flex items-center gap-3"><label class="text-sm font-bold text-slate-600">Difficulty:</label><select id="codal-difficulty" class="border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm outline-none shadow-sm font-medium"><option value="0.2">Easy (Blank 20%)</option><option value="0.4" selected>Medium (Blank 40%)</option><option value="0.6">Hard (Blank 60%)</option><option value="0.9">Master (Blank 90%)</option></select></div><button onclick="window.appHandlers.generateBlindCodal()" class="bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition shadow-sm"><i class="fas fa-magic mr-2"></i> Generate Test</button></div></div><div id="codal-workspace" class="hidden flex-1 bg-white p-8 rounded-xl shadow-sm border border-slate-200 overflow-y-auto"><div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4"><h4 class="font-bold text-slate-700"><i class="fas fa-pen-nib mr-2 text-amber-500"></i> Fill in the blanks</h4><div class="flex gap-3"><button onclick="window.appHandlers.resetCodal()" class="text-sm text-slate-500 hover:text-slate-800 font-bold transition px-3 py-1 bg-slate-100 rounded-lg"><i class="fas fa-redo mr-1"></i> Retry</button><button onclick="window.appHandlers.revealCodal()" class="text-sm text-amber-600 hover:text-amber-700 font-bold transition px-3 py-1 bg-amber-50 rounded-lg"><i class="fas fa-eye mr-1"></i> Reveal Answers</button></div></div><div id="codal-test-area" class="text-xl leading-loose text-slate-800 font-serif"></div></div></div>`; }
+            render() { 
+                const savedKey = localStorage.getItem('gemini_api_key') || '';
+                return `
+                <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-book-medical text-red-500"></i> Codal Booster</h3>
+                            <p class="text-xs text-slate-500 mt-1">Generate provision flashcards for specific subjects and test your recall.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 mb-6 items-end">
+                        <div class="w-full md:w-1/4">
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Law Subject</label>
+                            <select id="booster-subject" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
+                                <option value="Civil Law">Civil Law</option>
+                                <option value="Criminal Law">Criminal Law</option>
+                                <option value="Political Law">Political Law</option>
+                                <option value="Remedial Law">Remedial Law</option>
+                                <option value="Commercial Law">Commercial Law</option>
+                                <option value="Labor Law">Labor Law</option>
+                                <option value="Taxation Law">Taxation Law</option>
+                                <option value="Legal Ethics">Legal Ethics</option>
+                            </select>
+                        </div>
+                        <div class="w-full md:w-1/2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Topic / Range</label>
+                            <input type="text" id="booster-topic" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. 'Family Code Arts 1-20' or 'Justifying Circumstances'">
+                        </div>
+                        <div class="w-full md:w-1/4">
+                             <input type="hidden" id="booster-api-key" value="${savedKey}">
+                             <button onclick="window.appHandlers.generateCodalBooster()" id="btn-booster-gen" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-bolt mr-2"></i> Boost Me</button>
+                        </div>
+                    </div>
+
+                    <div id="booster-output" class="flex-1 overflow-y-auto pr-2">
+                        <div class="flex flex-col items-center justify-center h-64 text-slate-400 opacity-50">
+                            <i class="fas fa-layer-group text-6xl mb-4"></i>
+                            <p>Select a subject and topic to generate cards.</p>
+                        </div>
+                    </div>
+                </div>`; 
+            }
         }
 
         class MnemonicView {
@@ -855,27 +897,71 @@
                 catch(e) { alert("Error saving to notebook."); console.error(e); }
             },
 
-            generateBlindCodal: () => {
-                const text = document.getElementById('codal-input').value.trim(); if (!text) { alert("Please paste a provision first."); return; }
-                const difficulty = parseFloat(document.getElementById('codal-difficulty').value); const stopWords = ['a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'to', 'in', 'of', 'for', 'by', 'with', 'on', 'at', 'as', 'it']; const tokens = text.split(/([a-zA-Z0-9]+)/); let eligibleIndices = [];
-                tokens.forEach((tok, index) => { if (/[a-zA-Z0-9]+/.test(tok)) { if (tok.length > 3 || !stopWords.includes(tok.toLowerCase())) { eligibleIndices.push(index); } } });
-                eligibleIndices.sort(() => Math.random() - 0.5); const blanksCount = Math.floor(eligibleIndices.length * difficulty); const selectedIndices = eligibleIndices.slice(0, blanksCount); let html = '';
-                tokens.forEach((tok, index) => {
-                    if (selectedIndices.includes(index)) { const width = Math.max(tok.length * 12 + 10, 40); html += `<input type="text" data-answer="${tok}" class="codal-blank border-b-2 border-slate-400 focus:border-blue-600 outline-none text-center bg-slate-50 text-blue-700 mx-1 font-bold font-sans transition-colors" style="width: ${width}px" oninput="window.appHandlers.checkCodalInput(this)">`; } 
-                    else { html += tok; }
-                });
-                html = html.replace(/\n/g, '<br>'); document.getElementById('codal-workspace').classList.remove('hidden'); document.getElementById('codal-test-area').innerHTML = html; const firstBlank = document.querySelector('.codal-blank'); if (firstBlank) firstBlank.focus();
-            },
-            checkCodalInput: (input) => {
-                const answer = input.getAttribute('data-answer');
-                if (input.value.toLowerCase().trim() === answer.toLowerCase()) {
-                    input.value = answer; input.classList.remove('border-slate-400', 'focus:border-blue-600', 'text-blue-700', 'bg-slate-50'); input.classList.add('border-green-500', 'text-green-700', 'bg-green-50', 'pointer-events-none'); input.readOnly = true;
-                    const blanks = Array.from(document.querySelectorAll('.codal-blank:not([readonly])'));
-                    if (blanks.length > 0) blanks[0].focus(); else { setTimeout(() => alert("Perfect! You've mastered this provision."), 100); }
+          // --- CODAL BOOSTER HANDLERS ---
+            generateCodalBooster: async () => {
+                const subject = document.getElementById('booster-subject').value;
+                const topic = document.getElementById('booster-topic').value.trim();
+                const output = document.getElementById('booster-output');
+                const btn = document.getElementById('btn-booster-gen');
+                
+                // Use the shared key from localStorage if the hidden input is empty
+                let apiKey = document.getElementById('booster-api-key').value.trim();
+                if (!apiKey) apiKey = localStorage.getItem('gemini_api_key');
+                
+                if (!apiKey) { alert("Please enter your Gemini API Key in the AI Search tab first."); return; }
+                if (!topic) { alert("Please enter a topic or article range."); return; }
+                
+                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
+                output.innerHTML = `<div class="flex justify-center h-40 items-center"><div class="loader"></div></div>`;
+                
+                try {
+                    const promptText = `You are a Philippine Law Codal Reference. Generate exactly 5 key flashcards for the subject '${subject}' specifically covering: '${topic}'. 
+                    Format strictly as a JSON array of objects. Each object must have:
+                    "article": (The Article Number, e.g., "Art. 123" or "Section 5"),
+                    "title": (A short 3-5 word title of the provision),
+                    "text": (The VERBATIM text of the provision from the Philippine Codal).
+                    Do NOT use markdown. Output raw JSON only.`;
+
+                    // SECURE URL
+                    const apiUrl = ['https:/', '/generativelanguage.googleapis.com', '/v1beta/models/gemini-2.5-flash:generateContent?key=', apiKey].join('');
+
+                    const response = await fetch(apiUrl, { 
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] }) 
+                    });
+                    
+                    if (!response.ok) throw new Error("API Error");
+                    const data = await response.json(); 
+                    let jsonString = data.candidates[0].content.parts[0].text;
+                    jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); 
+                    const cards = JSON.parse(jsonString);
+                    
+                    output.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 pb-10">` + cards.map((c, i) => `
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden group hover:border-red-300 transition">
+                            <div class="bg-slate-50 p-3 border-b border-slate-100 flex justify-between items-center">
+                                <span class="font-bold text-red-700 text-sm tracking-wider uppercase">${c.article}</span>
+                                <span class="text-xs text-slate-500 font-medium">${c.title}</span>
+                            </div>
+                            <div class="p-5 flex-1 relative">
+                                <div id="card-text-${i}" class="text-slate-800 leading-relaxed text-sm font-serif text-justify">${c.text}</div>
+                                <div id="card-input-area-${i}" class="hidden mt-3">
+                                    <textarea class="w-full p-2 border border-slate-300 rounded text-sm mb-2" rows="3" placeholder="Type what you remember..."></textarea>
+                                    <button onclick="document.getElementById('card-text-${i}').classList.remove('blur-sm', 'select-none'); document.getElementById('card-input-area-${i}').classList.add('hidden');" class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded font-bold">Check Answer</button>
+                                </div>
+                            </div>
+                            <div class="p-2 bg-slate-50 border-t border-slate-100 flex justify-end">
+                                <button onclick="document.getElementById('card-text-${i}').classList.add('blur-sm', 'select-none'); document.getElementById('card-input-area-${i}').classList.remove('hidden');" class="text-xs text-slate-400 hover:text-blue-600 font-bold px-2 py-1"><i class="fas fa-eye-slash mr-1"></i> Test Me</button>
+                            </div>
+                        </div>
+                    `).join('') + `</div>`;
+
+                } catch (e) {
+                    console.error(e);
+                    output.innerHTML = `<div class="text-red-500 p-4 text-center">Failed to generate cards. Try again.</div>`;
+                } finally {
+                    btn.disabled = false; btn.innerHTML = '<i class="fas fa-bolt mr-2"></i> Boost Me';
                 }
             },
-            revealCodal: () => { document.querySelectorAll('.codal-blank').forEach(input => { if (!input.readOnly) { input.value = input.getAttribute('data-answer'); input.classList.remove('border-slate-400', 'focus:border-blue-600', 'text-blue-700', 'bg-slate-50'); input.classList.add('border-red-400', 'text-red-600', 'bg-red-50'); input.readOnly = true; } }); },
-            resetCodal: () => { window.appHandlers.generateBlindCodal(); },
 
 
           renderMatrixRows: (data) => { 
