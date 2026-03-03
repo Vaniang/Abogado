@@ -898,28 +898,35 @@
             },
 
           // --- CODAL BOOSTER HANDLERS ---
-            generateCodalBooster: async () => {
+       generateCodalBooster: async () => {
                 const subject = document.getElementById('booster-subject').value;
                 const topic = document.getElementById('booster-topic').value.trim();
                 const output = document.getElementById('booster-output');
                 const btn = document.getElementById('btn-booster-gen');
                 
-                // Use the shared key from localStorage if the hidden input is empty
-                let apiKey = document.getElementById('booster-api-key').value.trim();
-                if (!apiKey) apiKey = localStorage.getItem('gemini_api_key');
-                
+                let apiKey = document.getElementById('search-api-key') ? document.getElementById('search-api-key').value : localStorage.getItem('gemini_api_key');
                 if (!apiKey) { alert("Please enter your Gemini API Key in the AI Search tab first."); return; }
+                
                 if (!topic) { alert("Please enter a topic or article range."); return; }
                 
                 btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
-                output.innerHTML = `<div class="flex justify-center h-40 items-center"><div class="loader"></div></div>`;
+                output.innerHTML = `<div class="flex flex-col justify-center h-40 items-center text-slate-400"><div class="loader mb-3"></div><p class="text-xs">Drafting provisions...</p></div>`;
                 
                 try {
-                    const promptText = `You are a Philippine Law Codal Reference. Generate exactly 5 key flashcards for the subject '${subject}' specifically covering: '${topic}'. 
-                    Format strictly as a JSON array of objects. Each object must have:
-                    "article": (The Article Number, e.g., "Art. 123" or "Section 5"),
-                    "title": (A short 3-5 word title of the provision),
-                    "text": (The VERBATIM text of the provision from the Philippine Codal).
+                    // UPGRADED PROMPT: Specifically handles requests for "All" vs specific ranges
+                    const promptText = `You are a Philippine Law Codal Reference. 
+                    User Request: Generate flashcards for subject '${subject}', topic: '${topic}'.
+                    
+                    CRITICAL INSTRUCTION: 
+                    If the user asks for a specific range (e.g. "Bill of Rights" or "Arts 1-20"), provide ALL articles in that range up to a maximum of 15 cards.
+                    If the topic is huge (e.g. "Entire ObliCon"), provide the top 15 most important/frequently asked provisions.
+                    
+                    Format strictly as a RAW JSON array of objects. 
+                    [{
+                        "article": "Art. 1156",
+                        "title": "Concept of Obligation",
+                        "text": "An obligation is a juridical necessity to give, to do or not to do."
+                    }]
                     Do NOT use markdown. Output raw JSON only.`;
 
                     // SECURE URL
@@ -932,15 +939,18 @@
                     
                     if (!response.ok) throw new Error("API Error");
                     const data = await response.json(); 
+                    
                     let jsonString = data.candidates[0].content.parts[0].text;
-                    jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); 
+                    // AGGRESSIVE CLEANUP: Removes markdown blocks to prevent crashes
+                    jsonString = jsonString.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+                    
                     const cards = JSON.parse(jsonString);
                     
                     output.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 pb-10">` + cards.map((c, i) => `
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden group hover:border-red-300 transition">
                             <div class="bg-slate-50 p-3 border-b border-slate-100 flex justify-between items-center">
                                 <span class="font-bold text-red-700 text-sm tracking-wider uppercase">${c.article}</span>
-                                <span class="text-xs text-slate-500 font-medium">${c.title}</span>
+                                <span class="text-xs text-slate-500 font-medium text-right ml-2">${c.title}</span>
                             </div>
                             <div class="p-5 flex-1 relative">
                                 <div id="card-text-${i}" class="text-slate-800 leading-relaxed text-sm font-serif text-justify">${c.text}</div>
@@ -957,12 +967,14 @@
 
                 } catch (e) {
                     console.error(e);
-                    output.innerHTML = `<div class="text-red-500 p-4 text-center">Failed to generate cards. Try again.</div>`;
+                    output.innerHTML = `<div class="bg-red-50 text-red-600 p-4 rounded-lg text-center text-sm border border-red-100">
+                        <p class="font-bold">Failed to generate.</p>
+                        <p class="mt-1">Try asking for a smaller range (e.g., "Arts 1156-1170") instead of the whole subject.</p>
+                    </div>`;
                 } finally {
                     btn.disabled = false; btn.innerHTML = '<i class="fas fa-bolt mr-2"></i> Boost Me';
                 }
             },
-
 
           renderMatrixRows: (data) => { 
                 const list = document.getElementById('matrix-list'); if (!list) return; 
@@ -1359,13 +1371,14 @@
             },
             deleteDigest: (id) => { Modal.show({ title: 'Delete Digest', content: 'Are you sure you want to delete this digest?', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('digests', id) }); },
 
-            renderDigestRows: (data) => {
+        renderDigestRows: (data) => {
                 const list = document.getElementById('digest-list'); if (!list) return;
                 list.innerHTML = '';
                 if (data.length === 0) { list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests match your search.</p></div>`; return; }
 
                 data.forEach(d => {
-                    const row = document.createElement('div'); row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
+                    const row = document.createElement('div'); 
+                    row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
                     
                     const title = d.title || '';
                     const subject = d.subject || '';
@@ -1373,17 +1386,46 @@
                     const issue = d.issue || '';
                     const ruling = d.ruling || '';
 
-                    const safeTitle = title.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                    let dlText = `Title: ${title}\nSubject: ${subject}\n\nFACTS:\n${facts}\n\nISSUE:\n${issue}\n\nRULING:\n${ruling}`;
-                    const safeDlText = dlText.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n").replace(/\r/g, "");
+                    // FIX: Safe string escaping for the onclick events
+                    const escapeStr = (str) => {
+                        return str.replace(/\\/g, '\\\\')
+                                  .replace(/'/g, "\\'")
+                                  .replace(/"/g, '&quot;')
+                                  .replace(/\n/g, '\\n')
+                                  .replace(/\r/g, '');
+                    };
 
-                    let printHtml = `<h1>${title}</h1><p><strong>Subject:</strong> ${subject}</p><br><h3>FACTS</h3><p>${facts.replace(/\n/g, "<br>")}</p><br><h3>ISSUE</h3><p>${issue.replace(/\n/g, "<br>")}</p><br><h3>RULING</h3><p>${ruling.replace(/\n/g, "<br>")}</p>`;
-                    const safePrintHtml = printHtml.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "");
+                    const safeTitle = escapeStr(title);
+                    const safeDlText = escapeStr(`Title: ${title}\nSubject: ${subject}\n\nFACTS:\n${facts}\n\nISSUE:\n${issue}\n\nRULING:\n${ruling}`);
+                    const printBody = `<h1>${title}</h1><p><strong>Subject:</strong> ${subject}</p><br><h3>FACTS</h3><p>${facts.replace(/\n/g, "<br>")}</p><br><h3>ISSUE</h3><p>${issue.replace(/\n/g, "<br>")}</p><br><h3>RULING</h3><p>${ruling.replace(/\n/g, "<br>")}</p>`;
+                    const safePrintHtml = escapeStr(printBody);
 
-                    row.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1 pr-4"><h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${title}</h4><span class="inline-block mt-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${subject}</span></div><button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button></div><details class="mt-4 group cursor-pointer outline-none"><summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3"><div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest</div><div class="flex gap-2"><button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '${safePrintHtml}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button><button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}_Digest.txt', '${safeDlText}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button></div></summary><div class="mt-4 p-5 bg-white border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">${facts ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Facts</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${facts}</p></div>` : ''}${issue ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Issue</h5><p class="text-slate-800 font-semibold leading-relaxed whitespace-pre-wrap">${issue}</p></div>` : ''}<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Ruling</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${ruling || 'No ruling extracted.'}</p></div></div></details>`; 
+                    row.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1 pr-4">
+                            <h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${title}</h4>
+                            <span class="inline-block mt-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${subject}</span>
+                        </div>
+                        <button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button>
+                    </div>
+                    <details class="mt-4 group cursor-pointer outline-none">
+                        <summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3">
+                            <div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Read Full Digest</div>
+                            <div class="flex gap-2">
+                                <button onclick="window.appHandlers.printContent('${safeTitle}', '${safePrintHtml}')" class="text-xs text-slate-400 hover:text-blue-600 p-1" title="Print"><i class="fas fa-print"></i></button>
+                                <button onclick="window.appHandlers.downloadText('${safeTitle}_Digest.txt', '${safeDlText}')" class="text-xs text-slate-400 hover:text-blue-600 p-1" title="Download"><i class="fas fa-download"></i></button>
+                            </div>
+                        </summary>
+                        <div class="mt-4 p-5 bg-white border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">
+                            ${facts ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Facts</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${facts}</p></div>` : ''}
+                            ${issue ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Issue</h5><p class="text-slate-800 font-semibold leading-relaxed whitespace-pre-wrap">${issue}</p></div>` : ''}
+                            <div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">Ruling</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${ruling || 'No ruling extracted.'}</p></div>
+                        </div>
+                    </details>`; 
                     list.appendChild(row);
                 });
             },
+            
             filterDigests: () => {
                 const term = document.getElementById('digest-search').value.toLowerCase();
                 const filtered = views.digests.digestsData.filter(d => 
