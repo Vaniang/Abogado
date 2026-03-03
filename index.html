@@ -898,13 +898,20 @@
             },
 
           // --- CODAL BOOSTER HANDLERS ---
-       generateCodalBooster: async () => {
+      generateCodalBooster: async () => {
                 const subject = document.getElementById('booster-subject').value;
                 const topic = document.getElementById('booster-topic').value.trim();
                 const output = document.getElementById('booster-output');
                 const btn = document.getElementById('btn-booster-gen');
                 
+                // Try getting key from the specific input first, then local storage
                 let apiKey = document.getElementById('search-api-key') ? document.getElementById('search-api-key').value : localStorage.getItem('gemini_api_key');
+                
+                // Fallback: Check if there is a hidden input in the booster view itself
+                if (!apiKey && document.getElementById('booster-api-key')) {
+                    apiKey = document.getElementById('booster-api-key').value;
+                }
+
                 if (!apiKey) { alert("Please enter your Gemini API Key in the AI Search tab first."); return; }
                 
                 if (!topic) { alert("Please enter a topic or article range."); return; }
@@ -913,7 +920,6 @@
                 output.innerHTML = `<div class="flex flex-col justify-center h-40 items-center text-slate-400"><div class="loader mb-3"></div><p class="text-xs">Drafting provisions...</p></div>`;
                 
                 try {
-                    // UPGRADED PROMPT: Specifically handles requests for "All" vs specific ranges
                     const promptText = `You are a Philippine Law Codal Reference. 
                     User Request: Generate flashcards for subject '${subject}', topic: '${topic}'.
                     
@@ -937,11 +943,20 @@
                         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] }) 
                     });
                     
-                    if (!response.ok) throw new Error("API Error");
+                    // NEW: Handle Rate Limits (429) specifically
+                    if (response.status === 429) {
+                        throw new Error("You're going too fast! The AI needs a break. Please wait 1 minute before trying again.");
+                    }
+
+                    if (!response.ok) throw new Error("API Error: " + response.statusText);
+                    
                     const data = await response.json(); 
                     
+                    if (!data.candidates || !data.candidates[0].content) {
+                        throw new Error("The AI returned an empty response. Try a different topic.");
+                    }
+
                     let jsonString = data.candidates[0].content.parts[0].text;
-                    // AGGRESSIVE CLEANUP: Removes markdown blocks to prevent crashes
                     jsonString = jsonString.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
                     
                     const cards = JSON.parse(jsonString);
@@ -967,9 +982,11 @@
 
                 } catch (e) {
                     console.error(e);
-                    output.innerHTML = `<div class="bg-red-50 text-red-600 p-4 rounded-lg text-center text-sm border border-red-100">
-                        <p class="font-bold">Failed to generate.</p>
-                        <p class="mt-1">Try asking for a smaller range (e.g., "Arts 1156-1170") instead of the whole subject.</p>
+                    // NEW: Show the actual error message to the user
+                    output.innerHTML = `<div class="bg-red-50 text-red-600 p-6 rounded-xl text-center text-sm border border-red-100 flex flex-col items-center gap-2">
+                        <i class="fas fa-exclamation-circle text-2xl"></i>
+                        <p class="font-bold">Generation Failed</p>
+                        <p class="opacity-80">${e.message}</p>
                     </div>`;
                 } finally {
                     btn.disabled = false; btn.innerHTML = '<i class="fas fa-bolt mr-2"></i> Boost Me';
