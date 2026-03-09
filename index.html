@@ -463,7 +463,50 @@
 
         class CaseDigesterView {
             constructor() { this.digestedData = null; }
-            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-magic text-amber-500"></i> AI Case Digester</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="gemini-api-key" placeholder="Paste key here..." class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter <span class="text-red-500">*</span></label><input type="text" id="digest-subject" placeholder="e.g. Crim 1" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div><div class="border-t border-slate-100 pt-4"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Full Text</label><textarea id="digest-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Paste case text here..."></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative"><input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)"><i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i><p class="text-xs text-slate-500">Click to upload PDF</p></div><div id="digest-filename" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div></div><button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-3 rounded-lg text-sm font-bold hover:bg-slate-700 transition shadow-md mt-auto"><i class="fas fa-robot mr-1"></i> Digest & Auto-Save</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area"><div class="h-full flex flex-col items-center justify-center text-slate-400 text-center"><i class="fas fa-brain text-5xl mb-4 opacity-20"></i><p class="text-sm font-medium">Provide the case text and your API key.</p><p class="text-xs mt-1">Gemini will read it, extract the core elements, and automatically save it.</p></div></div></div></div>`; }
+            render() { 
+                const savedKey = localStorage.getItem('gemini_api_key') || ''; 
+                // We create a reusable strict dropdown list of Law Subjects
+                const subjectOptions = `
+                    <optgroup label="Civil Law">
+                        <option value="Persons and Family Relations">Persons and Family Relations</option>
+                        <option value="Obligations and Contracts" selected>Obligations and Contracts</option>
+                        <option value="Property">Property</option>
+                        <option value="Sales and Lease">Sales and Lease</option>
+                        <option value="Succession">Succession</option>
+                        <option value="Partnership, Agency & Trust">Partnership, Agency & Trust</option>
+                        <option value="Credit Transactions">Credit Transactions</option>
+                        <option value="Torts and Damages">Torts and Damages</option>
+                    </optgroup>
+                    <optgroup label="Criminal Law">
+                        <option value="Criminal Law I">Criminal Law I</option>
+                        <option value="Criminal Law II">Criminal Law II</option>
+                        <option value="Special Penal Laws">Special Penal Laws</option>
+                    </optgroup>
+                    <optgroup label="Remedial & Political Law">
+                        <option value="Civil Procedure">Civil Procedure</option>
+                        <option value="Criminal Procedure">Criminal Procedure</option>
+                        <option value="Evidence">Evidence</option>
+                        <option value="Constitutional Law I">Constitutional Law I</option>
+                        <option value="Constitutional Law II">Constitutional Law II</option>
+                    </optgroup>
+                    <optgroup label="Commercial Law & Others">
+                        <option value="Corporation Law">Corporation Law</option>
+                        <option value="Labor Law">Labor Law</option>
+                        <option value="Taxation">Taxation</option>
+                        <option value="Legal Ethics">Legal Ethics</option>
+                        <option value="General / Other">General / Other</option>
+                    </optgroup>
+                `;
+
+                return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-magic text-amber-500"></i> AI Case Digester</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="gemini-api-key" placeholder="Paste key here..." class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+                
+                <div class="grid grid-cols-1 gap-3 border-t border-slate-100 pt-3">
+                    <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook Subject <span class="text-red-500">*</span></label><select id="digest-subject" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white">${subjectOptions}</select></div>
+                    <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article <span class="text-xs text-slate-400 font-normal">(Optional)</span></label><input type="text" id="digest-topic" placeholder="e.g. Art. 1156 or Delay" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+                </div>
+                
+                <div class="border-t border-slate-100 pt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Full Text</label><textarea id="digest-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Paste case text here..."></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative"><input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)"><i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i><p class="text-xs text-slate-500">Click to upload PDF</p></div><div id="digest-filename" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div></div><button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-3 rounded-lg text-sm font-bold hover:bg-slate-700 transition shadow-md mt-auto"><i class="fas fa-robot mr-1"></i> Digest & Auto-Save</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area"><div class="h-full flex flex-col items-center justify-center text-slate-400 text-center"><i class="fas fa-brain text-5xl mb-4 opacity-20"></i><p class="text-sm font-medium">Provide the case text and your API key.</p><p class="text-xs mt-1">Gemini will read it, extract the core elements, and automatically save it.</p></div></div></div></div>`; 
+            }
         }
 
         class ReviewView {
@@ -1372,17 +1415,64 @@
             deleteNote: (noteId) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete Page', content: '<p class="text-slate-600">Are you sure you want to delete this page permanently?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700', onSubmit: async () => { await AppDB.delete('notes', noteId); views.subject_notebook.activeNoteId = null; document.getElementById('notebook-editor-area').innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-book-open text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Page deleted.</p></div>`; } }); },
 
             addDigest: () => {
+                const subjectOptions = `<optgroup label="Civil Law"><option value="Persons and Family Relations">Persons and Family Relations</option><option value="Obligations and Contracts" selected>Obligations and Contracts</option><option value="Property">Property</option><option value="Sales and Lease">Sales and Lease</option><option value="Succession">Succession</option><option value="Partnership, Agency & Trust">Partnership, Agency & Trust</option><option value="Credit Transactions">Credit Transactions</option><option value="Torts and Damages">Torts and Damages</option></optgroup><optgroup label="Criminal Law"><option value="Criminal Law I">Criminal Law I</option><option value="Criminal Law II">Criminal Law II</option><option value="Special Penal Laws">Special Penal Laws</option></optgroup><optgroup label="Remedial & Political Law"><option value="Civil Procedure">Civil Procedure</option><option value="Criminal Procedure">Criminal Procedure</option><option value="Evidence">Evidence</option><option value="Constitutional Law I">Constitutional Law I</option><option value="Constitutional Law II">Constitutional Law II</option></optgroup><optgroup label="Commercial Law & Others"><option value="Corporation Law">Corporation Law</option><option value="Labor Law">Labor Law</option><option value="Taxation">Taxation</option><option value="Legal Ethics">Legal Ethics</option><option value="General / Other">General / Other</option></optgroup>`;
                 Modal.show({
                     title: 'Manual Digest',
-                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input type="text" id="dig-title" class="w-full border border-slate-300 rounded-lg p-2 outline-none"></div>
-                              <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Subject Matter</label><input type="text" id="dig-subj" class="w-full border border-slate-300 rounded-lg p-2 outline-none"></div>
-                              <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="dig-facts" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none"></textarea></div>
-                              <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="dig-issue" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none"></textarea></div>
-                              <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="dig-ruling" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none"></textarea></div>`,
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input type="text" id="dig-title" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500"></div>
+                              <div class="mt-2 grid grid-cols-2 gap-2">
+                                  <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook</label><select id="dig-subj" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">${subjectOptions}</select></div>
+                                  <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic/Article</label><input type="text" id="dig-topic" placeholder="e.g. Art 1156" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500"></div>
+                              </div>
+                              <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="dig-facts" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-blue-500"></textarea></div>
+                              <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="dig-issue" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-blue-500"></textarea></div>
+                              <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="dig-ruling" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-blue-500"></textarea></div>`,
                     onSubmit: async () => {
                         const title = document.getElementById('dig-title').value.trim();
                         if (!title) return;
-                        await AppDB.add('digests', { title, subject: document.getElementById('dig-subj').value, facts: document.getElementById('dig-facts').value, issue: document.getElementById('dig-issue').value, ruling: document.getElementById('dig-ruling').value, created: serverTimestamp() });
+                        await AppDB.add('digests', { 
+                            title, 
+                            subject: document.getElementById('dig-subj').value, 
+                            topic: document.getElementById('dig-topic').value.trim(), // NEW
+                            facts: document.getElementById('dig-facts').value, 
+                            issue: document.getElementById('dig-issue').value, 
+                            ruling: document.getElementById('dig-ruling').value, 
+                            created: serverTimestamp() 
+                        });
+                    }
+                });
+            },
+
+            editDigest: (id, title, subject, topic, facts, issue, ruling) => {
+                const decodeHtml = (html) => { const txt = document.createElement("textarea"); txt.innerHTML = html; return txt.value; };
+                const subjectOptions = `<optgroup label="Civil Law"><option value="Persons and Family Relations">Persons and Family Relations</option><option value="Obligations and Contracts">Obligations and Contracts</option><option value="Property">Property</option><option value="Sales and Lease">Sales and Lease</option><option value="Succession">Succession</option><option value="Partnership, Agency & Trust">Partnership, Agency & Trust</option><option value="Credit Transactions">Credit Transactions</option><option value="Torts and Damages">Torts and Damages</option></optgroup><optgroup label="Criminal Law"><option value="Criminal Law I">Criminal Law I</option><option value="Criminal Law II">Criminal Law II</option><option value="Special Penal Laws">Special Penal Laws</option></optgroup><optgroup label="Remedial & Political Law"><option value="Civil Procedure">Civil Procedure</option><option value="Criminal Procedure">Criminal Procedure</option><option value="Evidence">Evidence</option><option value="Constitutional Law I">Constitutional Law I</option><option value="Constitutional Law II">Constitutional Law II</option></optgroup><optgroup label="Commercial Law & Others"><option value="Corporation Law">Corporation Law</option><option value="Labor Law">Labor Law</option><option value="Taxation">Taxation</option><option value="Legal Ethics">Legal Ethics</option><option value="General / Other">General / Other</option></optgroup>`;
+                
+                // Helper to pre-select the correct dropdown value dynamically
+                const selectHtml = subjectOptions.replace(`value="${subject}"`, `value="${subject}" selected`);
+
+                Modal.show({
+                    title: '<i class="fas fa-edit text-blue-600"></i> Edit Digest',
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input type="text" id="dig-title-edit" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500" value="${title.replace(/"/g, '&quot;')}"></div>
+                              <div class="mt-3 grid grid-cols-2 gap-2">
+                                  <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook</label><select id="dig-subj-edit" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">${selectHtml}</select></div>
+                                  <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic/Article</label><input type="text" id="dig-topic-edit" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500" value="${(topic && topic !== 'undefined') ? topic.replace(/"/g, '&quot;') : ''}"></div>
+                              </div>
+                              <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="dig-facts-edit" rows="4" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(facts)}</textarea></div>
+                              <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="dig-issue-edit" rows="3" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(issue)}</textarea></div>
+                              <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="dig-ruling-edit" rows="4" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(ruling)}</textarea></div>`,
+                    submitText: 'Save Changes',
+                    submitClass: 'px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-bold transition shadow-sm',
+                    onSubmit: async () => {
+                        const updatedTitle = document.getElementById('dig-title-edit').value.trim();
+                        if (!updatedTitle) { alert("Case Title is required!"); return; }
+                        await AppDB.update('digests', id, { 
+                            title: updatedTitle, 
+                            subject: document.getElementById('dig-subj-edit').value, 
+                            topic: document.getElementById('dig-topic-edit').value.trim(), 
+                            facts: document.getElementById('dig-facts-edit').value, 
+                            issue: document.getElementById('dig-issue-edit').value, 
+                            ruling: document.getElementById('dig-ruling-edit').value, 
+                            updated: serverTimestamp() 
+                        });
                     }
                 });
             },
@@ -1474,6 +1564,7 @@
                         
                         const title = d.title || '';
                         const subject = d.subject || '';
+                        const topic = d.topic || ''; // <--- Topic variable declared here
                         const facts = d.facts || '';
                         const issue = d.issue || '';
                         const ruling = d.ruling || '';
@@ -1485,23 +1576,26 @@
 
                         const safeTitle = escapeStr(title);
                         const safeSubject = escapeStr(subject);
+                        const safeTopic = escapeStr(topic); // <--- Escaped safeTopic
                         const safeFacts = escapeStr(facts);
                         const safeIssue = escapeStr(issue);
                         const safeRuling = escapeStr(ruling);
                         const safeNotes = escapeStr(notes);
                         
-                        const safeDlText = escapeStr(`Title: ${title}\nSubject: ${subject}\n\nFACTS:\n${facts}\n\nISSUE:\n${issue}\n\nRULING:\n${ruling}\n\nNOTES:\n${notes}`);
-                        const printBody = `<h1>${title}</h1><p><strong>Subject:</strong> ${subject}</p><br><h3>FACTS</h3><p>${facts.replace(/\n/g, "<br>")}</p><br><h3>ISSUE</h3><p>${issue.replace(/\n/g, "<br>")}</p><br><h3>RULING</h3><p>${ruling.replace(/\n/g, "<br>")}</p>${notes ? `<br><h3>NOTES</h3><p>${notes.replace(/\n/g, "<br>")}</p>` : ''}`;
+                        const safeDlText = escapeStr(`Title: ${title}\nSubject: ${subject}\nTopic: ${topic}\n\nFACTS:\n${facts}\n\nISSUE:\n${issue}\n\nRULING:\n${ruling}\n\nNOTES:\n${notes}`);
+                        const printBody = `<h1>${title}</h1><p><strong>Subject:</strong> ${subject}</p>${topic ? `<p><strong>Topic:</strong> ${topic}</p>` : ''}<br><h3>FACTS</h3><p>${facts.replace(/\n/g, "<br>")}</p><br><h3>ISSUE</h3><p>${issue.replace(/\n/g, "<br>")}</p><br><h3>RULING</h3><p>${ruling.replace(/\n/g, "<br>")}</p>${notes ? `<br><h3>NOTES</h3><p>${notes.replace(/\n/g, "<br>")}</p>` : ''}`;
                         const safePrintHtml = escapeStr(printBody);
 
+                        // <--- THIS IS WHERE YOUR SNIPPET WAS INJECTED --->
                         row.innerHTML = `
                         <div class="flex justify-between items-start gap-4">
                             <div class="flex-1">
                                 <h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${title}</h4>
+                                ${topic ? `<span class="inline-block mt-1.5 bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"><i class="fas fa-tag mr-1"></i>${topic}</span>` : ''}
                             </div>
                             <div class="flex items-center gap-1.5 flex-wrap justify-end">
                                 <button onclick="window.appHandlers.openDigestNotes('${d.id}', '${safeTitle}', '${safeNotes}')" class="text-slate-400 hover:text-amber-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Personal Notes"><i class="fas fa-sticky-note"></i></button>
-                                <button onclick="window.appHandlers.editDigest('${d.id}', '${safeTitle}', '${safeSubject}', '${safeFacts}', '${safeIssue}', '${safeRuling}')" class="text-slate-400 hover:text-blue-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
+                                <button onclick="window.appHandlers.editDigest('${d.id}', '${safeTitle}', '${safeSubject}', '${safeTopic}', '${safeFacts}', '${safeIssue}', '${safeRuling}')" class="text-slate-400 hover:text-blue-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
                                 <button onclick="window.appHandlers.printContent('${safeTitle}', '${safePrintHtml}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
                                 <button onclick="window.appHandlers.downloadText('${safeTitle}_Digest.txt', '${safeDlText}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Download Text"><i class="fas fa-download"></i></button>
                                 <button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-400 hover:text-red-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Delete"><i class="fas fa-trash"></i></button>
@@ -1539,7 +1633,17 @@
             },
 
             handleDigestUpload: async (input) => { const file = input.files[0]; if (!file) return; const display = document.getElementById('digest-filename'); const btn = document.getElementById('btn-process-digest'); display.innerText = file.name; display.classList.remove('hidden'); btn.innerText = "Reading PDF..."; btn.disabled = true; try { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; let fullText = ""; const maxPages = Math.min(pdf.numPages, 10); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' ') + "\n"; } window.appHandlers.digestText = fullText; document.getElementById('digest-textarea').value = ''; btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; } catch (e) { alert("Failed to read PDF."); btn.innerHTML = "Error"; } },
-            processDigest: async () => { const titleInput = document.getElementById('digest-title').value.trim(); const subjectInput = document.getElementById('digest-subject').value.trim(); const textAreaInput = document.getElementById('digest-textarea').value.trim(); const apiKey = document.getElementById('gemini-api-key').value.trim(); if (!apiKey) { alert("Please enter your Gemini API Key."); return; } localStorage.setItem('gemini_api_key', apiKey); if (!titleInput || !subjectInput) { alert("Please enter both the Case Title and Subject Matter."); return; } let textToDigest = textAreaInput || window.appHandlers.digestText; if (!textToDigest) { alert("Please paste the full text of the case or upload a PDF."); return; } const area = document.getElementById('digest-results-area'); const btn = document.getElementById('btn-process-digest'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Gemini is Digesting...'; area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; try { const promptText = `You are an expert law professor. Digest the following legal case text. Focus your extraction of the Facts, Issue, and Ruling strictly in relation to: "${subjectInput}". Return the result STRICTLY as a raw JSON object with exactly three keys: "facts", "issue", and "ruling". Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text. Case Text: ${textToDigest.substring(0, 50000)}`; const apiUrl = 'https://' + 'generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey; const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } }) }); if (!response.ok) throw new Error(`API Error: ${response.status}`); const data = await response.json(); let jsonString = data.candidates[0].content.parts[0].text; jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); const parsedDigest = JSON.parse(jsonString); const facts = parsedDigest.facts || "Facts not found."; const issue = parsedDigest.issue || "Issue not found."; const ruling = parsedDigest.ruling || "Ruling not found."; await AppDB.add('digests', { title: titleInput, subject: subjectInput, facts: facts, issue: issue, ruling: ruling, created: serverTimestamp() }); area.innerHTML = `<div class="space-y-4"><div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm animate-fade-in"><i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved to Cons. Digests.</p></div><button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View</button></div><div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm whitespace-pre-wrap">${facts}</p></div><div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Issue</h4><p class="text-sm font-medium whitespace-pre-wrap">${issue}</p></div><div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Ruling</h4><p class="text-sm whitespace-pre-wrap">${ruling}</p></div></div>`; } catch (error) { area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; window.appHandlers.digestText = ''; } },
+            processDigest: async () => { const titleInput = document.getElementById('digest-title').value.trim(); const subjectInput = document.getElementById('digest-subject').value;
+            const topicInput = document.getElementById('digest-topic').value.trim(); // NEW
+            const textAreaInput = document.getElementById('digest-textarea').value.trim(); const apiKey = document.getElementById('gemini-api-key').value.trim(); if (!apiKey) { alert("Please enter your Gemini API Key."); return; } localStorage.setItem('gemini_api_key', apiKey); if (!titleInput || !subjectInput) { alert("Please enter both the Case Title and Subject Matter."); return; } let textToDigest = textAreaInput || window.appHandlers.digestText; if (!textToDigest) { alert("Please paste the full text of the case or upload a PDF."); return; } const area = document.getElementById('digest-results-area'); const btn = document.getElementById('btn-process-digest'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Gemini is Digesting...'; area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; try { const promptText = `You are an expert law professor. Digest the following legal case text. Focus your extraction of the Facts, Issue, and Ruling strictly in relation to: "${subjectInput}". Return the result STRICTLY as a raw JSON object with exactly three keys: "facts", "issue", and "ruling". Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text. Case Text: ${textToDigest.substring(0, 50000)}`; const apiUrl = 'https://' + 'generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey; const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } }) }); if (!response.ok) throw new Error(`API Error: ${response.status}`); const data = await response.json(); let jsonString = data.candidates[0].content.parts[0].text; jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); const parsedDigest = JSON.parse(jsonString); const facts = parsedDigest.facts || "Facts not found."; const issue = parsedDigest.issue || "Issue not found."; const ruling = parsedDigest.ruling || "Ruling not found."; await AppDB.add('digests', { 
+                title: titleInput, 
+                subject: subjectInput, 
+                topic: topicInput, // NEW
+                facts: facts, 
+                issue: issue, 
+                ruling: ruling, 
+                created: serverTimestamp() 
+            }); area.innerHTML = `<div class="space-y-4"><div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm animate-fade-in"><i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved to Cons. Digests.</p></div><button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View</button></div><div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm whitespace-pre-wrap">${facts}</p></div><div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Issue</h4><p class="text-sm font-medium whitespace-pre-wrap">${issue}</p></div><div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Ruling</h4><p class="text-sm whitespace-pre-wrap">${ruling}</p></div></div>`; } catch (error) { area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; window.appHandlers.digestText = ''; } },
 
             setMode: (mode) => {
                 window.appHandlers.reviewMode = mode;
