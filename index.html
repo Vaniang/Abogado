@@ -510,10 +510,75 @@
         }
 
         class ReviewView {
-            constructor() { this.generatedContent = null; this.isProcessing = false; }
-            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full"><div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-y-auto"><h3 class="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review</h3><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Paste Text <span class="text-xs text-slate-400 font-normal">(Best for Codals)</span></label><textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..." oninput="document.getElementById('btn-generate').disabled = false;"></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-2">- OR -</div><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone"><input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)"><i class="fas fa-file-pdf text-2xl text-slate-400 mb-2"></i><p class="text-sm font-medium text-slate-600">Upload text-searchable PDF</p></div><div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div><div class="mt-4 space-y-3"><label class="block text-sm font-medium text-slate-700">Review Mode</label><div class="grid grid-cols-2 gap-2"><button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Recit (Flashcards)</button><button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button></div></div><button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Generate AI Review</button></div><div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center"><i class="fas fa-brain text-4xl mb-4 opacity-50"></i><h4 class="text-lg font-semibold">AI Mock Review</h4><p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate interactive practice questions based on your material.</p></div></div></div></div>`; }
-        }
+    constructor() { 
+        this.generatedContent = null; 
+        this.isProcessing = false; 
+    }
 
+    render() { 
+        const savedKey = localStorage.getItem('gemini_api_key') || ''; 
+        
+        return `
+        <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+                
+                <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-y-auto">
+                    <h3 class="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review
+                    </h3>
+                    
+                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+                        <label class="block text-xs font-bold text-blue-800 mb-1">
+                            <i class="fas fa-key"></i> Gemini API Key
+                        </label>
+                        <input type="password" id="review-api-key" placeholder="Paste key here..." class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            Paste Text <span class="text-xs text-slate-400 font-normal">(Best for Codals)</span>
+                        </label>
+                        <textarea id="review-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste provisions or notes here..." oninput="document.getElementById('btn-generate').disabled = this.value.trim().length === 0;"></textarea>
+                    </div>
+                    
+                    <div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-2">
+                        - OR -
+                    </div>
+                    
+                    <div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative" id="drop-zone">
+                        <input type="file" id="pdf-upload" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)">
+                        <i class="fas fa-file-pdf text-2xl text-slate-400 mb-2"></i>
+                        <p class="text-sm font-medium text-slate-600">Upload text-searchable PDF</p>
+                    </div>
+                    
+                    <div id="file-name-display" class="mt-2 text-xs text-blue-600 font-medium truncate hidden"></div>
+                    
+                    <div class="mt-4 space-y-3">
+                        <label class="block text-sm font-medium text-slate-700">Review Mode</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="window.appHandlers.setMode('recit')" id="btn-recit" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Recit (Flashcards)</button>
+                            <button onclick="window.appHandlers.setMode('exam')" id="btn-exam" class="px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Exam (Essay)</button>
+                        </div>
+                    </div>
+                    
+                    <button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Generate AI Review
+                    </button>
+                </div>
+
+                <div class="lg:col-span-2 bg-slate-200 rounded-xl border border-slate-300 p-6 overflow-y-auto flex flex-col relative" id="review-output">
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 pointer-events-none p-8 text-center">
+                        <i class="fas fa-brain text-4xl mb-4 opacity-50"></i>
+                        <h4 class="text-lg font-semibold">AI Mock Review</h4>
+                        <p class="text-sm max-w-xs mt-2">Paste text or upload a PDF to generate interactive practice questions based on your material.</p>
+                    </div>
+                </div>
+                
+            </div>
+        </div>`; 
+    }
+}
+        
         class SavedReviewsView {
             constructor() { this.unsubscribe = null; }
             render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6 flex-shrink-0"><h3 class="text-xl font-bold text-slate-700">My Saved Reviews & SRS</h3></div><div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col"><div id="saved-reviews-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div></div></div>`; }
@@ -1666,7 +1731,245 @@
                 }
             },
             handleFileUpload: async (input) => { const file = input.files[0]; if (!file) return; document.getElementById('file-name-display').innerText = file.name; document.getElementById('file-name-display').classList.remove('hidden'); document.getElementById('btn-generate').innerText = "Processing PDF..."; document.getElementById('review-textarea').value = ''; try { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; let fullText = ""; const maxPages = Math.min(pdf.numPages, 10); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' '); fullText += pageText + "\n"; } window.appHandlers.pdfText = fullText; document.getElementById('btn-generate').disabled = false; document.getElementById('btn-generate').innerText = "Generate AI Review"; } catch (e) { console.error(e); alert("Error reading PDF."); document.getElementById('btn-generate').innerText = "Error"; } },
-            generateReview: async () => { const textAreaInput = document.getElementById('review-textarea').value.trim(); let text = textAreaInput || window.appHandlers.pdfText; const mode = window.appHandlers.reviewMode || 'recit'; const output = document.getElementById('review-output'); const apiKey = document.getElementById('review-api-key').value.trim(); const btn = document.getElementById('btn-generate'); if (!apiKey) { alert("Please enter your Gemini API Key."); return; } localStorage.setItem('gemini_api_key', apiKey); if (!text) { alert("Please paste text or upload a text-searchable PDF first."); return; } btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...'; output.innerHTML = `<div class="flex justify-center flex-col items-center h-full p-10"><div class="loader mb-4"></div><p class="text-slate-500 font-medium">Gemini is designing your ${mode === 'recit' ? 'Flashcards' : 'Mock Bar Exam'}...</p></div>`; try { let promptText = mode === 'recit' ? `You are a strict law professor helping a student memorize key concepts. Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. Focus on definitions, elements, exceptions, and core doctrines. Return ONLY a raw JSON array of objects, where each object has a "front" (the question or term) and a "back" (the answer or definition). Do NOT use markdown like \`\`\`json. Output raw JSON only. Material: ${text.substring(0, 45000)}` : `You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 5 essay-type hypothetical legal problems. These problems must test issue spotting, critical thinking, and the direct application of the rules and jurisprudence found in the text. Return ONLY a raw JSON array of objects, where each object has: "question": (The hypothetical scenario and the specific question asked at the end). "suggested_answer": (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply). Do NOT use markdown like \`\`\`json. Output raw JSON only. Material: ${text.substring(0, 45000)}`; const apiUrl = 'https://' + 'generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey; const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } }) }); if (!response.ok) throw new Error(`API Error: ${response.status}`); const data = await response.json(); let jsonString = data.candidates[0].content.parts[0].text; jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); let parsedData = JSON.parse(jsonString); if (mode === 'recit') { parsedData = parsedData.map(c => ({...c, nextReview: Date.now(), interval: 0})); } window.appHandlers.currentReviewData = { mode: mode, content: parsedData }; output.innerHTML = `<div class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm mb-6 flex gap-3 items-center sticky top-0 z-20"><input type="text" id="save-review-title" placeholder="Name this review (e.g., Obicon Art 1156)" class="flex-1 p-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium"><button onclick="window.appHandlers.saveCurrentReview()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition whitespace-nowrap"><i class="fas fa-save mr-1"></i> Save Material</button></div>`; if (mode === 'recit') { output.innerHTML += `<h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2"><i class="fas fa-bolt text-amber-500"></i> Recit Flashcards (${parsedData.length})</h3>`; const grid = document.createElement('div'); grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4 pb-8"; parsedData.forEach((card, i) => { const el = document.createElement('div'); el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group perspective relative overflow-hidden"; el.onclick = function() { this.querySelector('.card-inner').classList.toggle('hidden'); this.querySelector('.card-back').classList.toggle('hidden'); }; el.innerHTML = `<div class="card-inner"><span class="text-[10px] text-blue-600 font-bold uppercase mb-3 block tracking-widest">Card ${i+1} / Question</span><p class="serif-text font-semibold text-slate-800 leading-snug">${card.front}</p><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-amber-600 transition">(Click to reveal answer)</p></div></div><div class="card-back hidden animate-fade-in flex flex-col h-full justify-between"><div><span class="text-[10px] text-green-600 font-bold uppercase mb-3 block tracking-widest">Answer</span><p class="text-sm text-slate-700 leading-relaxed">${card.back}</p></div><div class="mt-4 pt-3 border-t border-slate-100 text-center"><p class="text-xs text-slate-400 group-hover:text-blue-600 transition">(Click to flip back)</p></div></div>`; grid.appendChild(el); }); output.appendChild(grid); } else { output.innerHTML += `<h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2"><i class="fas fa-balance-scale text-slate-800"></i> Mock Bar Examination</h3>`; const paper = document.createElement('div'); paper.className = "bg-white p-8 rounded shadow-md border border-slate-300 min-h-[500px] serif-text mb-8"; let html = `<div class="text-center border-b-2 border-black pb-4 mb-8"><h2 class="text-2xl font-bold uppercase tracking-widest">Mock Bar Examination</h2><p class="italic text-slate-600 mt-1">Focus: Issue Spotting & Application</p></div>`; parsedData.forEach((item, i) => { html += `<div class="mb-10"><h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4><p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${item.question}</p><textarea id="live-exam-answer-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your legal analysis here..."></textarea><div class="mt-4"><button onclick="window.appHandlers.evaluateAnswer(${i}, null)" id="btn-eval-live-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check My Answer</button></div><div id="eval-result-live-${i}" class="mt-4 hidden"></div><details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4"><summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary><div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${item.suggested_answer}</div></details></div>${i !== parsedData.length - 1 ? '<hr class="my-8 border-slate-200">' : ''}`; }); paper.innerHTML = html; output.appendChild(paper); } } catch (error) { console.error("Gemini failed:", error); output.innerHTML = `<div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 flex items-start gap-4 shadow-sm w-full max-w-lg mx-auto mt-10"><i class="fas fa-exclamation-triangle text-2xl mt-1"></i><div><p class="font-bold text-lg mb-1">Failed to generate review.</p><p class="text-sm opacity-90">${error.message}</p></div></div>`; } finally { btn.disabled = false; btn.innerHTML = 'Generate AI Review'; window.appHandlers.pdfText = ''; } },
+           /* ==========================================
+   HELPER FUNCTIONS (Place these outside your main handlers object)
+   These make the main generate function much cleaner and safer.
+   ========================================== */
+
+/**
+ * Strips any potential Markdown code blocks (```json) from the AI's response.
+ */
+const cleanAiJsonResponse = (text) => {
+    return text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+};
+
+/**
+ * Displays a clean, user-friendly loading state in the output area.
+ */
+const showReviewLoadingState = (outputEl, mode) => {
+    outputEl.innerHTML = `
+        <div class="flex justify-center flex-col items-center h-full p-10 text-center">
+            <div class="loader mb-6"></div>
+            <p class="text-slate-700 font-bold text-lg mb-1">
+                Gemini is Designing Your Review
+            </p>
+            <p class="text-slate-500 font-medium text-sm max-w-sm">
+                Creating ${mode === 'recit' ? 'exactly 10 precise flashcards' : 'exactly 5 rigorous essay scenarios'} based on your material...
+            </p>
+        </div>`;
+};
+
+/**
+ * Displays an error message to the user if the AI generation fails.
+ */
+const showReviewErrorState = (outputEl, errorMessage) => {
+    outputEl.innerHTML = `
+        <div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 flex items-start gap-4 shadow-sm w-full max-w-lg mx-auto mt-10">
+            <i class="fas fa-exclamation-triangle text-2xl mt-1"></i>
+            <div>
+                <p class="font-bold text-lg mb-1">Failed to generate review.</p>
+                <p class="text-sm opacity-90">${errorMessage}</p>
+            </div>
+        </div>`;
+};
+
+/**
+ * Toggles a card from Front (Question) to Back (Answer).
+ */
+const handleCardFlip = (cardElement) => {
+    const isShowingFront = !cardElement.querySelector('.card-inner').classList.contains('hidden');
+    
+    // Smoothly switch views using opacity and hidden
+    cardElement.querySelector('.card-inner').classList.toggle('hidden', isShowingFront);
+    cardElement.querySelector('.card-back').classList.toggle('hidden', !isShowingFront);
+    
+    // Briefly highlight the "answer" area on flip
+    if(isShowingFront) {
+        cardElement.classList.add('border-green-300');
+        setTimeout(() => cardElement.classList.remove('border-green-300'), 500);
+    }
+};
+
+/* ==========================================
+   MAIN GENERATE FUNCTION (Keep this inside your window.appHandlers)
+   Now dramatically cleaner, safer, and easier to maintain.
+   ========================================== */
+
+generateReview: async () => {
+    const textAreaInput = document.getElementById('review-textarea').value.trim();
+    let text = textAreaInput || window.appHandlers.pdfText;
+    const mode = window.appHandlers.reviewMode || 'recit';
+    const output = document.getElementById('review-output');
+    const apiKey = document.getElementById('review-api-key').value.trim();
+    const btn = document.getElementById('btn-generate');
+
+    /* --- Validation Phase --- */
+    if (!apiKey) { alert("Please enter your Gemini API Key."); return; }
+    if (!text) { alert("Please paste text or upload a text-searchable PDF first."); return; }
+
+    /* --- Pre-Processing & UI Prep --- */
+    localStorage.setItem('gemini_api_key', apiKey);
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
+    showReviewLoadingState(output, mode);
+
+    try {
+        /* --- 1. PROMPT ENGINEERING (Clean & Separate) --- */
+        let promptText = '';
+        const baseInstructions = 'DO NOT use markdown like \`\`\`json. Output ONLY a raw JSON array.';
+        const truncatedText = text.substring(0, 45000); // Safety constraint
+
+        if (mode === 'recit') {
+            promptText = `You are a strict law professor helping a student memorize key concepts. Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. Focus on definitions, elements, exceptions, and core doctrines. Return ONLY a raw JSON array of objects, where each object has a "front" (the question/term) and a "back" (the precise answer/definition). ${baseInstructions} Material: ${truncatedText}`;
+        } else {
+            promptText = `You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 5 essay-type hypothetical legal problems. These problems must test issue spotting, critical thinking, and the direct application of the rules and jurisprudence found in the text. Return ONLY a raw JSON array of objects, where each object has: "question" (The hypothetical scenario and the specific question asked at the end) and "suggested_answer" (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply). ${baseInstructions} Material: ${truncatedText}`;
+        }
+
+        /* --- 2. API REQUEST PHASE --- */
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                contents: [{ role: "user", parts: [{ text: promptText }] }],
+                generationConfig: { responseMimeType: "application/json" } // Force JSON response
+            })
+        });
+
+        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+        /* --- 3. JSON PARSING & DATA PREP --- */
+        const data = await response.json();
+        const jsonString = cleanAiJsonResponse(data.candidates[0].content.parts[0].text);
+        let parsedData = JSON.parse(jsonString);
+
+        // Enhance flashcard data with SRS (Space Repetition System) parameters
+        if (mode === 'recit') {
+            parsedData = parsedData.map(c => ({...c, nextReview: Date.now(), interval: 0}));
+        }
+
+        // Store the result globally so it can be saved later
+        window.appHandlers.currentReviewData = { mode: mode, content: parsedData };
+
+        /* --- 4. DATA RENDERING PHASE (Dynamic HTML Generation) --- */
+        
+        // Render A: The Sticky Save/Name Bar
+        output.innerHTML = `
+            <div class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm mb-6 flex gap-3 items-center sticky top-0 z-20">
+                <input type="text" id="save-review-title" placeholder="Name this review (e.g., Obicon Art 1156)" class="flex-1 p-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+                <button onclick="window.appHandlers.saveCurrentReview()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition whitespace-nowrap">
+                    <i class="fas fa-save mr-1"></i> Save Material
+                </button>
+            </div>`;
+
+        if (mode === 'recit') {
+            /* --- Mode 1: Flashcards (Recit) --- */
+            output.innerHTML += `
+                <h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2">
+                    <i class="fas fa-bolt text-amber-500"></i> Recit Flashcards (${parsedData.length})
+                </h3>`;
+
+            const grid = document.createElement('div');
+            grid.className = "grid grid-cols-1 md:grid-cols-2 gap-4 pb-8";
+
+            parsedData.forEach((card, i) => {
+                const el = document.createElement('div');
+                
+                // UX Improvement: Cleaner classes and structured content
+                el.className = "bg-white p-6 rounded-xl shadow-sm border border-slate-300 cursor-pointer hover:shadow-md transition flex flex-col justify-between min-h-[160px] group relative overflow-hidden";
+                el.onclick = function() { handleCardFlip(this); };
+
+                // Question Front
+                const frontHtml = `
+                    <div class="card-inner flex flex-col h-full justify-between">
+                        <div>
+                            <span class="text-[10px] text-blue-600 font-bold uppercase mb-3 block tracking-widest">Card ${i+1} / Question</span>
+                            <p class="serif-text font-semibold text-slate-800 leading-snug">${card.front}</p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-100 text-center">
+                            <p class="text-xs text-slate-400 group-hover:text-amber-600 transition">(Click to reveal answer)</p>
+                        </div>
+                    </div>`;
+
+                // Answer Back
+                const backHtml = `
+                    <div class="card-back hidden animate-fade-in flex flex-col h-full justify-between">
+                        <div>
+                            <span class="text-[10px] text-green-600 font-bold uppercase mb-3 block tracking-widest">Answer</span>
+                            <p class="text-sm text-slate-700 leading-relaxed">${card.back}</p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-100 text-center">
+                            <p class="text-xs text-slate-400 group-hover:text-blue-600 transition">(Click to flip back)</p>
+                        </div>
+                    </div>`;
+
+                el.innerHTML = frontHtml + backHtml;
+                grid.appendChild(el);
+            });
+            output.appendChild(grid);
+
+        } else {
+            /* --- Mode 2: Essay (Mock Bar Exam) --- */
+            output.innerHTML += `
+                <h3 class="font-bold text-xl mb-4 py-2 flex items-center gap-2">
+                    <i class="fas fa-balance-scale text-slate-800"></i> Mock Bar Examination
+                </h3>`;
+
+            const paper = document.createElement('div');
+            paper.className = "bg-white p-8 rounded shadow-md border border-slate-300 min-h-[500px] serif-text mb-8";
+            
+            let html = `
+                <div class="text-center border-b-2 border-black pb-4 mb-8">
+                    <h2 class="text-2xl font-bold uppercase tracking-widest">Mock Bar Examination</h2>
+                    <p class="italic text-slate-600 mt-1">Focus: Issue Spotting & Application</p>
+                </div>`;
+
+            parsedData.forEach((item, i) => {
+                html += `
+                    <div class="mb-10">
+                        <h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4>
+                        <p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${item.question}</p>
+                        
+                        <textarea id="live-exam-answer-${i}" 
+                            class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" 
+                            placeholder="Type your legal analysis here..."></textarea>
+                        
+                        <div class="mt-4">
+                            <button onclick="window.appHandlers.evaluateAnswer(${i}, null)" id="btn-eval-live-${i}" 
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition">
+                                <i class="fas fa-check-double mr-1"></i> Check My Answer
+                            </button>
+                        </div>
+                        
+                        <div id="eval-result-live-${i}" class="mt-4 hidden"></div>
+                        
+                        <details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4">
+                            <summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none">
+                                <i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer
+                            </summary>
+                            <div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${item.suggested_answer}</div>
+                        </details>
+                    </div>
+                    ${i !== parsedData.length - 1 ? '<hr class="my-8 border-slate-200">' : ''}`;
+            });
+            paper.innerHTML = html;
+            output.appendChild(paper);
+        }
+
+    } catch (error) {
+        console.error("Gemini failed:", error);
+        showReviewErrorState(output, error.message);
+    } finally {
+        /* --- Post-Request Cleanup Phase --- */
+        btn.disabled = false;
+        btn.innerHTML = 'Generate AI Review';
+        
+        // Crucial Cleanup: Clear the uploaded PDF text so it doesn't automatically 
+        // generate a review the next time the button is clicked!
+        window.appHandlers.pdfText = '';
+    }
+},
             evaluateAnswer: async (index, docId) => { const apiKey = localStorage.getItem('gemini_api_key'); if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; } const isLive = docId === null; const answerId = isLive ? `live-exam-answer-${index}` : `saved-exam-answer-${docId}-${index}`; const btnId = isLive ? `btn-eval-live-${index}` : `btn-eval-${docId}-${index}`; const resultId = isLive ? `eval-result-live-${index}` : `eval-result-${docId}-${index}`; const answerEl = document.getElementById(answerId); const userAnswer = answerEl.value.trim(); if (!userAnswer) { alert("Please type an answer first."); return; } const btn = document.getElementById(btnId); const resultDiv = document.getElementById(resultId); let reviewData; if (isLive && window.appHandlers.currentReviewData) { reviewData = window.appHandlers.currentReviewData.content[index]; } else if (!isLive && window.appHandlers.savedExamData[docId]) { reviewData = window.appHandlers.savedExamData[docId][index]; } if(!reviewData) return; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...'; resultDiv.classList.remove('hidden'); resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`; try { const promptText = `You are a strict but fair law professor grading a student's answer to a Bar Exam question. Question: ${reviewData.question} Suggested Correct Answer / Rubric: ${reviewData.suggested_answer} Student's Answer: ${userAnswer} Task: Provide a brief, constructive evaluation. Mention what they got right (Issue spotting, Rule application). Mention what they missed. Give a final score out of 100%. Keep formatting clean using basic HTML tags like <b> and <br>, do NOT use code blocks or markdown backticks.`; const apiUrl = 'https://' + 'generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey; const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] }) }); if (!response.ok) throw new Error(`API Error: ${response.status}`); const data = await response.json(); let feedback = data.candidates[0].content.parts[0].text; resultDiv.innerHTML = `<div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans mt-2"><h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>${feedback}</div>`; } catch (error) { resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer'; } },
             rateFlashcard: async (reviewId, cardIndex, rating) => { try { const reviewContent = window.appHandlers.savedReviewData[reviewId]; if (!reviewContent) return; let card = reviewContent[cardIndex]; const now = Date.now(); let newInterval = card.interval || 0; if (rating === 'hard') { newInterval = 1; } else if (rating === 'good') { newInterval = newInterval === 0 ? 3 : newInterval * 2; } else if (rating === 'easy') { newInterval = newInterval === 0 ? 7 : newInterval * 3; } card.interval = newInterval; card.nextReview = now + (newInterval * 24 * 60 * 60 * 1000); reviewContent[cardIndex] = card; await AppDB.update('reviews', reviewId, { content: reviewContent }); } catch(e) { console.error("Error updating flashcard:", e); alert("Failed to save flashcard rating."); } },
             saveCurrentReview: async () => { const title = document.getElementById('save-review-title').value.trim(); if (!title) { alert('Please enter a title to save this review.'); return; } if (!window.appHandlers.currentReviewData) return; const { mode, content } = window.appHandlers.currentReviewData; try { await AppDB.add('reviews', { title, type: mode, content: content, created: serverTimestamp() }); alert('Review saved successfully to your Saved Reviews tab!'); window.appHandlers.navigate('saved_reviews'); } catch (e) { console.error(e); alert('Failed to save review.'); } },
