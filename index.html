@@ -1484,7 +1484,7 @@
                 });
             },
             deleteDigest: (id) => { Modal.show({ title: 'Delete Digest', content: 'Are you sure you want to delete this digest?', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('digests', id) }); },
-            printDigest: (title, subject, topic, facts, issue, ruling, notes) => {
+           printDigest: (title, subject, topic, facts, issue, ruling, notes) => {
                 const html = `<div style="font-family: serif; max-width: 800px; margin: 0 auto; line-height: 1.6;">
                     <h1 style="color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 26px; margin-bottom: 5px;">${title}</h1>
                     <p style="color: #64748b; font-style: italic; margin-top: 0; margin-bottom: 20px;">
@@ -1493,22 +1493,22 @@
                     
                     <div style="margin-bottom: 20px;">
                         <h3 style="color: #475569; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Facts</h3>
-                        <p style="font-size: 16px; color: #334155; margin-top: 5px; white-space: pre-wrap;">${facts}</p>
+                        <p style="font-size: 16px; color: #334155; margin-top: 5px; white-space: pre-wrap; text-align: justify;">${facts}</p>
                     </div>
                     
                     <div style="margin-bottom: 20px;">
                         <h3 style="color: #475569; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Issue</h3>
-                        <p style="font-size: 16px; color: #334155; margin-top: 5px; white-space: pre-wrap;">${issue}</p>
+                        <p style="font-size: 16px; color: #334155; margin-top: 5px; white-space: pre-wrap; text-align: justify;">${issue}</p>
                     </div>
                     
                     <div style="margin-bottom: 20px;">
                         <h3 style="color: #475569; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Ruling</h3>
-                        <p style="font-size: 16px; color: #334155; margin-top: 5px; white-space: pre-wrap;">${ruling}</p>
+                        <p style="font-size: 16px; color: #334155; margin-top: 5px; white-space: pre-wrap; text-align: justify;">${ruling}</p>
                     </div>
                     
                     ${notes && notes !== 'undefined' ? `<div style="margin-top: 25px; padding: 15px; background-color: #fef3c7; border-radius: 8px;">
                         <h3 style="color: #b45309; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-top: 0;">My Notes</h3>
-                        <p style="font-size: 14px; color: #78350f; margin-top: 5px; white-space: pre-wrap;">${notes}</p>
+                        <p style="font-size: 14px; color: #78350f; margin-top: 5px; white-space: pre-wrap; text-align: justify;">${notes}</p>
                     </div>` : ''}
                 </div>`;
                 window.appHandlers.printContent(`Digest - ${title}`, html);
