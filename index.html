@@ -1593,9 +1593,7 @@
                         const safeNotes = escapeStr(notes);
                         
                         const safeDlText = escapeStr(`Title: ${title}\nSubject: ${subject}\nTopic: ${topic}\n\nFACTS:\n${facts}\n\nISSUE:\n${issue}\n\nRULING:\n${ruling}\n\nNOTES:\n${notes}`);
-                        const printBody = `<h1>${title}</h1><p><strong>Subject:</strong> ${subject}</p>${topic ? `<p><strong>Topic:</strong> ${topic}</p>` : ''}<br><h3>FACTS</h3><p>${facts.replace(/\n/g, "<br>")}</p><br><h3>ISSUE</h3><p>${issue.replace(/\n/g, "<br>")}</p><br><h3>RULING</h3><p>${ruling.replace(/\n/g, "<br>")}</p>${notes ? `<br><h3>NOTES</h3><p>${notes.replace(/\n/g, "<br>")}</p>` : ''}`;
-                        const safePrintHtml = escapeStr(printBody);
-
+                        
                         // <--- THIS IS WHERE YOUR SNIPPET WAS INJECTED --->
                         row.innerHTML = `
                         <div class="flex justify-between items-start gap-4">
@@ -1606,7 +1604,7 @@
                             <div class="flex items-center gap-1.5 flex-wrap justify-end">
                                 <button onclick="window.appHandlers.openDigestNotes('${d.id}', '${safeTitle}', '${safeNotes}')" class="text-slate-400 hover:text-amber-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Personal Notes"><i class="fas fa-sticky-note"></i></button>
                                 <button onclick="window.appHandlers.editDigest('${d.id}', '${safeTitle}', '${safeSubject}', '${safeTopic}', '${safeFacts}', '${safeIssue}', '${safeRuling}')" class="text-slate-400 hover:text-blue-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
-                                <button onclick="window.appHandlers.printContent('${safeTitle}', '${safePrintHtml}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
+                                <button onclick="window.appHandlers.printDigest('${safeTitle}', '${safeSubject}', '${safeTopic}', '${safeFacts}', '${safeIssue}', '${safeRuling}', '${safeNotes}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
                                 <button onclick="window.appHandlers.downloadText('${safeTitle}_Digest.txt', '${safeDlText}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Download Text"><i class="fas fa-download"></i></button>
                                 <button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-400 hover:text-red-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Delete"><i class="fas fa-trash"></i></button>
                             </div>
