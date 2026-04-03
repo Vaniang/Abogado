@@ -857,7 +857,7 @@ generateReview: async () => {
             { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }, { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }, { id: 'saved_reviews', label: 'Saved Reviews', icon: 'fa-archive' }
         ];
 
-        function renderSidebar() {
+       function renderSidebar() {
             sidebarNav.innerHTML = navItems.map(item => {
                 if (item.id === 'codals') {
                     // SECURE URL: Split to prevent Markdown conversion during copy-paste
@@ -867,6 +867,52 @@ generateReview: async () => {
                 }
             }).join('');
         }
+
+        /* ==========================================
+           HELPER FUNCTIONS (Placed safely OUTSIDE the object)
+           ========================================== */
+        const cleanAiJsonResponse = (text) => {
+            return text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+        };
+
+        const showReviewLoadingState = (outputEl, mode) => {
+            outputEl.innerHTML = `
+                <div class="flex justify-center flex-col items-center h-full p-10 text-center">
+                    <div class="loader mb-6"></div>
+                    <p class="text-slate-700 font-bold text-lg mb-1">Gemini is Designing Your Review</p>
+                    <p class="text-slate-500 font-medium text-sm max-w-sm">
+                        Creating ${mode === 'recit' ? 'exactly 10 precise flashcards' : 'exactly 5 rigorous essay scenarios'} based on your material...
+                    </p>
+                </div>`;
+        };
+
+        const showReviewErrorState = (outputEl, errorMessage) => {
+            outputEl.innerHTML = `
+                <div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 flex items-start gap-4 shadow-sm w-full max-w-lg mx-auto mt-10">
+                    <i class="fas fa-exclamation-triangle text-2xl mt-1"></i>
+                    <div>
+                        <p class="font-bold text-lg mb-1">Failed to generate review.</p>
+                        <p class="text-sm opacity-90">${errorMessage}</p>
+                    </div>
+                </div>`;
+        };
+
+        const handleCardFlip = (cardElement) => {
+            const isShowingFront = !cardElement.querySelector('.card-inner').classList.contains('hidden');
+            cardElement.querySelector('.card-inner').classList.toggle('hidden', isShowingFront);
+            cardElement.querySelector('.card-back').classList.toggle('hidden', !isShowingFront);
+            if(isShowingFront) {
+                cardElement.classList.add('border-green-300');
+                setTimeout(() => cardElement.classList.remove('border-green-300'), 500);
+            }
+        };
+
+        /* ==========================================
+           MAIN APP HANDLERS OBJECT
+           ========================================== */
+        window.appHandlers = {
+
+            clearAiSearch: () => {
 
         window.appHandlers = {
 
@@ -1901,69 +1947,6 @@ generateReview: async () => {
                 }
             },
             handleFileUpload: async (input) => { const file = input.files[0]; if (!file) return; document.getElementById('file-name-display').innerText = file.name; document.getElementById('file-name-display').classList.remove('hidden'); document.getElementById('btn-generate').innerText = "Processing PDF..."; document.getElementById('review-textarea').value = ''; try { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; let fullText = ""; const maxPages = Math.min(pdf.numPages, 10); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' '); fullText += pageText + "\n"; } window.appHandlers.pdfText = fullText; document.getElementById('btn-generate').disabled = false; document.getElementById('btn-generate').innerText = "Generate AI Review"; } catch (e) { console.error(e); alert("Error reading PDF."); document.getElementById('btn-generate').innerText = "Error"; } },
-           /* ==========================================
-   HELPER FUNCTIONS (Place these outside your main handlers object)
-   These make the main generate function much cleaner and safer.
-   ========================================== */
-
-/**
- * Strips any potential Markdown code blocks (```json) from the AI's response.
- */
-const cleanAiJsonResponse = (text) => {
-    return text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-};
-
-/**
- * Displays a clean, user-friendly loading state in the output area.
- */
-const showReviewLoadingState = (outputEl, mode) => {
-    outputEl.innerHTML = `
-        <div class="flex justify-center flex-col items-center h-full p-10 text-center">
-            <div class="loader mb-6"></div>
-            <p class="text-slate-700 font-bold text-lg mb-1">
-                Gemini is Designing Your Review
-            </p>
-            <p class="text-slate-500 font-medium text-sm max-w-sm">
-                Creating ${mode === 'recit' ? 'exactly 10 precise flashcards' : 'exactly 5 rigorous essay scenarios'} based on your material...
-            </p>
-        </div>`;
-};
-
-/**
- * Displays an error message to the user if the AI generation fails.
- */
-const showReviewErrorState = (outputEl, errorMessage) => {
-    outputEl.innerHTML = `
-        <div class="bg-red-50 text-red-700 p-6 rounded-xl border border-red-200 flex items-start gap-4 shadow-sm w-full max-w-lg mx-auto mt-10">
-            <i class="fas fa-exclamation-triangle text-2xl mt-1"></i>
-            <div>
-                <p class="font-bold text-lg mb-1">Failed to generate review.</p>
-                <p class="text-sm opacity-90">${errorMessage}</p>
-            </div>
-        </div>`;
-};
-
-/**
- * Toggles a card from Front (Question) to Back (Answer).
- */
-const handleCardFlip = (cardElement) => {
-    const isShowingFront = !cardElement.querySelector('.card-inner').classList.contains('hidden');
-    
-    // Smoothly switch views using opacity and hidden
-    cardElement.querySelector('.card-inner').classList.toggle('hidden', isShowingFront);
-    cardElement.querySelector('.card-back').classList.toggle('hidden', !isShowingFront);
-    
-    // Briefly highlight the "answer" area on flip
-    if(isShowingFront) {
-        cardElement.classList.add('border-green-300');
-        setTimeout(() => cardElement.classList.remove('border-green-300'), 500);
-    }
-};
-
-/* ==========================================
-   MAIN GENERATE FUNCTION (Keep this inside your window.appHandlers)
-   Now dramatically cleaner, safer, and easier to maintain.
-   ========================================== */
 
 generateReview: async () => {
     const textAreaInput = document.getElementById('review-textarea').value.trim();
