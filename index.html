@@ -520,23 +520,6 @@
 const cleanAiJsonResponse = (text) => {
     return text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
 };
-
-/**
- * Toggles a card from Front (Question) to Back (Answer).
- */
-const handleCardFlip = (cardElement) => {
-    const isShowingFront = !cardElement.querySelector('.card-inner').classList.contains('hidden');
-    
-    // Smoothly switch views using opacity and hidden
-    cardElement.querySelector('.card-inner').classList.toggle('hidden', isShowingFront);
-    cardElement.querySelector('.card-back').classList.toggle('hidden', !isShowingFront);
-    
-    // Briefly highlight the "answer" area on flip
-    if(isShowingFront) {
-        cardElement.classList.add('border-green-300');
-        setTimeout(() => cardElement.classList.remove('border-green-300'), 500);
-    }
-};
         class SavedReviewsView {
             constructor() { this.unsubscribe = null; }
             render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6 flex-shrink-0"><h3 class="text-xl font-bold text-slate-700">My Saved Reviews & SRS</h3></div><div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col"><div id="saved-reviews-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div></div></div>`; }
