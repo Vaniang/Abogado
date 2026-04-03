@@ -868,13 +868,6 @@ generateReview: async () => {
             }).join('');
         }
 
-        /* ==========================================
-           HELPER FUNCTIONS (Placed safely OUTSIDE the object)
-           ========================================== */
-        const cleanAiJsonResponse = (text) => {
-            return text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-        };
-
         const showReviewLoadingState = (outputEl, mode) => {
             outputEl.innerHTML = `
                 <div class="flex justify-center flex-col items-center h-full p-10 text-center">
