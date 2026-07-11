@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lex: Law School Companion</title>
+    <title>Lex: Law School Companion V2.2</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -71,7 +71,7 @@
         <div class="p-6 border-b border-slate-800 flex items-center gap-3">
             <img src="./LEX.png" alt="Lex Logo" class="w-10 h-10 rounded-lg shadow-inner object-cover border border-slate-700" onerror="this.style.display='none'">
             <div>
-                <h1 class="font-bold text-lg tracking-wide">LEX</h1>
+                <h1 class="font-bold text-lg tracking-wide">LEX 2.0</h1>
                 <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">"AJA! <br> FUTURE ATTORNEY MAZON!"</p>
             </div>
         </div>
@@ -136,7 +136,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDoc, getDocs, writeBatch, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDxKEf2v5P2LN_a2BcR_ODYDGINZMmVPWk",
@@ -163,8 +163,8 @@
             { id: 'class_notes', order: 2, label: '02 — Class Notes', icon: 'fa-pen-to-square' },
             { id: 'codal_provisions', order: 3, label: '03 — Codal Provisions', icon: 'fa-scale-balanced' },
             { id: 'assigned_cases', order: 4, label: '04 — Assigned Cases', icon: 'fa-book-bookmark' },
-            { id: 'case_digests', order: 5, label: '05 — Case Digests', icon: 'fa-gavel' },
-            { id: 'doctrines', order: 6, label: '06 — Doctrines, Tests, and Exceptions', icon: 'fa-landmark' },
+            { id: 'case_digests', order: 5, label: '05 — Case Analysis Notes', icon: 'fa-gavel' },
+            { id: 'doctrines', order: 6, label: '06 — Doctrine Notes and Class Synthesis', icon: 'fa-landmark' },
             { id: 'recitation', order: 7, label: '07 — Recitation Questions', icon: 'fa-microphone' },
             { id: 'assignments', order: 8, label: '08 — Assignments and Legal Research', icon: 'fa-file-signature' },
             { id: 'exam_review', order: 9, label: '09 — Quiz and Exam Review', icon: 'fa-graduation-cap' },
@@ -261,7 +261,7 @@
             show: (options) => {
                 const modal = document.getElementById('app-modal'); document.getElementById('app-modal-title').innerHTML = options.title; document.getElementById('app-modal-body').innerHTML = options.content;
                 const submitBtn = document.getElementById('app-modal-submit'); submitBtn.innerText = options.submitText || 'Save'; submitBtn.className = options.submitClass || 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition shadow-sm';
-                submitBtn.onclick = async () => { const originalText = submitBtn.innerText; submitBtn.innerText = 'Processing...'; submitBtn.disabled = true; try { await options.onSubmit(); modal.classList.add('hidden'); } catch (e) { console.error(e); alert("An error occurred."); } finally { submitBtn.innerText = originalText; submitBtn.disabled = false; } };
+                submitBtn.onclick = async () => { const originalText = submitBtn.innerText; submitBtn.innerText = 'Processing...'; submitBtn.disabled = true; try { await options.onSubmit(); modal.classList.add('hidden'); } catch (e) { console.error(e); alert(e?.message || "An error occurred."); } finally { submitBtn.innerText = originalText; submitBtn.disabled = false; } };
                 modal.classList.remove('hidden');
             },
             hide: () => document.getElementById('app-modal').classList.add('hidden')
@@ -354,7 +354,26 @@
                         const isActive = semester.id === AppState.activeSemesterId;
                         const card = document.createElement('div');
                         card.className = `bg-white rounded-xl border ${isActive ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'} p-6 shadow-sm relative`;
-                        card.innerHTML = `<div class="flex justify-between gap-3"><div><span class="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${semester.archived ? 'bg-slate-100 text-slate-500' : isActive ? 'bg-blue-100 text-blue-700' : 'bg-green-50 text-green-700'}">${semester.archived ? 'Archived' : isActive ? 'Active Semester' : 'Available'}</span><h4 class="text-xl font-bold serif-text text-slate-800 mt-3">${Security.escapeHTML(semester.term || 'Semester')}</h4><p class="text-sm font-bold text-slate-500 mt-1">${Security.escapeHTML(semester.schoolYear || '')}</p></div><i class="fas fa-calendar-days text-3xl ${isActive ? 'text-blue-500' : 'text-slate-200'}"></i></div><div class="mt-5 text-xs text-slate-500 space-y-1"><p><i class="far fa-calendar mr-2"></i>${Security.escapeHTML(semester.startDate || 'No start date')} — ${Security.escapeHTML(semester.endDate || 'No end date')}</p></div><div class="mt-5 pt-4 border-t border-slate-100 flex justify-between gap-2">${!semester.archived ? `<button onclick="window.appHandlers.setActiveSemester('${semester.id}')" class="flex-1 ${isActive ? 'bg-slate-100 text-slate-500' : 'bg-blue-600 hover:bg-blue-700 text-white'} px-3 py-2 rounded-lg text-xs font-bold" ${isActive ? 'disabled' : ''}>${isActive ? '<i class="fas fa-check mr-1"></i> Active' : 'Set Active'}</button><button onclick="window.appHandlers.archiveSemester('${semester.id}')" class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-amber-700 hover:bg-amber-50" title="Archive semester"><i class="fas fa-box-archive"></i></button>` : `<button onclick="window.appHandlers.restoreSemester('${semester.id}')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-xs font-bold">Restore Semester</button>`}</div>`;
+                        card.innerHTML = `
+                            <div class="flex justify-between gap-3">
+                                <div>
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${semester.archived ? 'bg-slate-100 text-slate-500' : isActive ? 'bg-blue-100 text-blue-700' : 'bg-green-50 text-green-700'}">${semester.archived ? 'Archived' : isActive ? 'Active Semester' : 'Available'}</span>
+                                    <h4 class="text-xl font-bold serif-text text-slate-800 mt-3">${Security.escapeHTML(semester.term || 'Semester')}</h4>
+                                    <p class="text-sm font-bold text-slate-500 mt-1">${Security.escapeHTML(semester.schoolYear || '')}</p>
+                                </div>
+                                <i class="fas fa-calendar-days text-3xl ${isActive ? 'text-blue-500' : 'text-slate-200'}"></i>
+                            </div>
+                            <div class="mt-5 text-xs text-slate-500 space-y-1">
+                                <p><i class="far fa-calendar mr-2"></i>${Security.escapeHTML(semester.startDate || 'No start date')} — ${Security.escapeHTML(semester.endDate || 'No end date')}</p>
+                            </div>
+                            <div class="mt-5 pt-4 border-t border-slate-100 flex items-center gap-2">
+                                ${!semester.archived
+                                    ? `<button onclick="window.appHandlers.setActiveSemester('${semester.id}')" class="flex-1 ${isActive ? 'bg-slate-100 text-slate-500' : 'bg-blue-600 hover:bg-blue-700 text-white'} px-3 py-2 rounded-lg text-xs font-bold" ${isActive ? 'disabled' : ''}>${isActive ? '<i class="fas fa-check mr-1"></i> Active' : 'Set Active'}</button>
+                                       <button onclick="window.appHandlers.archiveSemester('${semester.id}')" class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-amber-700 hover:bg-amber-50" title="Archive semester"><i class="fas fa-box-archive"></i></button>`
+                                    : `<button onclick="window.appHandlers.restoreSemester('${semester.id}')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-xs font-bold">Restore Semester</button>`}
+                                <button onclick="window.appHandlers.editSemester('${semester.id}')" class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-blue-700 hover:bg-blue-50" title="Edit semester"><i class="fas fa-pen"></i></button>
+                                <button onclick="window.appHandlers.deleteSemester('${semester.id}')" class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-red-700 hover:bg-red-50" title="Delete semester"><i class="fas fa-trash"></i></button>
+                            </div>`;
                         grid.appendChild(card);
                     });
                 });
@@ -407,23 +426,114 @@
         }
 
         class SubjectNotebookView {
-            constructor() { this.unsubscribe = null; this.subjectId = null; this.subjectName = ''; this.activeNoteId = null; this.notesData = []; }
+            constructor() {
+                this.unsubscribeNotes = null;
+                this.unsubscribeDigests = null;
+                this.unsubscribeDoctrines = null;
+                this.subjectId = null;
+                this.subjectName = '';
+                this.activeNoteId = null;
+                this.activePanel = 'overview';
+                this.notesData = [];
+                this.digestsData = [];
+                this.doctrinesData = [];
+            }
             render() {
-                return `<div class="h-[calc(100vh-4rem)] flex flex-col -m-8 pb-10"><div class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center flex-shrink-0 shadow-sm z-10"><div class="flex items-center gap-4 min-w-0"><button onclick="window.appHandlers.navigate('subjects')" class="text-slate-400 hover:text-blue-600 transition flex items-center gap-2 font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 flex-shrink-0"><i class="fas fa-arrow-left"></i> Subjects</button><div class="min-w-0"><h3 class="text-xl font-bold text-slate-800 serif-text truncate">${Security.escapeHTML(this.subjectName)}</h3><p class="text-xs text-slate-400 truncate">${Security.escapeHTML(AppState.activeLabel())}</p></div></div><button onclick="window.appHandlers.addNote('${this.subjectId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm flex-shrink-0"><i class="fas fa-plus mr-2"></i>New Page</button></div><div class="flex flex-1 overflow-hidden bg-slate-50"><div class="w-80 bg-white border-r border-slate-200 overflow-y-auto flex flex-col shadow-sm z-0" id="notebook-pages-list"><div class="p-8 text-center text-slate-400"><div class="loader mx-auto"></div></div></div><div class="flex-1 flex flex-col relative bg-slate-50/50" id="notebook-editor-area"></div></div></div>`;
+                return `<div class="h-[calc(100vh-4rem)] flex flex-col -m-8 pb-10">
+                    <div class="bg-white border-b border-slate-200 px-8 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3 flex-shrink-0 shadow-sm z-10">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <button onclick="window.appHandlers.navigate('subjects')" class="text-slate-400 hover:text-blue-600 transition flex items-center gap-2 font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 flex-shrink-0"><i class="fas fa-arrow-left"></i> Subjects</button>
+                            <div class="min-w-0"><h3 class="text-xl font-bold text-slate-800 serif-text truncate">${Security.escapeHTML(this.subjectName)}</h3><p class="text-xs text-slate-400 truncate">${Security.escapeHTML(AppState.activeLabel())}</p></div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                                <button id="subject-tab-notebook" onclick="window.appHandlers.showSubjectOverview()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-book-open mr-1"></i>Notebook</button>
+                                <button id="subject-tab-digests" onclick="window.appHandlers.showSubjectDigests()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-gavel mr-1"></i>Case Digests</button>
+                                <button id="subject-tab-doctrines" onclick="window.appHandlers.showSubjectDoctrines()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-table mr-1"></i>Doctrine Matrix</button>
+                            </div>
+                            <button onclick="window.appHandlers.addNote('${this.subjectId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm flex-shrink-0"><i class="fas fa-plus mr-2"></i>New Page</button>
+                        </div>
+                    </div>
+                    <div class="flex flex-1 overflow-hidden bg-slate-50">
+                        <div class="w-80 bg-white border-r border-slate-200 overflow-y-auto flex flex-col shadow-sm z-0" id="notebook-pages-list"><div class="p-8 text-center text-slate-400"><div class="loader mx-auto"></div></div></div>
+                        <div class="flex-1 flex flex-col relative bg-slate-50/50 min-w-0" id="notebook-editor-area"></div>
+                    </div>
+                </div>`;
             }
             init(subjectId, subjectName) {
-                this.subjectId = subjectId; this.subjectName = subjectName; this.activeNoteId = null; this.notesData = [];
+                this.subjectId = subjectId;
+                this.subjectName = subjectName;
+                this.activeNoteId = null;
+                this.activePanel = 'overview';
+                this.notesData = [];
+                this.digestsData = [];
+                this.doctrinesData = [];
                 document.getElementById('content-area').innerHTML = this.render();
-                this.unsubscribe = AppDB.subscribeQuery('notes', 'subjectId', '==', subjectId, snapshot => {
+                this.refreshTabStyles();
+
+                this.unsubscribeNotes = AppDB.subscribeQuery('notes', 'subjectId', '==', subjectId, snapshot => {
                     this.notesData = [];
                     snapshot.forEach(record => this.notesData.push({ id: record.id, ...record.data() }));
                     this.renderSidebar();
-                    if (!this.activeNoteId) this.showOverview();
+                    if (this.activePanel === 'overview') this.showOverview();
                 });
+                this.unsubscribeDigests = AppDB.subscribe('digests', snapshot => {
+                    this.digestsData = [];
+                    snapshot.forEach(record => this.digestsData.push({ id: record.id, ...record.data() }));
+                    if (this.activePanel === 'digests') this.showDigests();
+                    else if (this.activePanel === 'overview') this.showOverview();
+                });
+                this.unsubscribeDoctrines = AppDB.subscribe('doctrines', snapshot => {
+                    this.doctrinesData = [];
+                    snapshot.forEach(record => this.doctrinesData.push({ id: record.id, ...record.data() }));
+                    if (this.activePanel === 'doctrines') this.showDoctrines();
+                    else if (this.activePanel === 'overview') this.showOverview();
+                });
+            }
+            refreshTabStyles() {
+                const notebookTab = document.getElementById('subject-tab-notebook');
+                const digestTab = document.getElementById('subject-tab-digests');
+                const doctrineTab = document.getElementById('subject-tab-doctrines');
+                const activeClasses = ['bg-white', 'text-blue-700', 'shadow-sm'];
+                const inactiveClasses = ['text-slate-500', 'hover:text-slate-800'];
+                [notebookTab, digestTab, doctrineTab].forEach(tab => {
+                    if (!tab) return;
+                    tab.classList.remove(...activeClasses, ...inactiveClasses);
+                    tab.classList.add(...inactiveClasses);
+                });
+                const activeTab = this.activePanel === 'digests' ? digestTab : this.activePanel === 'doctrines' ? doctrineTab : notebookTab;
+                if (activeTab) {
+                    activeTab.classList.remove(...inactiveClasses);
+                    activeTab.classList.add(...activeClasses);
+                }
+            }
+            recordLinkedToSubject(record) {
+                if (!record) return false;
+                const subjectIds = Array.isArray(record.subjectIds) ? record.subjectIds : [];
+                const excluded = Array.isArray(record.unlinkedSubjectIds) ? record.unlinkedSubjectIds : [];
+                if (excluded.includes(this.subjectId)) return false;
+                if (subjectIds.includes(this.subjectId) || record.primarySubjectId === this.subjectId) return true;
+                const currentName = String(this.subjectName || '').trim().toLowerCase();
+                if (!currentName) return false;
+                const legacyNames = [record.subject, record.subjectName, record.notebook]
+                    .filter(Boolean)
+                    .map(value => String(value).trim().toLowerCase());
+                return legacyNames.includes(currentName);
+            }
+            linkedDigests() {
+                return this.digestsData
+                    .filter(record => this.recordLinkedToSubject(record))
+                    .sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+            }
+            linkedDoctrines() {
+                return this.doctrinesData
+                    .filter(record => this.recordLinkedToSubject(record))
+                    .sort((a, b) => (a.article || a.topic || '').localeCompare(b.article || b.topic || '', undefined, { numeric: true, sensitivity: 'base' }));
             }
             renderSidebar() {
                 const list = document.getElementById('notebook-pages-list'); if (!list) return;
-                list.innerHTML = `<button onclick="window.appHandlers.showSubjectOverview()" class="w-full text-left px-5 py-4 border-b border-slate-200 bg-slate-900 text-white text-sm font-bold flex items-center gap-3"><i class="fas fa-chart-pie text-amber-400"></i>00 — Subject Dashboard</button>`;
+                const dashboardActive = this.activePanel === 'overview';
+                list.innerHTML = `<button onclick="window.appHandlers.showSubjectOverview()" class="w-full text-left px-5 py-4 border-b border-slate-200 ${dashboardActive ? 'bg-slate-900 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-900'} text-sm font-bold flex items-center gap-3"><i class="fas fa-chart-pie text-amber-400"></i>00 — Subject Dashboard</button>`;
                 DEFAULT_NOTE_SECTIONS.filter(section => section.id !== 'dashboard').forEach(section => {
                     const sectionNotes = this.notesData.filter(note => (note.sectionId || 'class_notes') === section.id).sort((a, b) => {
                         const orderDiff = (a.order || 0) - (b.order || 0); if (orderDiff) return orderDiff;
@@ -437,7 +547,7 @@
                         const empty = document.createElement('div'); empty.className = 'px-5 py-3 text-xs text-slate-300 italic border-b border-slate-100'; empty.textContent = 'No pages yet'; list.appendChild(empty);
                     }
                     sectionNotes.forEach(note => {
-                        const isActive = this.activeNoteId === note.id;
+                        const isActive = this.activeNoteId === note.id && this.activePanel === 'notes';
                         const button = document.createElement('button');
                         button.className = `w-full text-left px-5 py-3 border-b border-slate-100 text-sm font-medium transition group flex justify-between items-center ${isActive ? 'bg-blue-50 text-blue-700 border-l-4 border-l-blue-600' : 'text-slate-600 hover:bg-slate-50 border-l-4 border-l-transparent'}`;
                         button.innerHTML = `<span class="truncate pr-2 flex items-center gap-2"><i class="far fa-file-alt opacity-50"></i>${Security.escapeHTML(note.title || 'Untitled Page')}</span><i class="fas fa-trash text-slate-300 hover:text-red-500 transition px-2 py-1 opacity-0 group-hover:opacity-100" onclick="event.stopPropagation(); window.appHandlers.deleteNote('${note.id}')"></i>`;
@@ -447,14 +557,62 @@
                 });
             }
             showOverview() {
-                this.activeNoteId = null; this.renderSidebar();
+                this.activeNoteId = null;
+                this.activePanel = 'overview';
+                this.renderSidebar();
+                this.refreshTabStyles();
                 const area = document.getElementById('notebook-editor-area'); if (!area) return;
                 const total = this.notesData.length;
+                const digestCount = this.linkedDigests().length;
+                const doctrineCount = this.linkedDoctrines().length;
                 const sectionCards = DEFAULT_NOTE_SECTIONS.filter(section => section.id !== 'dashboard').map(section => {
                     const count = this.notesData.filter(note => (note.sectionId || 'class_notes') === section.id).length;
                     return `<button onclick="window.appHandlers.addNote('${this.subjectId}', '${section.id}')" class="text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition"><div class="flex justify-between items-center"><i class="fas ${section.icon} text-blue-500"></i><span class="text-2xl font-bold text-slate-700">${count}</span></div><p class="text-xs font-bold text-slate-500 mt-3">${Security.escapeHTML(section.label.replace(/^\d+ — /, ''))}</p></button>`;
                 }).join('');
-                area.innerHTML = `<div class="p-8 overflow-y-auto"><div class="max-w-5xl mx-auto"><div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg"><p class="text-xs uppercase tracking-widest text-blue-200 font-bold">Subject Notebook</p><h3 class="text-3xl font-bold serif-text mt-2">${Security.escapeHTML(this.subjectName)}</h3><p class="text-blue-100 mt-2">${total} organized page${total === 1 ? '' : 's'} in ${Security.escapeHTML(AppState.activeLabel())}</p><button onclick="window.appHandlers.addNote('${this.subjectId}')" class="mt-5 bg-white text-blue-800 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Create a Page</button></div><div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-6">${sectionCards}</div><div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-5"><h4 class="font-bold text-amber-800"><i class="fas fa-lightbulb mr-2"></i>Recommended weekly workflow</h4><p class="text-sm text-amber-900/80 mt-2">Write class notes, link the assigned cases and codal provisions, prepare recitation questions, then consolidate the week into your Master Outline.</p></div></div></div>`;
+                area.innerHTML = `<div class="p-8 overflow-y-auto"><div class="max-w-6xl mx-auto">
+                    <div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg"><p class="text-xs uppercase tracking-widest text-blue-200 font-bold">Subject Notebook</p><h3 class="text-3xl font-bold serif-text mt-2">${Security.escapeHTML(this.subjectName)}</h3><p class="text-blue-100 mt-2">${total} organized page${total === 1 ? '' : 's'} in ${Security.escapeHTML(AppState.activeLabel())}</p><button onclick="window.appHandlers.addNote('${this.subjectId}')" class="mt-5 bg-white text-blue-800 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Create a Page</button></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                        <button onclick="window.appHandlers.showSubjectDigests()" class="bg-white border border-amber-200 rounded-xl p-5 text-left hover:shadow-md hover:border-amber-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Case Digests</h4></div><span class="text-4xl font-bold text-amber-600">${digestCount}</span></div><p class="text-sm text-slate-500 mt-3">The same records shown in Consolidated Case Digests—no duplicate copies.</p></button>
+                        <button onclick="window.appHandlers.showSubjectDoctrines()" class="bg-white border border-blue-200 rounded-xl p-5 text-left hover:shadow-md hover:border-blue-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-blue-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Doctrine Matrix</h4></div><span class="text-4xl font-bold text-blue-600">${doctrineCount}</span></div><p class="text-sm text-slate-500 mt-3">Edit once and the doctrine updates globally and inside this subject.</p></button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-6">${sectionCards}</div>
+                    <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-5"><h4 class="font-bold text-amber-800"><i class="fas fa-link mr-2"></i>One record, multiple views</h4><p class="text-sm text-amber-900/80 mt-2">Use the linked Case Digests and Doctrine Matrix tabs for master records. Use notebook sections 05 and 06 only for personal analysis, professor comments, and class synthesis.</p></div>
+                </div></div>`;
+            }
+            showDigests() {
+                this.activeNoteId = null;
+                this.activePanel = 'digests';
+                this.renderSidebar();
+                this.refreshTabStyles();
+                const area = document.getElementById('notebook-editor-area'); if (!area) return;
+                const records = this.linkedDigests();
+                const cards = records.map(digest => {
+                    const topic = digest.topic || 'General';
+                    return `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-5 flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                            <div class="min-w-0"><div class="flex flex-wrap gap-2 mb-2"><span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${Security.escapeHTML(topic)}</span>${Array.isArray(digest.subjectIds) && digest.subjectIds.length > 1 ? `<span class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">Linked to ${digest.subjectIds.length} subjects</span>` : ''}</div><h4 class="text-lg font-bold text-slate-800 serif-text">${Security.escapeHTML(digest.title || 'Untitled Case')}</h4>${digest.citation ? `<p class="text-xs text-slate-500 mt-1">${Security.escapeHTML(digest.citation)}</p>` : ''}</div>
+                            <div class="flex flex-wrap gap-2 flex-shrink-0"><button onclick="window.appHandlers.editLinkedDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-pen mr-1"></i>Edit</button><button onclick="window.appHandlers.unlinkDigestFromCurrentSubject('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"><i class="fas fa-unlink mr-1"></i>Unlink</button><button onclick="window.appHandlers.deleteDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-red-50 text-red-600 hover:bg-red-100" title="Delete from all subjects"><i class="fas fa-trash"></i></button></div>
+                        </div>
+                        <details class="border-t border-slate-100 group"><summary class="cursor-pointer list-none px-5 py-3 text-sm font-bold text-blue-600 hover:bg-slate-50 flex items-center gap-2"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>Open Digest</summary><div class="p-5 pt-2 grid grid-cols-1 gap-4"><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Facts</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.facts || 'No facts recorded.')}</p></div><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Issue</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.issue || 'No issue recorded.')}</p></div><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Ruling</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.ruling || 'No ruling recorded.')}</p></div>${digest.notes ? `<div class="bg-amber-50 border border-amber-100 rounded-lg p-4"><h5 class="text-xs font-bold uppercase tracking-wider text-amber-700">Personal Notes</h5><p class="text-sm text-amber-900 mt-1 whitespace-pre-wrap">${Security.escapeHTML(digest.notes)}</p></div>` : ''}</div></details>
+                    </div>`;
+                }).join('');
+                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are master records from Consolidated Case Digests, displayed only when linked to this subject.</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
+            }
+            showDoctrines() {
+                this.activeNoteId = null;
+                this.activePanel = 'doctrines';
+                this.renderSidebar();
+                this.refreshTabStyles();
+                const area = document.getElementById('notebook-editor-area'); if (!area) return;
+                const records = this.linkedDoctrines();
+                const rows = records.map(doctrine => `<tr class="align-top hover:bg-slate-50">
+                    <td class="p-4 border-b border-slate-100"><p class="font-bold text-blue-800">${Security.escapeHTML(doctrine.article || doctrine.topic || 'General')}</p></td>
+                    <td class="p-4 border-b border-slate-100"><p class="font-bold text-slate-800">${Security.escapeHTML(doctrine.caseTitle || 'No case specified')}</p>${doctrine.citation ? `<p class="text-xs text-slate-500 mt-1">${Security.escapeHTML(doctrine.citation)}</p>` : ''}</td>
+                    <td class="p-4 border-b border-slate-100"><p class="text-sm text-slate-700 whitespace-pre-wrap">${Security.escapeHTML(doctrine.doctrine || 'No doctrine recorded.')}</p></td>
+                    <td class="p-4 border-b border-slate-100"><p class="text-sm text-slate-600 whitespace-pre-wrap">${Security.escapeHTML(doctrine.application || 'No application recorded.')}</p></td>
+                    <td class="p-4 border-b border-slate-100"><div class="flex gap-2"><button onclick="window.appHandlers.editLinkedDoctrine('${doctrine.id}')" class="text-blue-600 hover:bg-blue-50 rounded p-2" title="Edit"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.unlinkDoctrineFromCurrentSubject('${doctrine.id}')" class="text-slate-500 hover:bg-slate-100 rounded p-2" title="Unlink"><i class="fas fa-unlink"></i></button><button onclick="window.appHandlers.deleteDoctrine('${doctrine.id}')" class="text-red-500 hover:bg-red-50 rounded p-2" title="Delete from all subjects"><i class="fas fa-trash"></i></button></div></td>
+                </tr>`).join('');
+                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-7xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-blue-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Doctrine Matrix</h3><p class="text-sm text-slate-500 mt-1">Each entry is the same master doctrine displayed in the consolidated Doctrine Matrix.</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDoctrineToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDoctrineForCurrentSubject()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Doctrine</button></div></div>${records.length ? `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto"><table class="w-full text-left min-w-[900px]"><thead class="bg-slate-50"><tr><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Article / Topic</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Case and Citation</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Doctrine</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Application</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Actions</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-table text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No doctrines linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a doctrine here or link an existing entry from the consolidated matrix.</p></div>`}</div></div>`;
             }
         }
 
@@ -1593,6 +1751,107 @@ const cleanAiJsonResponse = (text) => {
                     }
                 });
             },
+            editSemester: (id) => {
+                const semester = views.semesters.semesters.find(item => item.id === id);
+                if (!semester) return;
+
+                const standardTerms = ['First Semester', 'Second Semester', 'Summer Term', 'Review Semester'];
+                const terms = standardTerms.includes(semester.term)
+                    ? standardTerms
+                    : [semester.term, ...standardTerms];
+                const termOptions = terms.map(term => `<option value="${Security.escapeHTML(term)}" ${term === semester.term ? 'selected' : ''}>${Security.escapeHTML(term)}</option>`).join('');
+
+                Modal.show({
+                    title: '<i class="fas fa-pen text-blue-600"></i> Edit Semester',
+                    content: `
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">School Year</label>
+                            <input type="text" id="edit-sem-school-year" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value="${Security.escapeHTML(semester.schoolYear || '')}" placeholder="2026-2027">
+                        </div>
+                        <div class="mt-3">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Term</label>
+                            <select id="edit-sem-term" class="w-full p-2 border border-slate-300 rounded-lg outline-none">${termOptions}</select>
+                        </div>
+                        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+                                <input type="date" id="edit-sem-start" class="w-full p-2 border border-slate-300 rounded-lg outline-none" value="${Security.escapeHTML(semester.startDate || '')}">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+                                <input type="date" id="edit-sem-end" class="w-full p-2 border border-slate-300 rounded-lg outline-none" value="${Security.escapeHTML(semester.endDate || '')}">
+                            </div>
+                        </div>`,
+                    submitText: 'Save Changes',
+                    onSubmit: async () => {
+                        const schoolYear = document.getElementById('edit-sem-school-year').value.trim();
+                        const term = document.getElementById('edit-sem-term').value;
+                        const startDate = document.getElementById('edit-sem-start').value;
+                        const endDate = document.getElementById('edit-sem-end').value;
+
+                        if (!schoolYear || !term) throw new Error('School year and term are required.');
+                        if (startDate && endDate && startDate > endDate) throw new Error('The end date must be on or after the start date.');
+
+                        const updates = { schoolYear, term, startDate, endDate, updated: serverTimestamp() };
+                        await AppDB.update('semesters', id, updates);
+
+                        if (AppState.activeSemesterId === id) {
+                            await AppState.setActiveSemester({ ...semester, ...updates, id });
+                            const title = document.getElementById('active-semester-title');
+                            if (title) title.textContent = AppState.activeLabel();
+                        }
+                    }
+                });
+            },
+            deleteSemester: async (id) => {
+                const semester = views.semesters.semesters.find(item => item.id === id);
+                if (!semester) return;
+
+                const userRoot = ['artifacts', appNamespace, 'users', currentUser.uid];
+                const [subjectsSnapshot, notesSnapshot] = await Promise.all([
+                    getDocs(query(collection(db, ...userRoot, 'subjects'), where('semesterId', '==', id))),
+                    getDocs(query(collection(db, ...userRoot, 'notes'), where('semesterId', '==', id)))
+                ]);
+
+                const subjectCount = subjectsSnapshot.size;
+                const noteCount = notesSnapshot.size;
+                const semesterName = `${semester.schoolYear || ''} • ${semester.term || 'Semester'}`.trim();
+
+                Modal.show({
+                    title: '<i class="fas fa-trash text-red-600"></i> Delete Semester',
+                    content: `
+                        <div class="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-900">
+                            <p class="font-bold">Delete ${Security.escapeHTML(semesterName)}?</p>
+                            <p class="mt-2">The semester record will be permanently deleted.</p>
+                        </div>
+                        <div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-900">
+                            <p class="font-bold"><i class="fas fa-shield-alt mr-1"></i>Your study materials will be preserved.</p>
+                            <p class="mt-2">${subjectCount} linked subject${subjectCount === 1 ? '' : 's'} and ${noteCount} linked note${noteCount === 1 ? '' : 's'} will be moved to <strong>Unassigned Legacy Notebooks</strong>.</p>
+                        </div>
+                        <label class="mt-4 flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                            <input type="checkbox" id="confirm-delete-semester" class="mt-1">
+                            <span class="text-sm text-slate-700">I understand that the semester itself cannot be restored after deletion.</span>
+                        </label>`,
+                    submitText: 'Delete Semester',
+                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-bold',
+                    onSubmit: async () => {
+                        const confirmed = document.getElementById('confirm-delete-semester')?.checked;
+                        if (!confirmed) throw new Error('Please check the confirmation box before deleting the semester.');
+
+                        const linkedDocuments = [...subjectsSnapshot.docs, ...notesSnapshot.docs];
+                        for (let index = 0; index < linkedDocuments.length; index += 450) {
+                            const batch = writeBatch(db);
+                            linkedDocuments.slice(index, index + 450).forEach(record => {
+                                batch.update(record.ref, { semesterId: null, updated: serverTimestamp() });
+                            });
+                            await batch.commit();
+                        }
+
+                        await AppDB.delete('semesters', id);
+                        if (AppState.activeSemesterId === id) await AppState.setActiveSemester(null);
+                    }
+                });
+            },
             setActiveSemester: async (id) => {
                 const semester = views.semesters.semesters.find(item => item.id === id);
                 if (!semester) return;
@@ -1620,6 +1879,144 @@ const cleanAiJsonResponse = (text) => {
             assignSubjectToActive: async (id) => { if (!AppState.activeSemesterId) return; await AppDB.update('subjects', id, { semesterId: AppState.activeSemesterId, updated: serverTimestamp() }); },
             openSubject: (id, name) => { cleanupView(views[currentView]); currentView = 'subject_notebook'; renderSidebar(); pageTitle.innerText = 'Notebook'; views.subject_notebook.init(id, name); },
             showSubjectOverview: () => views.subject_notebook.showOverview(),
+            showSubjectDigests: () => views.subject_notebook.showDigests(),
+            showSubjectDoctrines: () => views.subject_notebook.showDoctrines(),
+            getCurrentSubjectContext: () => ({
+                id: views.subject_notebook.subjectId,
+                name: views.subject_notebook.subjectName,
+                semesterId: AppState.activeSemesterId || null
+            }),
+            updateMasterRecordSubjectLink: async (collectionName, recordId, shouldLink) => {
+                const subject = window.appHandlers.getCurrentSubjectContext();
+                if (!subject.id) throw new Error('No subject is currently open.');
+                const recordRef = doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, recordId);
+                const snapshot = await getDoc(recordRef);
+                if (!snapshot.exists()) throw new Error('The selected record no longer exists.');
+                const data = snapshot.data();
+                const subjectIds = Array.isArray(data.subjectIds) ? [...data.subjectIds] : [];
+                const unlinkedSubjectIds = Array.isArray(data.unlinkedSubjectIds) ? [...data.unlinkedSubjectIds] : [];
+                const semesterIds = Array.isArray(data.semesterIds) ? [...data.semesterIds] : [];
+                const unique = values => [...new Set(values.filter(Boolean))];
+                const payload = { updated: serverTimestamp() };
+                if (shouldLink) {
+                    payload.subjectIds = unique([...subjectIds, subject.id]);
+                    payload.unlinkedSubjectIds = unlinkedSubjectIds.filter(id => id !== subject.id);
+                    payload.semesterIds = unique([...semesterIds, subject.semesterId]);
+                    if (!data.semesterId && subject.semesterId) payload.semesterId = subject.semesterId;
+                    if (!data.primarySubjectId) payload.primarySubjectId = subject.id;
+                    if (!data.subject && collectionName === 'digests') payload.subject = subject.name;
+                    if (!data.subjectName) payload.subjectName = subject.name;
+                } else {
+                    payload.subjectIds = subjectIds.filter(id => id !== subject.id);
+                    payload.unlinkedSubjectIds = unique([...unlinkedSubjectIds, subject.id]);
+                    if (data.primarySubjectId === subject.id) payload.primarySubjectId = payload.subjectIds[0] || null;
+                }
+                await updateDoc(recordRef, payload);
+            },
+            addDigestForCurrentSubject: () => {
+                const subject = window.appHandlers.getCurrentSubjectContext();
+                Modal.show({
+                    title: '<i class="fas fa-gavel text-amber-600"></i> New Linked Case Digest',
+                    content: `<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 mb-4">This creates one master digest linked to <b>${Security.escapeHTML(subject.name)}</b>. It will also appear in Consolidated Case Digests.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="subject-digest-title" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" placeholder="e.g., Picart v. Smith"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="subject-digest-citation" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="G.R. No., date"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="subject-digest-topic" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Negligence"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="subject-digest-facts" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="subject-digest-issue" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="subject-digest-ruling" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>`,
+                    submitText: 'Create Linked Digest',
+                    submitClass: 'px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-bold',
+                    onSubmit: async () => {
+                        const title = document.getElementById('subject-digest-title').value.trim();
+                        if (!title) throw new Error('Case title is required.');
+                        await AppDB.add('digests', {
+                            title,
+                            citation: document.getElementById('subject-digest-citation').value.trim(),
+                            topic: document.getElementById('subject-digest-topic').value.trim(),
+                            facts: document.getElementById('subject-digest-facts').value.trim(),
+                            issue: document.getElementById('subject-digest-issue').value.trim(),
+                            ruling: document.getElementById('subject-digest-ruling').value.trim(),
+                            subject: subject.name,
+                            subjectName: subject.name,
+                            primarySubjectId: subject.id,
+                            subjectIds: [subject.id],
+                            semesterId: subject.semesterId,
+                            semesterIds: subject.semesterId ? [subject.semesterId] : [],
+                            created: serverTimestamp(),
+                            updated: serverTimestamp()
+                        });
+                    }
+                });
+            },
+            editLinkedDigest: (id) => {
+                const digest = views.subject_notebook.digestsData.find(item => item.id === id);
+                if (!digest) return;
+                Modal.show({
+                    title: '<i class="fas fa-pen text-blue-600"></i> Edit Master Digest',
+                    content: `<div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 mb-4">Changes here also update Consolidated Case Digests and every linked subject.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="linked-digest-title" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(digest.title || '')}"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="linked-digest-citation" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(digest.citation || '')}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="linked-digest-topic" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(digest.topic || '')}"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="linked-digest-facts" rows="4" class="w-full p-2 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(digest.facts || '')}</textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="linked-digest-issue" rows="3" class="w-full p-2 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(digest.issue || '')}</textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="linked-digest-ruling" rows="4" class="w-full p-2 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(digest.ruling || '')}</textarea></div>`,
+                    submitText: 'Save Master Record',
+                    onSubmit: async () => {
+                        const title = document.getElementById('linked-digest-title').value.trim();
+                        if (!title) throw new Error('Case title is required.');
+                        await AppDB.update('digests', id, { title, citation: document.getElementById('linked-digest-citation').value.trim(), topic: document.getElementById('linked-digest-topic').value.trim(), facts: document.getElementById('linked-digest-facts').value.trim(), issue: document.getElementById('linked-digest-issue').value.trim(), ruling: document.getElementById('linked-digest-ruling').value.trim(), updated: serverTimestamp() });
+                    }
+                });
+            },
+            linkExistingDigestToCurrentSubject: () => {
+                const candidates = views.subject_notebook.digestsData.filter(item => !views.subject_notebook.recordLinkedToSubject(item)).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+                const content = candidates.length ? `<p class="text-sm text-slate-500 mb-3">Select master digests to display in this subject. No copies will be created.</p><div class="max-h-80 overflow-y-auto border border-slate-200 rounded-lg divide-y">${candidates.map(item => `<label class="flex items-start gap-3 p-3 hover:bg-slate-50 cursor-pointer"><input type="checkbox" name="existing-digest-link" value="${item.id}" class="mt-1"><span><b class="text-sm text-slate-800">${Security.escapeHTML(item.title || 'Untitled Case')}</b><span class="block text-xs text-slate-500 mt-1">${Security.escapeHTML(item.subject || item.topic || 'Uncategorized')}</span></span></label>`).join('')}</div>` : '<div class="text-center py-8 text-slate-400">All available digests are already linked to this subject.</div>';
+                Modal.show({
+                    title: '<i class="fas fa-link text-blue-600"></i> Link Existing Digests',
+                    content,
+                    submitText: candidates.length ? 'Link Selected' : 'Close',
+                    onSubmit: async () => {
+                        const ids = [...document.querySelectorAll('input[name="existing-digest-link"]:checked')].map(input => input.value);
+                        await Promise.all(ids.map(id => window.appHandlers.updateMasterRecordSubjectLink('digests', id, true)));
+                    }
+                });
+            },
+            unlinkDigestFromCurrentSubject: (id) => {
+                Modal.show({ title: '<i class="fas fa-unlink text-slate-500"></i> Unlink Digest', content: '<p>This removes the digest only from the current subject. The master record will remain in Consolidated Case Digests and in other linked subjects.</p>', submitText: 'Unlink Only', submitClass: 'px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 text-sm font-bold', onSubmit: async () => window.appHandlers.updateMasterRecordSubjectLink('digests', id, false) });
+            },
+            addDoctrineForCurrentSubject: () => {
+                const subject = window.appHandlers.getCurrentSubjectContext();
+                Modal.show({
+                    title: '<i class="fas fa-table text-blue-600"></i> New Linked Doctrine',
+                    content: `<div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 mb-4">This creates one master doctrine linked to <b>${Security.escapeHTML(subject.name)}</b> and the consolidated Doctrine Matrix.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Article / Topic</label><input id="subject-doctrine-article" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g., Article 1169 — Delay"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="subject-doctrine-case" class="w-full p-2 border border-slate-300 rounded-lg"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="subject-doctrine-citation" class="w-full p-2 border border-slate-300 rounded-lg"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Core Doctrine / Principle</label><textarea id="subject-doctrine-rule" rows="4" class="w-full p-2 border border-slate-300 rounded-lg resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Application / Context</label><textarea id="subject-doctrine-application" rows="3" class="w-full p-2 border border-slate-300 rounded-lg resize-y"></textarea></div>`,
+                    submitText: 'Create Linked Doctrine',
+                    onSubmit: async () => {
+                        const article = document.getElementById('subject-doctrine-article').value.trim();
+                        const doctrine = document.getElementById('subject-doctrine-rule').value.trim();
+                        if (!article || !doctrine) throw new Error('Article/topic and doctrine are required.');
+                        await AppDB.add('doctrines', { article, caseTitle: document.getElementById('subject-doctrine-case').value.trim(), citation: document.getElementById('subject-doctrine-citation').value.trim(), doctrine, application: document.getElementById('subject-doctrine-application').value.trim(), subject: subject.name, subjectName: subject.name, primarySubjectId: subject.id, subjectIds: [subject.id], semesterId: subject.semesterId, semesterIds: subject.semesterId ? [subject.semesterId] : [], created: serverTimestamp(), updated: serverTimestamp() });
+                    }
+                });
+            },
+            editLinkedDoctrine: (id) => {
+                const item = views.subject_notebook.doctrinesData.find(record => record.id === id);
+                if (!item) return;
+                Modal.show({
+                    title: '<i class="fas fa-pen text-blue-600"></i> Edit Master Doctrine',
+                    content: `<div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 mb-4">Changes here update the consolidated matrix and all linked subjects.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Article / Topic</label><input id="linked-doctrine-article" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(item.article || '')}"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="linked-doctrine-case" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(item.caseTitle || '')}"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="linked-doctrine-citation" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(item.citation || '')}"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Core Doctrine / Principle</label><textarea id="linked-doctrine-rule" rows="4" class="w-full p-2 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(item.doctrine || '')}</textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Application / Context</label><textarea id="linked-doctrine-application" rows="3" class="w-full p-2 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(item.application || '')}</textarea></div>`,
+                    submitText: 'Save Master Record',
+                    onSubmit: async () => {
+                        const article = document.getElementById('linked-doctrine-article').value.trim();
+                        const doctrine = document.getElementById('linked-doctrine-rule').value.trim();
+                        if (!article || !doctrine) throw new Error('Article/topic and doctrine are required.');
+                        await AppDB.update('doctrines', id, { article, caseTitle: document.getElementById('linked-doctrine-case').value.trim(), citation: document.getElementById('linked-doctrine-citation').value.trim(), doctrine, application: document.getElementById('linked-doctrine-application').value.trim(), updated: serverTimestamp() });
+                    }
+                });
+            },
+            linkExistingDoctrineToCurrentSubject: () => {
+                const candidates = views.subject_notebook.doctrinesData.filter(item => !views.subject_notebook.recordLinkedToSubject(item)).sort((a, b) => (a.article || '').localeCompare(b.article || ''));
+                const content = candidates.length ? `<p class="text-sm text-slate-500 mb-3">Select master doctrines to display in this subject. No duplicate entries will be created.</p><div class="max-h-80 overflow-y-auto border border-slate-200 rounded-lg divide-y">${candidates.map(item => `<label class="flex items-start gap-3 p-3 hover:bg-slate-50 cursor-pointer"><input type="checkbox" name="existing-doctrine-link" value="${item.id}" class="mt-1"><span><b class="text-sm text-slate-800">${Security.escapeHTML(item.article || item.topic || 'General')}</b><span class="block text-xs text-slate-500 mt-1">${Security.escapeHTML(item.caseTitle || item.doctrine || 'No case specified')}</span></span></label>`).join('')}</div>` : '<div class="text-center py-8 text-slate-400">All available doctrines are already linked to this subject.</div>';
+                Modal.show({
+                    title: '<i class="fas fa-link text-blue-600"></i> Link Existing Doctrines',
+                    content,
+                    submitText: candidates.length ? 'Link Selected' : 'Close',
+                    onSubmit: async () => {
+                        const ids = [...document.querySelectorAll('input[name="existing-doctrine-link"]:checked')].map(input => input.value);
+                        await Promise.all(ids.map(id => window.appHandlers.updateMasterRecordSubjectLink('doctrines', id, true)));
+                    }
+                });
+            },
+            unlinkDoctrineFromCurrentSubject: (id) => {
+                Modal.show({ title: '<i class="fas fa-unlink text-slate-500"></i> Unlink Doctrine', content: '<p>This removes the doctrine only from the current subject. The master record remains in the consolidated Doctrine Matrix and other linked subjects.</p>', submitText: 'Unlink Only', submitClass: 'px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 text-sm font-bold', onSubmit: async () => window.appHandlers.updateMasterRecordSubjectLink('doctrines', id, false) });
+            },
             addNote: (subjectId, presetSection = 'class_notes') => {
                 const sectionOptions = DEFAULT_NOTE_SECTIONS.filter(section => section.id !== 'dashboard').map(section => `<option value="${section.id}" ${section.id === presetSection ? 'selected' : ''}>${Security.escapeHTML(section.label)}</option>`).join('');
                 Modal.show({
@@ -1636,6 +2033,8 @@ const cleanAiJsonResponse = (text) => {
 
             openNote: (noteId, title, content, btnElement) => {
                 views.subject_notebook.activeNoteId = noteId;
+                views.subject_notebook.activePanel = 'notes';
+                views.subject_notebook.refreshTabStyles();
                 document.querySelectorAll('#notebook-pages-list button').forEach(b => { b.classList.remove('bg-blue-50', 'text-blue-700', 'border-l-blue-600'); b.classList.add('text-slate-600', 'border-l-transparent'); });
                 if(btnElement) { btnElement.classList.remove('text-slate-600', 'border-l-transparent'); btnElement.classList.add('bg-blue-50', 'text-blue-700', 'border-l-blue-600'); }
                 
