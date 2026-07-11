@@ -51,9 +51,16 @@
         #note-content-editor ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-bottom: 0.5rem !important; }
         #note-content-editor li { margin-bottom: 0.25rem !important; display: list-item !important; }
         .notebook-section-heading { position: sticky; top: 0; z-index: 5; }
+        .note-template-block h1 { font-family: 'Merriweather', serif; font-size: 1.65rem; font-weight: 700; margin: 0 0 .75rem; color: #0f172a; }
         .note-template-block h2 { font-family: 'Merriweather', serif; font-size: 1.15rem; font-weight: 700; margin: 1rem 0 .35rem; color: #1e293b; }
+        .note-template-block h3 { font-family: 'Merriweather', serif; font-size: 1rem; font-weight: 700; margin: .85rem 0 .25rem; color: #334155; }
         .note-template-block p { margin-bottom: .75rem; }
+        .note-template-block blockquote { margin: .5rem 0 1rem; padding: .75rem 1rem; border-left: 4px solid #cbd5e1; background: #f8fafc; border-radius: .35rem; }
         .note-template-placeholder { color: #94a3b8; font-style: italic; }
+        .subject-master-reviewer .reviewer-meta { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: .75rem; padding: 1rem; margin-bottom: 1rem; }
+        .subject-master-reviewer .reviewer-source { background: #ffffff; border: 1px solid #e2e8f0; border-radius: .65rem; padding: .85rem 1rem; margin: .4rem 0 .8rem; }
+        .subject-master-reviewer .reviewer-callout { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; border-radius: .65rem; padding: .85rem 1rem; margin: .75rem 0 1rem; }
+        .subject-master-reviewer .reviewer-empty { color: #94a3b8; font-style: italic; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex overflow-hidden">
@@ -71,7 +78,7 @@
         <div class="p-6 border-b border-slate-800 flex items-center gap-3">
             <img src="./LEX.png" alt="Lex Logo" class="w-10 h-10 rounded-lg shadow-inner object-cover border border-slate-700" onerror="this.style.display='none'">
             <div>
-                <h1 class="font-bold text-lg tracking-wide">LEX 2.0</h1>
+                <h1 class="font-bold text-lg tracking-wide">LEX</h1>
                 <p class="text-[10px] text-amber-400 font-bold tracking-widest uppercase">"AJA! <br> FUTURE ATTORNEY MAZON!"</p>
             </div>
         </div>
@@ -168,7 +175,7 @@
             { id: 'recitation', order: 7, label: '07 — Recitation Questions', icon: 'fa-microphone' },
             { id: 'assignments', order: 8, label: '08 — Assignments and Legal Research', icon: 'fa-file-signature' },
             { id: 'exam_review', order: 9, label: '09 — Quiz and Exam Review', icon: 'fa-graduation-cap' },
-            { id: 'master_outline', order: 10, label: '10 — Master Outline', icon: 'fa-sitemap' }
+            { id: 'master_outline', order: 10, label: '10 — Subject Master Reviewer', icon: 'fa-sitemap' }
         ];
 
         const NOTE_TEMPLATES = {
@@ -177,7 +184,8 @@
             case_digest: `<div class="note-template-block"><h2>Case Title and Citation</h2><p class="note-template-placeholder">Case title, G.R. No., date, ponente, division or En Banc.</p><h2>Subject and Topic</h2><p class="note-template-placeholder">Identify the relevant subject, topic, and provision.</p><h2>Facts</h2><p class="note-template-placeholder">State only the legally material facts.</p><h2>Issue</h2><p class="note-template-placeholder">Frame the legal issue as a question.</p><h2>Ruling</h2><p class="note-template-placeholder">Answer the issue and state the disposition.</p><h2>Ratio Decidendi</h2><p class="note-template-placeholder">Explain the Court’s reasoning.</p><h2>Doctrine</h2><p class="note-template-placeholder">State the controlling doctrine precisely.</p><h2>Recitation Summary</h2><p class="note-template-placeholder">Prepare a concise oral summary.</p></div>`,
             codal_note: `<div class="note-template-block"><h2>Law and Article/Section</h2><p class="note-template-placeholder">Identify the source and provision.</p><h2>Exact Provision</h2><p class="note-template-placeholder">Insert the relevant codal text.</p><h2>Elements or Requisites</h2><p class="note-template-placeholder">Break down the provision.</p><h2>General Rule</h2><p class="note-template-placeholder">State the general rule.</p><h2>Exceptions</h2><p class="note-template-placeholder">List recognized exceptions.</p><h2>Related Cases</h2><p class="note-template-placeholder">Link or list jurisprudence.</p><h2>Illustration</h2><p class="note-template-placeholder">Create a practical example.</p><h2>Memory Aid</h2><p class="note-template-placeholder">Add a mnemonic or recall cue.</p></div>`,
             case_comparison: `<div class="note-template-block"><h2>Legal Issue</h2><p class="note-template-placeholder">State the common issue.</p><h2>Case A</h2><p class="note-template-placeholder">Facts, ruling, and doctrine.</p><h2>Case B</h2><p class="note-template-placeholder">Facts, ruling, and doctrine.</p><h2>Common Doctrine</h2><p class="note-template-placeholder">Identify the shared principle.</p><h2>Material Difference</h2><p class="note-template-placeholder">Explain why the outcomes or applications differ.</p><h2>When Each Case Applies</h2><p class="note-template-placeholder">State the proper context for each authority.</p></div>`,
-            recitation: `<div class="note-template-block"><h2>Question</h2><p class="note-template-placeholder">Write the professor-style question.</p><h2>Direct Answer</h2><p class="note-template-placeholder">Answer yes/no or state the controlling conclusion.</p><h2>Legal Basis</h2><p class="note-template-placeholder">State the rule, provision, or doctrine.</p><h2>Application</h2><p class="note-template-placeholder">Apply the rule to the facts.</p><h2>Exceptions and Follow-up Questions</h2><p class="note-template-placeholder">Anticipate possible follow-ups.</p></div>`
+            recitation: `<div class="note-template-block"><h2>Question</h2><p class="note-template-placeholder">Write the professor-style question.</p><h2>Direct Answer</h2><p class="note-template-placeholder">Answer yes/no or state the controlling conclusion.</p><h2>Legal Basis</h2><p class="note-template-placeholder">State the rule, provision, or doctrine.</p><h2>Application</h2><p class="note-template-placeholder">Apply the rule to the facts.</p><h2>Exceptions and Follow-up Questions</h2><p class="note-template-placeholder">Anticipate possible follow-ups.</p></div>`,
+            master_reviewer: `<div class="note-template-block subject-master-reviewer"><h1>Subject Master Reviewer</h1><div class="reviewer-meta"><p><strong>Subject:</strong> </p><p><strong>Professor:</strong> </p><p><strong>Semester:</strong> </p><p><strong>Examination Coverage:</strong> </p><p><strong>Date Updated:</strong> </p></div><h2>I. Topic Overview</h2><p class="note-template-placeholder">Summarize the coverage and explain how the topics relate to one another.</p><h2>II. Governing Laws and Codal Provisions</h2><p class="note-template-placeholder">List controlling articles, sections, rules, and their essential meaning.</p><h2>III. General Rules, Elements, and Requisites</h2><p class="note-template-placeholder">State the principal rules and organize their elements or requisites.</p><h2>IV. Exceptions and Qualifications</h2><p class="note-template-placeholder">List exceptions, limitations, and special applications.</p><h2>V. Important Doctrines</h2><p class="note-template-placeholder">State each doctrine, its explanation, and the related case.</p><h2>VI. Leading Cases</h2><p class="note-template-placeholder">List the cases most likely to be used in recitation or examinations.</p><h2>VII. Important Distinctions</h2><p class="note-template-placeholder">Compare similar concepts and identify their material differences.</p><h2>VIII. Analytical Steps and Sample Applications</h2><p class="note-template-placeholder">Create a step-by-step approach for answering legal problems.</p><h2>IX. Possible Recitation and Bar Questions</h2><p class="note-template-placeholder">Add questions and concise suggested answers.</p><h2>X. Memory Aids</h2><p class="note-template-placeholder">Add mnemonics, keywords, and quick-recall rules.</p><h2>XI. Exam Checklist</h2><ul><li>Know the general rules.</li><li>Memorize the elements and requisites.</li><li>Identify the exceptions.</li><li>Review the leading cases and doctrines.</li><li>Practice applying the rules to facts.</li></ul><h2>XII. Personal Synthesis</h2><p class="note-template-placeholder">Explain the entire coverage in your own words.</p></div>`
         };
 
         const Security = {
@@ -254,7 +262,16 @@
             },
             sectionById: (id) => DEFAULT_NOTE_SECTIONS.find(section => section.id === id) || DEFAULT_NOTE_SECTIONS.find(section => section.id === 'class_notes'),
             semesterLabel: (semester) => semester ? `${semester.schoolYear || ''} • ${semester.term || ''}`.trim() : 'No active semester',
-            timestampMillis: (value) => value?.toMillis ? value.toMillis() : (value?.seconds ? value.seconds * 1000 : 0)
+            timestampMillis: (value) => value?.toMillis ? value.toMillis() : (value?.seconds ? value.seconds * 1000 : 0),
+            htmlToText: (html = '') => {
+                const holder = document.createElement('div');
+                holder.innerHTML = window.DOMPurify ? DOMPurify.sanitize(String(html)) : String(html);
+                return (holder.innerText || holder.textContent || '').replace(/\s+/g, ' ').trim();
+            },
+            excerpt: (value = '', maxLength = 1200) => {
+                const textValue = String(value || '').trim();
+                return textValue.length > maxLength ? `${textValue.slice(0, maxLength).trim()}…` : textValue;
+            }
         };
 
         const Modal = {
@@ -541,7 +558,8 @@
                     });
                     const heading = document.createElement('div');
                     heading.className = 'notebook-section-heading px-4 py-2.5 bg-slate-100 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex justify-between items-center';
-                    heading.innerHTML = `<span><i class="fas ${section.icon} mr-2"></i>${Security.escapeHTML(section.label)}</span><button onclick="window.appHandlers.addNote('${this.subjectId}', '${section.id}')" class="text-blue-600 hover:text-blue-800" title="Add page to this section"><i class="fas fa-plus"></i></button>`;
+                    const reviewerGenerateButton = section.id === 'master_outline' ? `<button onclick="window.appHandlers.generateMasterReviewer('${this.subjectId}')" class="text-amber-600 hover:text-amber-800" title="Generate from subject materials"><i class="fas fa-wand-magic-sparkles"></i></button>` : '';
+                    heading.innerHTML = `<span><i class="fas ${section.icon} mr-2"></i>${Security.escapeHTML(section.label)}</span><span class="flex items-center gap-3">${reviewerGenerateButton}<button onclick="window.appHandlers.addNote('${this.subjectId}', '${section.id}')" class="text-blue-600 hover:text-blue-800" title="Add page to this section"><i class="fas fa-plus"></i></button></span>`;
                     list.appendChild(heading);
                     if (!sectionNotes.length) {
                         const empty = document.createElement('div'); empty.className = 'px-5 py-3 text-xs text-slate-300 italic border-b border-slate-100'; empty.textContent = 'No pages yet'; list.appendChild(empty);
@@ -576,6 +594,7 @@
                         <button onclick="window.appHandlers.showSubjectDoctrines()" class="bg-white border border-blue-200 rounded-xl p-5 text-left hover:shadow-md hover:border-blue-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-blue-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Doctrine Matrix</h4></div><span class="text-4xl font-bold text-blue-600">${doctrineCount}</span></div><p class="text-sm text-slate-500 mt-3">Edit once and the doctrine updates globally and inside this subject.</p></button>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-6">${sectionCards}</div>
+                    <div class="mt-6 bg-gradient-to-r from-indigo-700 to-slate-900 rounded-xl p-6 text-white shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4"><div><p class="text-xs uppercase tracking-widest text-indigo-200 font-bold">Final Consolidated Reviewer</p><h4 class="text-xl font-bold serif-text mt-1">Subject Master Reviewer</h4><p class="text-sm text-indigo-100 mt-2 max-w-2xl">Create a structured blank reviewer or compile your existing notes, linked case digests, and linked doctrines into one editable page.</p></div><div class="flex flex-wrap gap-2 flex-shrink-0"><button onclick="window.appHandlers.addNote('${this.subjectId}', 'master_outline')" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-file-lines mr-2"></i>Use Template</button><button onclick="window.appHandlers.generateMasterReviewer('${this.subjectId}')" class="bg-amber-400 hover:bg-amber-300 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-wand-magic-sparkles mr-2"></i>Generate from Materials</button></div></div>
                     <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-5"><h4 class="font-bold text-amber-800"><i class="fas fa-link mr-2"></i>One record, multiple views</h4><p class="text-sm text-amber-900/80 mt-2">Use the linked Case Digests and Doctrine Matrix tabs for master records. Use notebook sections 05 and 06 only for personal analysis, professor comments, and class synthesis.</p></div>
                 </div></div>`;
             }
@@ -2019,14 +2038,91 @@ const cleanAiJsonResponse = (text) => {
             },
             addNote: (subjectId, presetSection = 'class_notes') => {
                 const sectionOptions = DEFAULT_NOTE_SECTIONS.filter(section => section.id !== 'dashboard').map(section => `<option value="${section.id}" ${section.id === presetSection ? 'selected' : ''}>${Security.escapeHTML(section.label)}</option>`).join('');
+                const defaultTemplate = presetSection === 'master_outline' ? 'master_reviewer' : 'blank';
+                const defaultTitle = presetSection === 'master_outline' ? `${views.subject_notebook.subjectName || 'Subject'} — Master Reviewer` : '';
+                const templateOptions = [
+                    ['blank', 'Blank Page'],
+                    ['class_note', 'Class Note'],
+                    ['case_digest', 'Case Digest'],
+                    ['codal_note', 'Codal Note'],
+                    ['case_comparison', 'Case Comparison'],
+                    ['recitation', 'Recitation / ALAC Practice'],
+                    ['master_reviewer', 'Subject Master Reviewer']
+                ].map(([value, label]) => `<option value="${value}" ${value === defaultTemplate ? 'selected' : ''}>${label}</option>`).join('');
                 Modal.show({
                     title: '<i class="fas fa-file-alt text-blue-600"></i> New Notebook Page',
-                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Page Title</label><input type="text" id="note-title" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., Class 01 — Sources of Obligations"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Notebook Section</label><select id="note-section" class="w-full p-2 border border-slate-300 rounded-lg outline-none">${sectionOptions}</select></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Page Template</label><select id="note-template" class="w-full p-2 border border-slate-300 rounded-lg outline-none"><option value="blank">Blank Page</option><option value="class_note">Class Note</option><option value="case_digest">Case Digest</option><option value="codal_note">Codal Note</option><option value="case_comparison">Case Comparison</option><option value="recitation">Recitation / ALAC Practice</option></select></div>`,
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Page Title</label><input type="text" id="note-title" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value="${Security.escapeHTML(defaultTitle)}" placeholder="e.g., Class 01 — Sources of Obligations"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Notebook Section</label><select id="note-section" class="w-full p-2 border border-slate-300 rounded-lg outline-none">${sectionOptions}</select></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Page Template</label><select id="note-template" class="w-full p-2 border border-slate-300 rounded-lg outline-none">${templateOptions}</select></div>${presetSection === 'master_outline' ? `<div class="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-800"><i class="fas fa-circle-info mr-1"></i>This creates a structured blank reviewer. Use <strong>Generate from Materials</strong> to compile existing subject content automatically.</div>` : ''}`,
                     onSubmit: async () => {
                         const title = document.getElementById('note-title').value.trim() || 'Untitled Page';
                         const sectionId = document.getElementById('note-section').value;
                         const noteType = document.getElementById('note-template').value;
                         await AppDB.add('notes', { semesterId: AppState.activeSemesterId || null, subjectId, sectionId, noteType, title, content: NOTE_TEMPLATES[noteType] || '', created: serverTimestamp(), updated: serverTimestamp() });
+                    }
+                });
+            },
+
+            generateMasterReviewer: (subjectId) => {
+                const notebook = views.subject_notebook;
+                if (!notebook || notebook.subjectId !== subjectId) { alert('Open the subject notebook before generating its reviewer.'); return; }
+
+                const availableNotes = notebook.notesData.filter(note => (note.sectionId || 'class_notes') !== 'master_outline' && Utils.htmlToText(note.content || ''));
+                const availableDigests = notebook.linkedDigests();
+                const availableDoctrines = notebook.linkedDoctrines();
+                const suggestedTitle = `${notebook.subjectName || 'Subject'} — Subject Master Reviewer`;
+
+                const sectionChoices = DEFAULT_NOTE_SECTIONS.filter(section => !['dashboard', 'master_outline'].includes(section.id)).map(section => {
+                    const count = notebook.notesData.filter(note => (note.sectionId || 'class_notes') === section.id && Utils.htmlToText(note.content || '')).length;
+                    const checked = ['class_notes', 'codal_provisions', 'case_digests', 'doctrines', 'recitation', 'exam_review'].includes(section.id) ? 'checked' : '';
+                    return `<label class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-slate-200 bg-white hover:border-blue-300"><span class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="review-source-section" value="${section.id}" ${checked} class="rounded border-slate-300 text-blue-600"><i class="fas ${section.icon} text-slate-400"></i>${Security.escapeHTML(section.label.replace(/^\d+ — /, ''))}</span><span class="text-xs font-bold text-slate-400">${count}</span></label>`;
+                }).join('');
+
+                Modal.show({
+                    title: '<i class="fas fa-wand-magic-sparkles text-amber-500"></i> Generate Subject Master Reviewer',
+                    submitText: 'Generate Reviewer',
+                    submitClass: 'px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 text-sm font-medium transition shadow-sm',
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Reviewer Title</label><input type="text" id="reviewer-title" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" value="${Security.escapeHTML(suggestedTitle)}"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Coverage Label</label><input type="text" id="reviewer-coverage" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="e.g., Entire Subject, Midterm Coverage, Articles 1156–1178" value="Entire Subject"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-2">Include Notebook Sections</label><div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1">${sectionChoices}</div></div><div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2"><label class="flex items-center justify-between gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50"><span class="text-sm font-medium text-amber-900"><input type="checkbox" id="reviewer-include-digests" checked class="mr-2 rounded border-amber-300 text-amber-600">Linked Case Digests</span><span class="text-xs font-bold text-amber-700">${availableDigests.length}</span></label><label class="flex items-center justify-between gap-3 p-3 rounded-lg border border-blue-200 bg-blue-50"><span class="text-sm font-medium text-blue-900"><input type="checkbox" id="reviewer-include-doctrines" checked class="mr-2 rounded border-blue-300 text-blue-600">Linked Doctrines</span><span class="text-xs font-bold text-blue-700">${availableDoctrines.length}</span></label></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Compilation Detail</label><select id="reviewer-detail" class="w-full p-2 border border-slate-300 rounded-lg outline-none"><option value="concise">Concise reviewer — shorter excerpts</option><option value="full">Detailed reviewer — longer source excerpts</option></select></div><div class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600"><i class="fas fa-circle-info mr-1 text-blue-500"></i>This compiler organizes your existing materials into one editable page. It does not create duplicate digest or doctrine records.</div>`,
+                    onSubmit: async () => {
+                        const title = document.getElementById('reviewer-title').value.trim() || suggestedTitle;
+                        const coverage = document.getElementById('reviewer-coverage').value.trim() || 'Entire Subject';
+                        const selectedSections = [...document.querySelectorAll('input[name="review-source-section"]:checked')].map(input => input.value);
+                        const includeDigests = document.getElementById('reviewer-include-digests').checked;
+                        const includeDoctrines = document.getElementById('reviewer-include-doctrines').checked;
+                        const detail = document.getElementById('reviewer-detail').value;
+                        const excerptLimit = detail === 'full' ? 5000 : 1200;
+
+                        const selectedNotes = availableNotes.filter(note => selectedSections.includes(note.sectionId || 'class_notes'));
+                        const digests = includeDigests ? availableDigests : [];
+                        const doctrines = includeDoctrines ? availableDoctrines : [];
+                        if (!selectedNotes.length && !digests.length && !doctrines.length) {
+                            throw new Error('There are no selected materials to compile. Add notes or link digests and doctrines first.');
+                        }
+
+                        const sectionHtml = selectedSections.map(sectionId => {
+                            const section = Utils.sectionById(sectionId);
+                            const notes = selectedNotes.filter(note => (note.sectionId || 'class_notes') === sectionId);
+                            if (!notes.length) return '';
+                            const entries = notes.map(note => {
+                                const sourceText = Utils.excerpt(Utils.htmlToText(note.content || ''), excerptLimit);
+                                return `<div class="reviewer-source"><h3>${Security.escapeHTML(note.title || 'Untitled Page')}</h3><p>${Security.escapeHTML(sourceText).replace(/\n/g, '<br>')}</p></div>`;
+                            }).join('');
+                            return `<h2>${Security.escapeHTML(section.label)}</h2>${entries}`;
+                        }).join('');
+
+                        const doctrineHtml = doctrines.length ? `<h2>Important Linked Doctrines</h2>${doctrines.map(item => {
+                            const heading = [item.article || item.topic || 'General Doctrine', item.caseTitle].filter(Boolean).join(' — ');
+                            return `<div class="reviewer-source"><h3>${Security.escapeHTML(heading)}</h3>${item.citation ? `<p><strong>Citation:</strong> ${Security.escapeHTML(item.citation)}</p>` : ''}<p><strong>Core Doctrine:</strong> ${Security.escapeHTML(Utils.excerpt(item.doctrine || 'No doctrine recorded.', excerptLimit))}</p>${item.application ? `<p><strong>Application:</strong> ${Security.escapeHTML(Utils.excerpt(item.application, excerptLimit))}</p>` : ''}</div>`;
+                        }).join('')}` : '';
+
+                        const digestHtml = digests.length ? `<h2>Leading Linked Cases</h2>${digests.map(item => {
+                            const facts = detail === 'full' && item.facts ? `<p><strong>Material Facts:</strong> ${Security.escapeHTML(Utils.excerpt(item.facts, excerptLimit))}</p>` : '';
+                            return `<div class="reviewer-source"><h3>${Security.escapeHTML(item.title || 'Untitled Case')}</h3>${item.citation ? `<p><strong>Citation:</strong> ${Security.escapeHTML(item.citation)}</p>` : ''}${item.topic ? `<p><strong>Topic:</strong> ${Security.escapeHTML(item.topic)}</p>` : ''}${facts}<p><strong>Issue:</strong> ${Security.escapeHTML(Utils.excerpt(item.issue || 'No issue recorded.', excerptLimit))}</p><p><strong>Ruling:</strong> ${Security.escapeHTML(Utils.excerpt(item.ruling || 'No ruling recorded.', excerptLimit))}</p>${item.ratio ? `<p><strong>Ratio:</strong> ${Security.escapeHTML(Utils.excerpt(item.ratio, excerptLimit))}</p>` : ''}${item.doctrine ? `<p><strong>Doctrine:</strong> ${Security.escapeHTML(Utils.excerpt(item.doctrine, excerptLimit))}</p>` : ''}</div>`;
+                        }).join('')}` : '';
+
+                        const generatedDate = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+                        const sourceCount = selectedNotes.length + digests.length + doctrines.length;
+                        const content = `<div class="note-template-block subject-master-reviewer"><h1>${Security.escapeHTML(title)}</h1><div class="reviewer-meta"><p><strong>Subject:</strong> ${Security.escapeHTML(notebook.subjectName)}</p><p><strong>Semester:</strong> ${Security.escapeHTML(AppState.activeLabel())}</p><p><strong>Coverage:</strong> ${Security.escapeHTML(coverage)}</p><p><strong>Generated:</strong> ${Security.escapeHTML(generatedDate)}</p><p><strong>Compiled Sources:</strong> ${sourceCount} (${selectedNotes.length} notebook pages, ${digests.length} case digests, ${doctrines.length} doctrines)</p></div><div class="reviewer-callout"><strong>Editing reminder:</strong> This is an editable consolidated reviewer. The original notebook pages, case digests, and doctrine records remain unchanged and linked to the subject.</div><h2>I. Coverage and Source Map</h2><p>This reviewer covers <strong>${Security.escapeHTML(coverage)}</strong>. Review each compiled section, remove unnecessary material, add transitions, and rewrite the final synthesis in your own words.</p>${sectionHtml || '<p class="reviewer-empty">No notebook sections were included.</p>'}${doctrineHtml}${digestHtml}<h2>Final Exam Checklist</h2><ul><li>Know the general rules and controlling provisions.</li><li>Memorize the elements, requisites, exceptions, and qualifications.</li><li>Connect every major doctrine to its leading case.</li><li>Practice distinguishing similar concepts.</li><li>Answer hypotheticals using a clear legal analysis structure.</li></ul><h2>Personal Synthesis</h2><p class="note-template-placeholder">Rewrite the most important rules and relationships in your own words before relying on this reviewer for recitation or examinations.</p></div>`;
+
+                        await AppDB.add('notes', { semesterId: AppState.activeSemesterId || null, subjectId, sectionId: 'master_outline', noteType: 'master_reviewer_generated', title, content, coverage, generatedSourceCount: sourceCount, generated: true, created: serverTimestamp(), updated: serverTimestamp() });
                     }
                 });
             },
