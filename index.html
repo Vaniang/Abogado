@@ -205,6 +205,40 @@
             body { height: auto; overflow: visible; background: white; }
             #app-main, #content-area { display: block; height: auto; overflow: visible; padding: 0; }
         }
+    
+
+        /* V2.6 — Class and Advocacy Alarm Center */
+        #lex-alarm-overlay { z-index: 360; }
+        #lex-alarm-card { animation: lexAlarmEnter .22s ease-out; }
+        .lex-alarm-pulse { animation: lexAlarmPulse 1.15s ease-in-out infinite; }
+        .lex-alarm-shake { animation: lexAlarmShake .45s ease-in-out 2; }
+        @keyframes lexAlarmEnter {
+            from { opacity: 0; transform: translateY(18px) scale(.96); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes lexAlarmPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, .38); }
+            50% { transform: scale(1.04); box-shadow: 0 0 0 18px rgba(245, 158, 11, 0); }
+        }
+        @keyframes lexAlarmShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-7px); }
+            75% { transform: translateX(7px); }
+        }
+        #lex-alarm-status-btn.lex-alarm-enabled { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+        #lex-alarm-status-btn.lex-alarm-disabled { border-color: #fde68a; background: #fffbeb; color: #b45309; }
+        #lex-alarm-status-dot { width: .55rem; height: .55rem; border-radius: 999px; display: inline-block; }
+        #lex-alarm-status-btn.lex-alarm-enabled #lex-alarm-status-dot { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.12); }
+        #lex-alarm-status-btn.lex-alarm-disabled #lex-alarm-status-dot { background: #f59e0b; }
+        @media (max-width: 767px) {
+            #lex-alarm-status-label { display: none; }
+            #lex-alarm-status-btn { width: 2.5rem; height: 2.5rem; padding: 0; justify-content: center; }
+            #lex-alarm-status-dot { position: absolute; top: .25rem; right: .25rem; width: .45rem; height: .45rem; }
+            #lex-alarm-card { width: calc(100vw - 1.5rem); border-radius: 1.25rem; }
+            #lex-alarm-actions { display: grid; grid-template-columns: 1fr 1fr; }
+            #lex-alarm-action-btn { grid-column: 1 / -1; }
+        }
+
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex overflow-hidden">
@@ -249,7 +283,10 @@
                 <button onclick="window.appHandlers.toggleSidebar()" class="lg:hidden w-10 h-10 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center justify-center flex-shrink-0" aria-label="Open navigation"><i class="fas fa-bars"></i></button>
                 <h2 id="page-title" class="text-2xl font-bold text-slate-800 serif-text">Dashboard</h2>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 md:gap-4">
+                <button id="lex-alarm-status-btn" onclick="window.appHandlers.openAlarmSettings()" class="lex-alarm-disabled relative flex items-center gap-2 border px-3 py-2 rounded-lg text-xs font-bold transition" title="Open Lex Alarm Center">
+                    <i class="fas fa-bell"></i><span id="lex-alarm-status-label">Arm Alarms</span><span id="lex-alarm-status-dot"></span>
+                </button>
                 <span id="header-date-display" class="text-sm font-medium text-slate-600 hidden md:inline-block"></span>
                 <span id="header-clock" class="text-sm font-mono text-slate-500 bg-slate-100 px-3 py-1 rounded">00:00:00</span>
             </div>
@@ -278,6 +315,28 @@
                 <button onclick="window.appHandlers.pausePomo()" id="btn-pomo-pause" class="flex-1 bg-amber-500 text-white py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-amber-600 transition hidden"><i class="fas fa-pause"></i> Pause</button>
                 <button onclick="window.appHandlers.resetPomo()" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-slate-300 transition" title="Reset Timer"><i class="fas fa-redo"></i></button>
                 <button onclick="window.appHandlers.switchPomoMode()" class="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-slate-900 transition" title="Switch to Break"><i class="fas fa-mug-hot"></i></button>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="lex-alarm-overlay" class="fixed inset-0 hidden items-center justify-center p-3 bg-slate-950/80 backdrop-blur-md">
+        <div id="lex-alarm-card" class="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl border border-white/20">
+            <div class="bg-gradient-to-br from-amber-500 via-orange-500 to-red-600 px-6 py-8 text-white text-center relative overflow-hidden">
+                <i class="fas fa-bell absolute -right-8 -bottom-10 text-[10rem] opacity-10"></i>
+                <div id="lex-alarm-icon" class="lex-alarm-pulse mx-auto w-20 h-20 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-4xl"><i class="fas fa-bell"></i></div>
+                <p id="lex-alarm-kicker" class="mt-5 text-xs font-bold uppercase tracking-[.25em] text-amber-100">Lex Alarm</p>
+                <h3 id="lex-alarm-title" class="mt-2 text-2xl md:text-3xl font-black leading-tight">Scheduled activity</h3>
+                <p id="lex-alarm-time" class="mt-2 text-sm font-bold text-white/90"></p>
+            </div>
+            <div class="p-6">
+                <p id="lex-alarm-message" class="text-center text-slate-700 leading-relaxed"></p>
+                <div id="lex-alarm-details" class="mt-4 hidden rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-600"></div>
+                <div id="lex-alarm-actions" class="mt-6 flex flex-wrap gap-3">
+                    <button onclick="window.appHandlers.dismissLexAlarm()" class="flex-1 min-w-[120px] px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"><i class="fas fa-check mr-2"></i>Dismiss</button>
+                    <button onclick="window.appHandlers.snoozeLexAlarm(5)" class="flex-1 min-w-[120px] px-4 py-3 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold"><i class="fas fa-clock mr-2"></i>Snooze 5 min</button>
+                    <button id="lex-alarm-action-btn" onclick="window.appHandlers.openLexAlarmActivity()" class="flex-1 min-w-[150px] px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold"><i class="fas fa-arrow-right mr-2"></i>Open</button>
+                </div>
             </div>
         </div>
     </div>
@@ -618,6 +677,323 @@
             }
         };
 
+
+        const LexAlarmService = {
+            unsubscribeClasses: null,
+            unsubscribePractices: null,
+            interval: null,
+            repeatTimer: null,
+            audioContext: null,
+            classes: [],
+            practices: [],
+            activeAlarm: null,
+            settings: null,
+            defaultSettings: {
+                enabled: false,
+                sound: true,
+                vibration: true,
+                voice: false,
+                startAlarm: true,
+                classLeadMinutes: 15,
+                practiceLeadMinutes: 5,
+                repeatSeconds: 12
+            },
+            settingsKey() {
+                return `lex_alarm_settings_${currentUser?.uid || 'guest'}`;
+            },
+            loadSettings() {
+                try {
+                    const saved = JSON.parse(localStorage.getItem(this.settingsKey()) || '{}');
+                    this.settings = { ...this.defaultSettings, ...saved };
+                } catch (error) {
+                    this.settings = { ...this.defaultSettings };
+                }
+                return this.settings;
+            },
+            saveSettings(next = {}) {
+                this.settings = { ...(this.settings || this.loadSettings()), ...next };
+                localStorage.setItem(this.settingsKey(), JSON.stringify(this.settings));
+                this.updateStatusUI();
+                return this.settings;
+            },
+            start() {
+                this.stop();
+                if (!currentUser) return;
+                this.loadSettings();
+                this.unsubscribeClasses = AppDB.subscribe('schedule', snapshot => {
+                    this.classes = [];
+                    snapshot.forEach(item => this.classes.push({ id: item.id, ...item.data() }));
+                    this.check();
+                });
+                this.unsubscribePractices = AppDB.subscribe('advocacy_schedules', snapshot => {
+                    this.practices = [];
+                    snapshot.forEach(item => this.practices.push({ id: item.id, ...item.data() }));
+                    this.check();
+                });
+                this.interval = setInterval(() => this.check(), 15 * 1000);
+                this.installAudioUnlock();
+                setTimeout(() => this.updateStatusUI(), 0);
+            },
+            stop() {
+                if (typeof this.unsubscribeClasses === 'function') this.unsubscribeClasses();
+                if (typeof this.unsubscribePractices === 'function') this.unsubscribePractices();
+                this.unsubscribeClasses = null;
+                this.unsubscribePractices = null;
+                if (this.interval) clearInterval(this.interval);
+                this.interval = null;
+                this.stopRinging();
+                this.classes = [];
+                this.practices = [];
+                this.activeAlarm = null;
+            },
+            installAudioUnlock() {
+                const unlock = async () => {
+                    if ((this.settings || this.loadSettings()).enabled) await this.ensureAudioContext(false);
+                };
+                document.addEventListener('pointerdown', unlock, { once: true, passive: true });
+                document.addEventListener('keydown', unlock, { once: true });
+            },
+            async ensureAudioContext(test = false) {
+                try {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContextClass) return false;
+                    if (!this.audioContext) this.audioContext = new AudioContextClass();
+                    if (this.audioContext.state === 'suspended') await this.audioContext.resume();
+                    if (test) this.playPattern(true);
+                    return this.audioContext.state === 'running';
+                } catch (error) {
+                    console.warn('Audio could not be activated:', error);
+                    return false;
+                }
+            },
+            async enable() {
+                this.saveSettings({ enabled: true });
+                await this.ensureAudioContext(true);
+                if ('Notification' in window && Notification.permission === 'default') {
+                    try { await Notification.requestPermission(); } catch (error) {}
+                }
+                this.updateStatusUI();
+                if (views.advocacy_lab?.updateNotificationButton) views.advocacy_lab.updateNotificationButton();
+                alert('Lex alarms are armed. Keep Lex open in a browser tab or open as an installed PWA for the sound alarm to run.');
+            },
+            disable() {
+                this.saveSettings({ enabled: false });
+                this.dismiss();
+                if (views.advocacy_lab?.updateNotificationButton) views.advocacy_lab.updateNotificationButton();
+            },
+            updateStatusUI() {
+                const settings = this.settings || this.loadSettings();
+                const button = document.getElementById('lex-alarm-status-btn');
+                const label = document.getElementById('lex-alarm-status-label');
+                if (!button || !label) return;
+                button.classList.toggle('lex-alarm-enabled', settings.enabled);
+                button.classList.toggle('lex-alarm-disabled', !settings.enabled);
+                label.textContent = settings.enabled ? 'Alarms Armed' : 'Arm Alarms';
+                button.title = settings.enabled ? 'Lex alarms are armed. Open settings.' : 'Lex alarms are off. Click to enable.';
+            },
+            dayMatches(day, date = new Date()) {
+                return String(day || '').toLowerCase() === AdvocacyUtils.dayNames[date.getDay()].toLowerCase();
+            },
+            classEventsForToday(now) {
+                const today = AdvocacyUtils.localDateKey(now);
+                return this.classes
+                    .filter(item => item.alarmEnabled !== false && this.dayMatches(item.day, now) && item.time)
+                    .map(item => ({
+                        kind: 'class',
+                        id: item.id,
+                        title: item.subject || 'Scheduled Class',
+                        start: AdvocacyUtils.combineDateTime(today, item.time),
+                        leadMinutes: Number.isFinite(Number(item.reminderMinutes)) ? Number(item.reminderMinutes) : Number((this.settings || this.loadSettings()).classLeadMinutes),
+                        room: item.room || '',
+                        professor: item.professor || '',
+                        source: item
+                    }));
+            },
+            practiceEventsForToday(now) {
+                const today = AdvocacyUtils.localDateKey(now);
+                return this.practices
+                    .filter(item => item.active !== false && item.alarmEnabled !== false && AdvocacyUtils.occursOn(item, now))
+                    .map(item => ({
+                        kind: 'practice',
+                        id: item.id,
+                        title: item.title || ADVOCACY_PRACTICE_TYPES[item.practiceType]?.label || 'Advocacy Practice',
+                        start: AdvocacyUtils.combineDateTime(today, item.startTime || item.time || '18:00'),
+                        leadMinutes: Number.isFinite(Number(item.reminderMinutes)) ? Number(item.reminderMinutes) : Number((this.settings || this.loadSettings()).practiceLeadMinutes),
+                        subjectName: item.subjectName || 'General',
+                        topic: item.topic || '',
+                        source: item
+                    }));
+            },
+            firedKey(event, phase) {
+                const dateKey = AdvocacyUtils.localDateKey(event.start);
+                return `lex_alarm_fired_${currentUser?.uid || 'guest'}_${event.kind}_${event.id}_${dateKey}_${phase}`;
+            },
+            isDue(target, now) {
+                const lateWindow = 90 * 1000;
+                return now.getTime() >= target.getTime() && now.getTime() <= target.getTime() + lateWindow;
+            },
+            check() {
+                const settings = this.settings || this.loadSettings();
+                if (!currentUser || !settings.enabled || this.activeAlarm) return;
+                const now = new Date();
+                const snooze = this.readSnooze();
+                if (snooze && now.getTime() >= snooze.triggerAt) {
+                    localStorage.removeItem(this.snoozeKey());
+                    this.showAlarm({ ...snooze.event, phase: 'snooze', snoozed: true });
+                    return;
+                }
+                const events = [...this.classEventsForToday(now), ...this.practiceEventsForToday(now)].sort((a, b) => a.start - b.start);
+                for (const event of events) {
+                    const phases = [];
+                    if (event.leadMinutes > 0) phases.push({ name: 'upcoming', target: new Date(event.start.getTime() - event.leadMinutes * 60000) });
+                    if (settings.startAlarm) phases.push({ name: 'start', target: event.start });
+                    for (const phase of phases) {
+                        const key = this.firedKey(event, phase.name);
+                        if (this.isDue(phase.target, now) && !localStorage.getItem(key)) {
+                            localStorage.setItem(key, String(Date.now()));
+                            this.showAlarm({ ...event, phase: phase.name });
+                            return;
+                        }
+                    }
+                }
+            },
+            snoozeKey() {
+                return `lex_alarm_snooze_${currentUser?.uid || 'guest'}`;
+            },
+            readSnooze() {
+                try { return JSON.parse(localStorage.getItem(this.snoozeKey()) || 'null'); }
+                catch (error) { return null; }
+            },
+            snooze(minutes = 5) {
+                if (!this.activeAlarm) return;
+                const event = { ...this.activeAlarm };
+                delete event.phase;
+                localStorage.setItem(this.snoozeKey(), JSON.stringify({ triggerAt: Date.now() + Number(minutes) * 60000, event }));
+                this.dismiss();
+            },
+            getAlarmCopy(alarm) {
+                const isClass = alarm.kind === 'class';
+                const atStart = alarm.phase === 'start';
+                const snoozed = alarm.phase === 'snooze' || alarm.snoozed;
+                const timeLabel = AdvocacyUtils.formatTime(AdvocacyUtils.minutesToTime(alarm.start.getHours() * 60 + alarm.start.getMinutes()));
+                if (isClass) {
+                    return {
+                        kicker: snoozed ? 'Snoozed Class Reminder' : 'Class Alarm',
+                        title: snoozed ? `${alarm.title} reminder` : (atStart ? `${alarm.title} starts now` : `${alarm.title} starts in ${alarm.leadMinutes} minutes`),
+                        message: atStart ? 'Prepare your materials and join your class now.' : 'Your scheduled class is approaching. Finish what you are doing and prepare to attend.',
+                        time: `${AdvocacyUtils.dayNames[alarm.start.getDay()]} • ${timeLabel}`,
+                        details: [alarm.room ? `<i class="fas fa-location-dot mr-2"></i>${Security.escapeHTML(alarm.room)}` : '', alarm.professor ? `<i class="fas fa-user-tie mr-2"></i>${Security.escapeHTML(alarm.professor)}` : ''].filter(Boolean).join('<br>'),
+                        action: 'Open Class Schedule'
+                    };
+                }
+                return {
+                    kicker: snoozed ? 'Snoozed Practice Reminder' : 'Advocacy Lab Alarm',
+                    title: snoozed ? `${alarm.title} reminder` : (atStart ? `${alarm.title} starts now` : `${alarm.title} starts in ${alarm.leadMinutes} minutes`),
+                    message: atStart ? 'Begin your English and ALAC practice session now.' : 'Your scheduled practice is approaching. Prepare your legal materials and speaking space.',
+                    time: `${AdvocacyUtils.dayNames[alarm.start.getDay()]} • ${timeLabel}`,
+                    details: [alarm.subjectName ? `<i class="fas fa-book mr-2"></i>${Security.escapeHTML(alarm.subjectName)}` : '', alarm.topic ? `<i class="fas fa-bullseye mr-2"></i>${Security.escapeHTML(alarm.topic)}` : ''].filter(Boolean).join('<br>'),
+                    action: 'Start Practice'
+                };
+            },
+            async showAlarm(alarm) {
+                alarm.start = alarm.start instanceof Date ? alarm.start : new Date(alarm.start);
+                this.activeAlarm = alarm;
+                const copy = this.getAlarmCopy(alarm);
+                const overlay = document.getElementById('lex-alarm-overlay');
+                const details = document.getElementById('lex-alarm-details');
+                document.getElementById('lex-alarm-kicker').textContent = copy.kicker;
+                document.getElementById('lex-alarm-title').textContent = copy.title;
+                document.getElementById('lex-alarm-time').textContent = copy.time;
+                document.getElementById('lex-alarm-message').textContent = copy.message;
+                document.getElementById('lex-alarm-action-btn').innerHTML = `<i class="fas ${alarm.kind === 'practice' ? 'fa-play' : 'fa-calendar-day'} mr-2"></i>${copy.action}`;
+                details.innerHTML = copy.details;
+                details.classList.toggle('hidden', !copy.details);
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+                document.getElementById('lex-alarm-card')?.classList.add('lex-alarm-shake');
+                setTimeout(() => document.getElementById('lex-alarm-card')?.classList.remove('lex-alarm-shake'), 1200);
+                await this.ensureAudioContext(false);
+                this.startRinging();
+                this.notify(copy, alarm);
+            },
+            startRinging() {
+                this.stopRinging();
+                const settings = this.settings || this.loadSettings();
+                if (settings.sound) this.playPattern();
+                if (settings.vibration && navigator.vibrate) navigator.vibrate([450, 180, 450, 180, 800]);
+                const repeatMs = Math.max(6, Number(settings.repeatSeconds || 12)) * 1000;
+                this.repeatTimer = setInterval(() => {
+                    if (!this.activeAlarm) return;
+                    if (settings.sound) this.playPattern();
+                    if (settings.vibration && navigator.vibrate) navigator.vibrate([350, 150, 350]);
+                }, repeatMs);
+                if (settings.voice && 'speechSynthesis' in window) {
+                    const copy = this.getAlarmCopy(this.activeAlarm);
+                    const speech = new SpeechSynthesisUtterance(copy.title);
+                    speech.rate = .95;
+                    window.speechSynthesis.cancel();
+                    window.speechSynthesis.speak(speech);
+                }
+            },
+            playPattern(test = false) {
+                const context = this.audioContext;
+                if (!context || context.state !== 'running') return;
+                const start = context.currentTime;
+                const notes = test ? [880, 1175] : [880, 880, 1175, 880];
+                notes.forEach((frequency, index) => {
+                    const oscillator = context.createOscillator();
+                    const gain = context.createGain();
+                    const noteStart = start + index * .22;
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(frequency, noteStart);
+                    gain.gain.setValueAtTime(.0001, noteStart);
+                    gain.gain.exponentialRampToValueAtTime(test ? .12 : .22, noteStart + .02);
+                    gain.gain.exponentialRampToValueAtTime(.0001, noteStart + .16);
+                    oscillator.connect(gain);
+                    gain.connect(context.destination);
+                    oscillator.start(noteStart);
+                    oscillator.stop(noteStart + .18);
+                });
+            },
+            stopRinging() {
+                if (this.repeatTimer) clearInterval(this.repeatTimer);
+                this.repeatTimer = null;
+                if (navigator.vibrate) navigator.vibrate(0);
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            },
+            dismiss() {
+                this.stopRinging();
+                this.activeAlarm = null;
+                const overlay = document.getElementById('lex-alarm-overlay');
+                overlay?.classList.add('hidden');
+                overlay?.classList.remove('flex');
+            },
+            openActivity() {
+                const alarm = this.activeAlarm;
+                this.dismiss();
+                if (!alarm) return;
+                if (alarm.kind === 'practice') {
+                    window.appHandlers.navigate('advocacy_lab');
+                    const dateKey = AdvocacyUtils.localDateKey(alarm.start);
+                    setTimeout(() => window.appHandlers.startScheduledAdvocacy(alarm.id, dateKey), 350);
+                } else {
+                    window.appHandlers.navigate('dashboard');
+                }
+            },
+            notify(copy, alarm) {
+                if (!('Notification' in window) || Notification.permission !== 'granted') return;
+                try {
+                    const notification = new Notification(copy.kicker, { body: `${copy.title}. ${copy.time}`, icon: './LEX.png', tag: `lex-${alarm.kind}-${alarm.id}-${alarm.phase}` });
+                    notification.onclick = () => { window.focus(); this.openActivity(); notification.close(); };
+                } catch (error) {}
+            },
+            test() {
+                const now = new Date();
+                now.setSeconds(0, 0);
+                this.showAlarm({ kind: 'practice', id: 'test', title: 'Lex Test Alarm', start: now, leadMinutes: 0, subjectName: 'Alarm Center', topic: 'Your alarm sound and overlay are working.', source: {}, phase: 'start' });
+            }
+        };
+
         const Modal = {
             show: (options) => {
                 const modal = document.getElementById('app-modal'); document.getElementById('app-modal-title').innerHTML = options.title; document.getElementById('app-modal-body').innerHTML = options.content;
@@ -630,10 +1006,10 @@
 
         // --- View Classes ---
        class DashboardView {
-            constructor() { this.unsubscribeReminders = null; this.unsubscribeSchedule = null; this.unsubscribePomoStats = null; this.clockInterval = null; }
+            constructor() { this.unsubscribeReminders = null; this.unsubscribeSchedule = null; this.unsubscribePomoStats = null; this.clockInterval = null; this.classes = []; }
             render() {
                 const verse = Utils.getDailyVerse();
-                return `<div class="max-w-6xl mx-auto pb-24"><div class="grid grid-cols-1 lg:grid-cols-3 gap-6"><div class="lg:col-span-2 space-y-6"><div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden"><i class="fas fa-balance-scale text-white opacity-5 text-9xl absolute -right-10 -bottom-10"></i><h3 class="text-2xl font-bold serif-text mb-2 relative z-10">Welcome back, Counsel.</h3><p class="text-blue-200 mb-6 relative z-10">Your journey to the Bar continues today.</p><div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm relative z-10"><p class="serif-text italic text-lg mb-2">"${verse.text}"</p><p class="text-sm text-amber-400 font-bold text-right">— ${verse.ref}</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full"><div class="flex items-center justify-between mb-4"><h4 class="font-bold text-slate-700"><i class="fas fa-calendar-week text-blue-600 mr-2"></i> Schedule</h4><button onclick="window.appHandlers.addClass()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition font-bold"><i class="fas fa-plus"></i></button></div><div id="dashboard-schedule-list" class="space-y-3 flex-1 overflow-y-auto max-h-[250px] pr-2"><div class="text-center py-8 text-slate-400 text-sm"><div class="loader mx-auto mb-2"></div>Loading...</div></div></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center items-center h-full"><div class="w-full flex items-center justify-between mb-2"><h4 class="font-bold text-slate-700"><i class="fas fa-stopwatch text-amber-500 mr-2"></i> Study Tracker</h4></div><div class="text-center mt-4"><span id="dash-study-time" class="text-5xl font-bold text-slate-800 font-mono">0<span class="text-2xl text-slate-400">h</span> 0<span class="text-2xl text-slate-400">m</span></span><p id="dash-study-sessions" class="text-sm font-medium text-blue-600 mt-3 bg-blue-50 px-4 py-1.5 rounded-full inline-block">0 Focus Sessions Logged</p><p class="text-xs text-slate-400 mt-4 leading-relaxed max-w-[200px] mx-auto">Use the floating timer in the bottom right to track your deep work.</p></div></div></div></div><div class="lg:col-span-1"><div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col"><div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl"><h4 class="font-bold text-slate-700"><i class="fas fa-tasks text-amber-500 mr-2"></i> Reminders</h4><button onclick="window.appHandlers.addReminder()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-200 transition font-bold"><i class="fas fa-plus mr-1"></i> Add Task</button></div><div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[600px]"></div></div></div></div></div>`;
+                return `<div class="max-w-6xl mx-auto pb-24"><div class="grid grid-cols-1 lg:grid-cols-3 gap-6"><div class="lg:col-span-2 space-y-6"><div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden"><i class="fas fa-balance-scale text-white opacity-5 text-9xl absolute -right-10 -bottom-10"></i><h3 class="text-2xl font-bold serif-text mb-2 relative z-10">Welcome back, Counsel.</h3><p class="text-blue-200 mb-6 relative z-10">Your journey to the Bar continues today.</p><div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm relative z-10"><p class="serif-text italic text-lg mb-2">"${verse.text}"</p><p class="text-sm text-amber-400 font-bold text-right">— ${verse.ref}</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full"><div class="flex items-center justify-between mb-4"><h4 class="font-bold text-slate-700"><i class="fas fa-calendar-week text-blue-600 mr-2"></i> Schedule</h4><div class="flex gap-2"><button onclick="window.appHandlers.openAlarmSettings()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded hover:bg-amber-200 transition font-bold" title="Alarm settings"><i class="fas fa-bell"></i></button><button onclick="window.appHandlers.addClass()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition font-bold"><i class="fas fa-plus"></i></button></div></div><div id="dashboard-schedule-list" class="space-y-3 flex-1 overflow-y-auto max-h-[250px] pr-2"><div class="text-center py-8 text-slate-400 text-sm"><div class="loader mx-auto mb-2"></div>Loading...</div></div></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center items-center h-full"><div class="w-full flex items-center justify-between mb-2"><h4 class="font-bold text-slate-700"><i class="fas fa-stopwatch text-amber-500 mr-2"></i> Study Tracker</h4></div><div class="text-center mt-4"><span id="dash-study-time" class="text-5xl font-bold text-slate-800 font-mono">0<span class="text-2xl text-slate-400">h</span> 0<span class="text-2xl text-slate-400">m</span></span><p id="dash-study-sessions" class="text-sm font-medium text-blue-600 mt-3 bg-blue-50 px-4 py-1.5 rounded-full inline-block">0 Focus Sessions Logged</p><p class="text-xs text-slate-400 mt-4 leading-relaxed max-w-[200px] mx-auto">Use the floating timer in the bottom right to track your deep work.</p></div></div></div></div><div class="lg:col-span-1"><div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col"><div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl"><h4 class="font-bold text-slate-700"><i class="fas fa-tasks text-amber-500 mr-2"></i> Reminders</h4><button onclick="window.appHandlers.addReminder()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-200 transition font-bold"><i class="fas fa-plus mr-1"></i> Add Task</button></div><div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[600px]"></div></div></div></div></div>`;
             }
             async init() {
                 const clockEl = document.getElementById('header-clock');
@@ -675,8 +1051,35 @@
                         list.appendChild(item); 
                     }); 
                 });
-                
-                this.unsubscribeSchedule = AppDB.subscribe('schedule', (snapshot) => { const schedList = document.getElementById('dashboard-schedule-list'); if (!schedList) return; schedList.innerHTML = ''; if (snapshot.empty) { schedList.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">Your schedule is empty.<br>Click '+' to add a class.</div>`; return; } const classes = []; snapshot.forEach(doc => classes.push({ id: doc.id, ...doc.data() })); const dayOrder = { "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6, "Sunday": 7 }; classes.sort((a, b) => { if (dayOrder[a.day] !== dayOrder[b.day]) return dayOrder[a.day] - dayOrder[b.day]; return a.time.localeCompare(b.time); }); let currentDay = ""; classes.forEach(cls => { if (cls.day !== currentDay) { schedList.innerHTML += `<div class="font-bold text-slate-500 text-xs mt-4 mb-2 uppercase tracking-wider border-b border-slate-100 pb-1">${cls.day}</div>`; currentDay = cls.day; } const item = document.createElement('div'); item.className = "flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg mb-2 group hover:border-blue-200 transition"; item.innerHTML = `<div class="flex items-center gap-3"><div class="bg-blue-100 text-blue-800 font-bold text-xs py-1 px-2 rounded min-w-[70px] text-center">${cls.time}</div><div><p class="font-bold text-slate-800 text-sm">${cls.subject}</p><p class="text-[10px] text-slate-500 mt-0.5"><i class="fas fa-map-marker-alt"></i> ${cls.room} • <i class="fas fa-user-tie"></i> ${cls.professor}</p></div></div><button onclick="window.appHandlers.deleteClass('${cls.id}')" class="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i class="fas fa-times"></i></button>`; schedList.appendChild(item); }); });
+                this.unsubscribeSchedule = AppDB.subscribe('schedule', (snapshot) => {
+                    const schedList = document.getElementById('dashboard-schedule-list');
+                    if (!schedList) return;
+                    schedList.innerHTML = '';
+                    this.classes = [];
+                    snapshot.forEach(record => this.classes.push({ id: record.id, ...record.data() }));
+                    if (!this.classes.length) {
+                        schedList.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">Your schedule is empty.<br>Click '+' to add a class.</div>`;
+                        return;
+                    }
+                    const dayOrder = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 7 };
+                    this.classes.sort((a, b) => {
+                        if (dayOrder[a.day] !== dayOrder[b.day]) return (dayOrder[a.day] || 99) - (dayOrder[b.day] || 99);
+                        return AdvocacyUtils.timeToMinutes(a.time) - AdvocacyUtils.timeToMinutes(b.time);
+                    });
+                    let currentDay = '';
+                    this.classes.forEach(cls => {
+                        if (cls.day !== currentDay) {
+                            schedList.insertAdjacentHTML('beforeend', `<div class="font-bold text-slate-500 text-xs mt-4 mb-2 uppercase tracking-wider border-b border-slate-100 pb-1">${Security.escapeHTML(cls.day || 'Unscheduled')}</div>`);
+                            currentDay = cls.day;
+                        }
+                        const lead = Number.isFinite(Number(cls.reminderMinutes)) ? Number(cls.reminderMinutes) : Number((LexAlarmService.settings || LexAlarmService.loadSettings()).classLeadMinutes);
+                        const alarmText = cls.alarmEnabled === false ? 'Alarm off' : (lead > 0 ? `${lead} min before + start` : 'At start');
+                        const item = document.createElement('div');
+                        item.className = 'flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-lg mb-2 group hover:border-blue-200 transition';
+                        item.innerHTML = `<div class="flex items-center gap-3 min-w-0"><div class="bg-blue-100 text-blue-800 font-bold text-xs py-1 px-2 rounded min-w-[78px] text-center">${Security.escapeHTML(AdvocacyUtils.formatTime(cls.time))}</div><div class="min-w-0"><p class="font-bold text-slate-800 text-sm truncate">${Security.escapeHTML(cls.subject || 'Class')}</p><p class="text-[10px] text-slate-500 mt-0.5"><i class="fas fa-map-marker-alt"></i> ${Security.escapeHTML(cls.room || 'No room')} • <i class="fas fa-user-tie"></i> ${Security.escapeHTML(cls.professor || 'No professor')}</p><p class="text-[10px] mt-1 ${cls.alarmEnabled === false ? 'text-slate-400' : 'text-amber-600 font-bold'}"><i class="fas ${cls.alarmEnabled === false ? 'fa-bell-slash' : 'fa-bell'} mr-1"></i>${alarmText}</p></div></div><div class="flex gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition"><button onclick="window.appHandlers.editClass('${cls.id}')" class="text-slate-400 hover:text-amber-600 p-1.5" title="Edit class and alarm"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.deleteClass('${cls.id}')" class="text-slate-400 hover:text-red-500 p-1.5" title="Delete class"><i class="fas fa-times"></i></button></div>`;
+                        schedList.appendChild(item);
+                    });
+                });
                 this.unsubscribePomoStats = AppDB.subscribe('focus_sessions', (snapshot) => { const timeEl = document.getElementById('dash-study-time'); const sessionsEl = document.getElementById('dash-study-sessions'); if (!timeEl || !sessionsEl) return; let totalMinutes = 0; let totalSessions = 0; if (!snapshot.empty) { snapshot.forEach(doc => { totalMinutes += doc.data().minutes; totalSessions++; }); } const hours = Math.floor(totalMinutes / 60); const mins = totalMinutes % 60; timeEl.innerHTML = `${hours}<span class="text-2xl text-slate-400">h</span> ${mins}<span class="text-2xl text-slate-400">m</span>`; sessionsEl.innerText = `${totalSessions} Focus Sessions Logged`; });
             }
             destroy() { if (this.clockInterval) { clearInterval(this.clockInterval); this.clockInterval = null; } }
@@ -1352,7 +1755,7 @@ const cleanAiJsonResponse = (text) => {
                             <button onclick="window.appHandlers.scheduleAdvocacyPractice()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-calendar-plus mr-2"></i>Schedule Practice</button>
                             <button onclick="window.appHandlers.scheduleAdvocacyAfterClass()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-person-walking-arrow-right mr-2"></i>After Class</button>
                             <button onclick="window.appHandlers.quickAdvocacyPractice()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-bolt mr-2"></i>Quick 10-Minute</button>
-                            <button id="adv-notification-btn" onclick="window.appHandlers.requestAdvocacyNotifications()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-bell mr-2"></i>Enable Reminders</button>
+                            <button id="adv-notification-btn" onclick="window.appHandlers.requestAdvocacyNotifications()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-bell mr-2"></i>Enable Alarms</button>
                         </div>
                     </div>
 
@@ -1433,8 +1836,8 @@ const cleanAiJsonResponse = (text) => {
             updateNotificationButton() {
                 const button = document.getElementById('adv-notification-btn');
                 if (!button) return;
-                const enabled = 'Notification' in window && Notification.permission === 'granted';
-                button.innerHTML = enabled ? '<i class="fas fa-bell text-green-600 mr-2"></i>Reminders Enabled' : '<i class="fas fa-bell mr-2"></i>Enable Reminders';
+                const enabled = Boolean((LexAlarmService.settings || LexAlarmService.loadSettings()).enabled);
+                button.innerHTML = enabled ? '<i class="fas fa-bell text-green-600 mr-2"></i>Alarms Armed' : '<i class="fas fa-bell mr-2"></i>Enable Alarms';
                 button.className = enabled
                     ? 'bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg text-sm font-bold'
                     : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold';
@@ -1480,7 +1883,7 @@ const cleanAiJsonResponse = (text) => {
                     const type = ADVOCACY_PRACTICE_TYPES[schedule.practiceType] || ADVOCACY_PRACTICE_TYPES.guided_alac;
                     const next = AdvocacyUtils.nextOccurrence(schedule);
                     return `<div class="border border-slate-200 rounded-xl p-4 ${schedule.active === false ? 'opacity-50 bg-slate-50' : 'bg-white'}">
-                        <div class="flex justify-between items-start gap-3"><div><p class="font-bold text-sm text-slate-800"><i class="fas ${type.icon} text-indigo-600 mr-2"></i>${Security.escapeHTML(schedule.title || type.label)}</p><p class="text-xs text-slate-500 mt-2">${Security.escapeHTML(AdvocacyUtils.recurrenceLabel(schedule))}</p><p class="text-xs text-slate-500 mt-1">${AdvocacyUtils.formatTime(schedule.startTime)} • ${Number(schedule.durationMinutes || 20)} min</p>${next ? `<p class="text-[11px] text-indigo-600 font-bold mt-2">Next: ${next.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}</p>` : ''}</div><div class="flex gap-1"><button onclick="window.appHandlers.toggleAdvocacySchedule('${schedule.id}', ${schedule.active === false ? 'true' : 'false'})" class="text-slate-400 hover:text-green-600 p-1.5" title="${schedule.active === false ? 'Activate' : 'Pause'}"><i class="fas ${schedule.active === false ? 'fa-play' : 'fa-pause'}"></i></button><button onclick="window.appHandlers.editAdvocacySchedule('${schedule.id}')" class="text-slate-400 hover:text-amber-600 p-1.5"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.deleteAdvocacySchedule('${schedule.id}')" class="text-slate-400 hover:text-red-600 p-1.5"><i class="fas fa-trash"></i></button></div></div>
+                        <div class="flex justify-between items-start gap-3"><div><p class="font-bold text-sm text-slate-800"><i class="fas ${type.icon} text-indigo-600 mr-2"></i>${Security.escapeHTML(schedule.title || type.label)}</p><p class="text-xs text-slate-500 mt-2">${Security.escapeHTML(AdvocacyUtils.recurrenceLabel(schedule))}</p><p class="text-xs text-slate-500 mt-1">${AdvocacyUtils.formatTime(schedule.startTime)} • ${Number(schedule.durationMinutes || 20)} min</p><p class="text-[11px] mt-1 ${schedule.alarmEnabled === false ? 'text-slate-400' : 'text-amber-600 font-bold'}"><i class="fas ${schedule.alarmEnabled === false ? 'fa-bell-slash' : 'fa-bell'} mr-1"></i>${schedule.alarmEnabled === false ? 'Alarm off' : `${Number(schedule.reminderMinutes ?? 5)} min before + start`}</p>${next ? `<p class="text-[11px] text-indigo-600 font-bold mt-2">Next: ${next.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}</p>` : ''}</div><div class="flex gap-1"><button onclick="window.appHandlers.toggleAdvocacySchedule('${schedule.id}', ${schedule.active === false ? 'true' : 'false'})" class="text-slate-400 hover:text-green-600 p-1.5" title="${schedule.active === false ? 'Activate' : 'Pause'}"><i class="fas ${schedule.active === false ? 'fa-play' : 'fa-pause'}"></i></button><button onclick="window.appHandlers.editAdvocacySchedule('${schedule.id}')" class="text-slate-400 hover:text-amber-600 p-1.5"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.deleteAdvocacySchedule('${schedule.id}')" class="text-slate-400 hover:text-red-600 p-1.5"><i class="fas fa-trash"></i></button></div></div>
                     </div>`;
                 }).join('');
             }
@@ -1593,7 +1996,7 @@ const cleanAiJsonResponse = (text) => {
                 const selectedDays = existing?.days || ['Monday', 'Wednesday', 'Friday'];
                 Modal.show({
                     title: `<i class="fas fa-calendar-plus text-indigo-600"></i> ${existing ? 'Edit' : 'Schedule'} Advocacy Practice`,
-                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Practice Title</label><input id="adv-sch-title" value="${Security.escapeHTML(existing?.title || 'English & ALAC Practice')}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Practice Type</label><select id="adv-sch-type" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${this.typeOptions(existing?.practiceType)}</select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><select id="adv-sch-subject" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${this.subjectOptions(existing?.subjectId)}</select></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Topic or Goal</label><input id="adv-sch-topic" value="${Security.escapeHTML(existing?.topic || '')}" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. Practice direct answers and factual application"></div><div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Start Date</label><input type="date" id="adv-sch-date" value="${existing?.startDate || today}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Time</label><input type="time" id="adv-sch-time" value="${startTime}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Duration</label><input type="number" min="5" max="180" id="adv-sch-duration" value="${Number(existing?.durationMinutes || 20)}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Reminder</label><select id="adv-sch-reminder" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="0" ${Number(existing?.reminderMinutes) === 0 ? 'selected' : ''}>At start</option><option value="5" ${Number(existing?.reminderMinutes) === 5 ? 'selected' : ''}>5 min before</option><option value="15" ${!existing || Number(existing?.reminderMinutes) === 15 ? 'selected' : ''}>15 min before</option><option value="30" ${Number(existing?.reminderMinutes) === 30 ? 'selected' : ''}>30 min before</option></select></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Recurrence</label><select id="adv-sch-recurrence" onchange="document.getElementById('adv-sch-days').classList.toggle('hidden', this.value !== 'selected_days')" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="one_time" ${recurrence === 'one_time' ? 'selected' : ''}>One time</option><option value="daily" ${recurrence === 'daily' ? 'selected' : ''}>Every day</option><option value="selected_days" ${['selected_days','after_class'].includes(recurrence) ? 'selected' : ''}>Selected weekdays</option></select></div><div id="adv-sch-days" class="mt-3 ${recurrence === 'selected_days' || recurrence === 'after_class' ? '' : 'hidden'}"><label class="block text-sm font-medium text-slate-700 mb-2">Practice Days</label><div class="grid grid-cols-2 md:grid-cols-4 gap-2">${AdvocacyUtils.dayNames.map(day => `<label class="flex items-center gap-2 p-2 border border-slate-200 rounded-lg text-sm"><input type="checkbox" name="adv-sch-day" value="${day}" ${selectedDays.includes(day) ? 'checked' : ''}>${day}</label>`).join('')}</div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Difficulty</label><select id="adv-sch-difficulty" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option>Basic</option><option ${!existing || existing?.difficulty === 'Intermediate' ? 'selected' : ''}>Intermediate</option><option ${existing?.difficulty === 'Bar-Level' ? 'selected' : ''}>Bar-Level</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Commitment Mode</label><select id="adv-sch-strictness" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="flexible" ${existing?.strictness === 'flexible' ? 'selected' : ''}>Flexible</option><option value="standard" ${!existing || existing?.strictness === 'standard' ? 'selected' : ''}>Standard</option><option value="accountability" ${existing?.strictness === 'accountability' ? 'selected' : ''}>Accountability</option></select></div></div>`,
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Practice Title</label><input id="adv-sch-title" value="${Security.escapeHTML(existing?.title || 'English & ALAC Practice')}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Practice Type</label><select id="adv-sch-type" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${this.typeOptions(existing?.practiceType)}</select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><select id="adv-sch-subject" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${this.subjectOptions(existing?.subjectId)}</select></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Topic or Goal</label><input id="adv-sch-topic" value="${Security.escapeHTML(existing?.topic || '')}" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. Practice direct answers and factual application"></div><div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Start Date</label><input type="date" id="adv-sch-date" value="${existing?.startDate || today}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Time</label><input type="time" id="adv-sch-time" value="${startTime}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Duration</label><input type="number" min="5" max="180" id="adv-sch-duration" value="${Number(existing?.durationMinutes || 20)}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Reminder</label><select id="adv-sch-reminder" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="0" ${Number(existing?.reminderMinutes) === 0 ? 'selected' : ''}>At start</option><option value="5" ${Number(existing?.reminderMinutes) === 5 ? 'selected' : ''}>5 min before</option><option value="15" ${!existing || Number(existing?.reminderMinutes) === 15 ? 'selected' : ''}>15 min before</option><option value="30" ${Number(existing?.reminderMinutes) === 30 ? 'selected' : ''}>30 min before</option></select></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Recurrence</label><select id="adv-sch-recurrence" onchange="document.getElementById('adv-sch-days').classList.toggle('hidden', this.value !== 'selected_days')" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="one_time" ${recurrence === 'one_time' ? 'selected' : ''}>One time</option><option value="daily" ${recurrence === 'daily' ? 'selected' : ''}>Every day</option><option value="selected_days" ${['selected_days','after_class'].includes(recurrence) ? 'selected' : ''}>Selected weekdays</option></select></div><div id="adv-sch-days" class="mt-3 ${recurrence === 'selected_days' || recurrence === 'after_class' ? '' : 'hidden'}"><label class="block text-sm font-medium text-slate-700 mb-2">Practice Days</label><div class="grid grid-cols-2 md:grid-cols-4 gap-2">${AdvocacyUtils.dayNames.map(day => `<label class="flex items-center gap-2 p-2 border border-slate-200 rounded-lg text-sm"><input type="checkbox" name="adv-sch-day" value="${day}" ${selectedDays.includes(day) ? 'checked' : ''}>${day}</label>`).join('')}</div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Difficulty</label><select id="adv-sch-difficulty" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option>Basic</option><option ${!existing || existing?.difficulty === 'Intermediate' ? 'selected' : ''}>Intermediate</option><option ${existing?.difficulty === 'Bar-Level' ? 'selected' : ''}>Bar-Level</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Commitment Mode</label><select id="adv-sch-strictness" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="flexible" ${existing?.strictness === 'flexible' ? 'selected' : ''}>Flexible</option><option value="standard" ${!existing || existing?.strictness === 'standard' ? 'selected' : ''}>Standard</option><option value="accountability" ${existing?.strictness === 'accountability' ? 'selected' : ''}>Accountability</option></select></div></div><label class="mt-3 flex items-start gap-3 p-3 border border-amber-200 bg-amber-50 rounded-lg cursor-pointer"><input type="checkbox" id="adv-sch-alarm" class="mt-1" ${existing?.alarmEnabled === false ? '' : 'checked'}><span><span class="block text-sm font-bold text-amber-900"><i class="fas fa-bell mr-1"></i>Sound an alarm for this practice</span><span class="block text-xs text-amber-700 mt-1">Lex will alarm at the reminder time and again when the session starts, based on your Alarm Center settings.</span></span></label>`,
                     submitText: existing ? 'Update Schedule' : 'Create Schedule',
                     onSubmit: async () => {
                         const title = document.getElementById('adv-sch-title').value.trim();
@@ -1606,7 +2009,7 @@ const cleanAiJsonResponse = (text) => {
                         const recurrenceValue = document.getElementById('adv-sch-recurrence').value;
                         const days = Array.from(document.querySelectorAll('input[name="adv-sch-day"]:checked')).map(input => input.value);
                         if (recurrenceValue === 'selected_days' && !days.length) throw new Error('Select at least one practice day.');
-                        const data = { title, practiceType: document.getElementById('adv-sch-type').value, subjectId, subjectName, topic: document.getElementById('adv-sch-topic').value.trim(), startDate, startTime: startTimeValue, durationMinutes: Number(document.getElementById('adv-sch-duration').value || 20), reminderMinutes: Number(document.getElementById('adv-sch-reminder').value || 0), recurrence: recurrenceValue, days: recurrenceValue === 'selected_days' ? days : [], difficulty: document.getElementById('adv-sch-difficulty').value, strictness: document.getElementById('adv-sch-strictness').value, active: existing?.active !== false, updated: serverTimestamp() };
+                        const data = { title, practiceType: document.getElementById('adv-sch-type').value, subjectId, subjectName, topic: document.getElementById('adv-sch-topic').value.trim(), startDate, startTime: startTimeValue, durationMinutes: Number(document.getElementById('adv-sch-duration').value || 20), reminderMinutes: Number(document.getElementById('adv-sch-reminder').value || 0), recurrence: recurrenceValue, days: recurrenceValue === 'selected_days' ? days : [], difficulty: document.getElementById('adv-sch-difficulty').value, strictness: document.getElementById('adv-sch-strictness').value, alarmEnabled: document.getElementById('adv-sch-alarm').checked, active: existing?.active !== false, updated: serverTimestamp() };
                         if (existing) await AppDB.update('advocacy_schedules', existing.id, data);
                         else await AppDB.add('advocacy_schedules', { ...data, created: serverTimestamp() });
                     }
@@ -1631,7 +2034,7 @@ const cleanAiJsonResponse = (text) => {
                         if (!endTime) throw new Error('Enter the class end time.');
                         const startTime = AdvocacyUtils.addMinutesToTime(endTime, Number(document.getElementById('adv-after-offset').value || 0));
                         const practiceType = document.getElementById('adv-after-type').value;
-                        await AppDB.add('advocacy_schedules', { title: `${classItem.subject || 'Class'} — After-Class Practice`, practiceType, subjectId: classItem.subjectId || '', subjectName: classItem.subject || 'General', topic: document.getElementById('adv-after-topic').value.trim() || `Review the day’s ${classItem.subject || 'law'} lesson`, startDate: AdvocacyUtils.localDateKey(), startTime, durationMinutes: Number(document.getElementById('adv-after-duration').value || 20), reminderMinutes: Number(document.getElementById('adv-after-reminder').value || 15), recurrence: 'after_class', days: [classItem.day], sourceClassId: classId, classEndTime: endTime, difficulty: 'Intermediate', strictness: 'standard', active: true, created: serverTimestamp(), updated: serverTimestamp() });
+                        await AppDB.add('advocacy_schedules', { title: `${classItem.subject || 'Class'} — After-Class Practice`, practiceType, subjectId: classItem.subjectId || '', subjectName: classItem.subject || 'General', topic: document.getElementById('adv-after-topic').value.trim() || `Review the day’s ${classItem.subject || 'law'} lesson`, startDate: AdvocacyUtils.localDateKey(), startTime, durationMinutes: Number(document.getElementById('adv-after-duration').value || 20), reminderMinutes: Number(document.getElementById('adv-after-reminder').value || 15), recurrence: 'after_class', days: [classItem.day], sourceClassId: classId, classEndTime: endTime, difficulty: 'Intermediate', strictness: 'standard', alarmEnabled: true, active: true, created: serverTimestamp(), updated: serverTimestamp() });
                     }
                 });
             }
@@ -2333,7 +2736,24 @@ const cleanAiJsonResponse = (text) => {
             },
             downloadText: (filename, textContent) => { const cleanText = typeof textContent === 'string' ? textContent.replace(/\\n/g, '\n') : textContent; const element = document.createElement('a'); element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(cleanText)); element.setAttribute('download', filename); element.style.display = 'none'; document.body.appendChild(element); element.click(); document.body.removeChild(element); },
             
-            requestAdvocacyNotifications: async () => await AdvocacyReminderService.requestPermission(),
+            openAlarmSettings: () => {
+                const settings = LexAlarmService.settings || LexAlarmService.loadSettings();
+                Modal.show({
+                    title: '<i class="fas fa-bell text-amber-500"></i> Lex Alarm Center',
+                    content: `<div class="p-4 rounded-xl ${settings.enabled ? 'bg-green-50 border-green-200 text-green-900' : 'bg-amber-50 border-amber-200 text-amber-900'} border"><p class="font-bold">${settings.enabled ? 'Alarms are armed' : 'Alarms are currently off'}</p><p class="text-xs mt-1">Sound alarms work while Lex is open or running as an installed PWA. Browser notifications require permission.</p></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4"><div><label class="block text-sm font-medium text-slate-700 mb-1">Default class warning</label><select id="alarm-class-lead" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="5" ${Number(settings.classLeadMinutes) === 5 ? 'selected' : ''}>5 minutes before</option><option value="10" ${Number(settings.classLeadMinutes) === 10 ? 'selected' : ''}>10 minutes before</option><option value="15" ${Number(settings.classLeadMinutes) === 15 ? 'selected' : ''}>15 minutes before</option><option value="30" ${Number(settings.classLeadMinutes) === 30 ? 'selected' : ''}>30 minutes before</option><option value="60" ${Number(settings.classLeadMinutes) === 60 ? 'selected' : ''}>1 hour before</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Default practice warning</label><select id="alarm-practice-lead" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="0" ${Number(settings.practiceLeadMinutes) === 0 ? 'selected' : ''}>At start only</option><option value="5" ${Number(settings.practiceLeadMinutes) === 5 ? 'selected' : ''}>5 minutes before</option><option value="10" ${Number(settings.practiceLeadMinutes) === 10 ? 'selected' : ''}>10 minutes before</option><option value="15" ${Number(settings.practiceLeadMinutes) === 15 ? 'selected' : ''}>15 minutes before</option><option value="30" ${Number(settings.practiceLeadMinutes) === 30 ? 'selected' : ''}>30 minutes before</option></select></div></div><div class="mt-4 space-y-2"><label class="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-lg"><span class="text-sm font-medium text-slate-700"><i class="fas fa-volume-high mr-2 text-blue-600"></i>Play alarm sound</span><input type="checkbox" id="alarm-sound" ${settings.sound ? 'checked' : ''}></label><label class="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-lg"><span class="text-sm font-medium text-slate-700"><i class="fas fa-mobile-screen mr-2 text-purple-600"></i>Vibrate supported phones/tablets</span><input type="checkbox" id="alarm-vibration" ${settings.vibration ? 'checked' : ''}></label><label class="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-lg"><span class="text-sm font-medium text-slate-700"><i class="fas fa-hourglass-start mr-2 text-red-600"></i>Alarm again exactly at start time</span><input type="checkbox" id="alarm-at-start" ${settings.startAlarm ? 'checked' : ''}></label><label class="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-lg"><span class="text-sm font-medium text-slate-700"><i class="fas fa-comment-dots mr-2 text-green-600"></i>Speak the alarm title</span><input type="checkbox" id="alarm-voice" ${settings.voice ? 'checked' : ''}></label></div><div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2"><button type="button" onclick="window.appHandlers.enableLexAlarms()" class="px-4 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold"><i class="fas fa-bell mr-2"></i>${settings.enabled ? 'Re-arm & Test Sound' : 'Enable & Test Alarms'}</button><button type="button" onclick="window.appHandlers.testLexAlarm()" class="px-4 py-3 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold"><i class="fas fa-volume-high mr-2"></i>Preview Full Alarm</button></div>${settings.enabled ? '<button type="button" onclick="window.appHandlers.disableLexAlarms()" class="mt-3 w-full px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 font-bold">Turn off all Lex alarms</button>' : ''}`,
+                    submitText: 'Save Settings',
+                    onSubmit: async () => {
+                        LexAlarmService.saveSettings({ classLeadMinutes: Number(document.getElementById('alarm-class-lead').value), practiceLeadMinutes: Number(document.getElementById('alarm-practice-lead').value), sound: document.getElementById('alarm-sound').checked, vibration: document.getElementById('alarm-vibration').checked, startAlarm: document.getElementById('alarm-at-start').checked, voice: document.getElementById('alarm-voice').checked });
+                    }
+                });
+            },
+            enableLexAlarms: async () => await LexAlarmService.enable(),
+            disableLexAlarms: () => { LexAlarmService.disable(); Modal.hide(); },
+            testLexAlarm: async () => { await LexAlarmService.ensureAudioContext(false); LexAlarmService.test(); },
+            dismissLexAlarm: () => LexAlarmService.dismiss(),
+            snoozeLexAlarm: (minutes) => LexAlarmService.snooze(minutes),
+            openLexAlarmActivity: () => LexAlarmService.openActivity(),
+            requestAdvocacyNotifications: async () => await LexAlarmService.enable(),
             scheduleAdvocacyPractice: () => AdvocacyForms.schedule(),
             editAdvocacySchedule: (id) => {
                 const schedule = views.advocacy_lab.schedules.find(item => item.id === id);
@@ -2576,7 +2996,30 @@ const cleanAiJsonResponse = (text) => {
             setPomoMode: (mode) => { window.appHandlers.pausePomo(); currentPomoMode = mode; currentPomoSeconds = mode === 'focus' ? POMO_FOCUS_MINS * 60 : POMO_BREAK_MINS * 60; const label = document.getElementById('pomo-mode-label'); if(mode === 'focus') { label.innerHTML = `<i class="fas fa-brain text-amber-400"></i> Focus Mode`; document.getElementById('pomo-main-content').classList.remove('bg-green-50'); document.getElementById('pomo-main-content').classList.add('bg-slate-50'); } else { label.innerHTML = `<i class="fas fa-mug-hot text-green-400"></i> Break Time`; document.getElementById('pomo-main-content').classList.remove('bg-slate-50'); document.getElementById('pomo-main-content').classList.add('bg-green-50'); } window.appHandlers.updatePomoUI(); },
             switchPomoMode: () => { window.appHandlers.setPomoMode(currentPomoMode === 'focus' ? 'break' : 'focus'); },
             togglePomoMinimize: () => { const widget = document.getElementById('pomodoro-widget'); const icon = document.getElementById('pomo-min-icon'); if (widget.classList.contains('translate-y-[calc(100%-48px)]')) { widget.classList.remove('translate-y-[calc(100%-48px)]'); icon.classList.remove('rotate-180'); } else { widget.classList.add('translate-y-[calc(100%-48px)]'); icon.classList.add('rotate-180'); } },
-            addClass: () => { Modal.show({ title: '<i class="fas fa-calendar-plus text-blue-600"></i> Add Class to Schedule', content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><input type="text" id="cls-sub" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Obicon"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Day of Week</label><select id="cls-day" class="w-full p-2 border border-slate-300 rounded-lg outline-none"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select></div><div class="mt-3 grid grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Time</label><input type="text" id="cls-time" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. 5:30 PM"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Room</label><input type="text" id="cls-room" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Room 101"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Professor</label><input type="text" id="cls-prof" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Atty. Mason"></div>`, onSubmit: async () => { const sub = document.getElementById('cls-sub').value.trim(); if (!sub) return; await AppDB.add('schedule', { subject: sub, day: document.getElementById('cls-day').value, time: document.getElementById('cls-time').value.trim(), room: document.getElementById('cls-room').value.trim(), professor: document.getElementById('cls-prof').value.trim() }); } }); },
+            classScheduleForm: (existing = null) => {
+                const dayOptions = AdvocacyUtils.dayNames.map(day => `<option ${existing?.day === day ? 'selected' : ''}>${day}</option>`).join('');
+                const existingTime = existing?.time ? AdvocacyUtils.minutesToTime(AdvocacyUtils.timeToMinutes(existing.time)) : '17:30';
+                const currentSettings = LexAlarmService.settings || LexAlarmService.loadSettings();
+                const lead = Number.isFinite(Number(existing?.reminderMinutes)) ? Number(existing.reminderMinutes) : Number(currentSettings.classLeadMinutes || 15);
+                Modal.show({
+                    title: `<i class="fas fa-calendar-plus text-blue-600"></i> ${existing ? 'Edit' : 'Add'} Class Schedule`,
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><input type="text" id="cls-sub" value="${Security.escapeHTML(existing?.subject || '')}" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Obligations and Contracts"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Day of Week</label><select id="cls-day" class="w-full p-2 border border-slate-300 rounded-lg outline-none bg-white">${dayOptions}</select></div><div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input type="time" id="cls-time" value="${existingTime}" class="w-full p-2 border border-slate-300 rounded-lg outline-none"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Room</label><input type="text" id="cls-room" value="${Security.escapeHTML(existing?.room || '')}" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Room 101"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Professor</label><input type="text" id="cls-prof" value="${Security.escapeHTML(existing?.professor || '')}" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g. Atty. Mason"></div><div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl"><label class="flex items-start gap-3 cursor-pointer"><input type="checkbox" id="cls-alarm-enabled" class="mt-1" ${existing?.alarmEnabled === false ? '' : 'checked'}><span><span class="block font-bold text-sm text-amber-900"><i class="fas fa-bell mr-1"></i>Alarm before class and at class start</span><span class="block text-xs text-amber-700 mt-1">The sound alarm runs while Lex is open in a browser tab or open as an installed PWA.</span></span></label><div class="mt-3"><label class="block text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Advance Warning</label><select id="cls-reminder-minutes" class="w-full p-2 border border-amber-300 rounded-lg bg-white"><option value="0" ${lead === 0 ? 'selected' : ''}>At start only</option><option value="5" ${lead === 5 ? 'selected' : ''}>5 minutes before</option><option value="10" ${lead === 10 ? 'selected' : ''}>10 minutes before</option><option value="15" ${lead === 15 ? 'selected' : ''}>15 minutes before</option><option value="30" ${lead === 30 ? 'selected' : ''}>30 minutes before</option><option value="60" ${lead === 60 ? 'selected' : ''}>1 hour before</option></select></div></div>`,
+                    submitText: existing ? 'Save Class' : 'Add Class',
+                    onSubmit: async () => {
+                        const subject = document.getElementById('cls-sub').value.trim();
+                        const time = document.getElementById('cls-time').value;
+                        if (!subject || !time) throw new Error('Subject and start time are required.');
+                        const data = { subject, day: document.getElementById('cls-day').value, time, room: document.getElementById('cls-room').value.trim(), professor: document.getElementById('cls-prof').value.trim(), alarmEnabled: document.getElementById('cls-alarm-enabled').checked, reminderMinutes: Number(document.getElementById('cls-reminder-minutes').value || 0), updated: serverTimestamp() };
+                        if (existing) await AppDB.update('schedule', existing.id, data);
+                        else await AppDB.add('schedule', { ...data, created: serverTimestamp() });
+                    }
+                });
+            },
+            addClass: () => window.appHandlers.classScheduleForm(),
+            editClass: (id) => {
+                const item = views.dashboard.classes.find(cls => cls.id === id) || views.advocacy_lab.classes.find(cls => cls.id === id) || LexAlarmService.classes.find(cls => cls.id === id);
+                if (item) window.appHandlers.classScheduleForm(item);
+            },
             deleteClass: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Remove Class', content: '<p>Remove this class from your schedule?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('schedule', id) }); },
             
           addReminder: () => {
@@ -3596,9 +4039,9 @@ generateReview: async () => {
             if (user) {
                 currentUser = user; document.getElementById('user-display').innerText = user.displayName || "Counsel";
                 loginScreen.classList.add('opacity-0', 'pointer-events-none'); setTimeout(() => loginScreen.classList.add('hidden'), 300);
-                AppState.init().finally(() => { AdvocacyReminderService.start(); window.appHandlers.navigate('dashboard'); window.appHandlers.updatePomoUI(); });
+                AppState.init().finally(() => { LexAlarmService.start(); window.appHandlers.navigate('dashboard'); window.appHandlers.updatePomoUI(); });
             } else {
-                cleanupView(views[currentView]); AdvocacyReminderService.stop(); currentUser = null; AppState.activeSemesterId = null; AppState.activeSemester = null;
+                cleanupView(views[currentView]); AdvocacyReminderService.stop(); LexAlarmService.stop(); currentUser = null; AppState.activeSemesterId = null; AppState.activeSemester = null;
                 loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
             }
         });
