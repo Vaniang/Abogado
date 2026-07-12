@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lex: Law School Companion V2.2</title>
+    <title>Lex: Law School Companion V2.4</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -271,6 +271,194 @@
             excerpt: (value = '', maxLength = 1200) => {
                 const textValue = String(value || '').trim();
                 return textValue.length > maxLength ? `${textValue.slice(0, maxLength).trim()}…` : textValue;
+            }
+        };
+
+        const ADVOCACY_PRACTICE_TYPES = {
+            guided_alac: { label: 'Guided ALAC Writing', icon: 'fa-list-ol' },
+            free_alac: { label: 'Free-Form ALAC Writing', icon: 'fa-pen-nib' },
+            oral_alac: { label: 'Oral ALAC Recitation', icon: 'fa-microphone-lines' },
+            read_aloud: { label: 'English Read-Aloud', icon: 'fa-volume-high' }
+        };
+
+        const AdvocacyUtils = {
+            dayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+            localDateKey(date = new Date()) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            },
+            parseLocalDate(dateKey) {
+                const [year, month, day] = String(dateKey || '').split('-').map(Number);
+                return new Date(year, (month || 1) - 1, day || 1, 0, 0, 0, 0);
+            },
+            combineDateTime(dateKey, timeValue = '00:00') {
+                const date = this.parseLocalDate(dateKey);
+                const minutes = this.timeToMinutes(timeValue);
+                date.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+                return date;
+            },
+            timeToMinutes(value = '') {
+                const raw = String(value || '').trim();
+                if (!raw) return 0;
+                const twelveHour = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+                if (twelveHour) {
+                    let hour = Number(twelveHour[1]) % 12;
+                    if (twelveHour[3].toUpperCase() === 'PM') hour += 12;
+                    return hour * 60 + Number(twelveHour[2]);
+                }
+                const twentyFour = raw.match(/^(\d{1,2}):(\d{2})$/);
+                if (twentyFour) return Number(twentyFour[1]) * 60 + Number(twentyFour[2]);
+                return 0;
+            },
+            minutesToTime(totalMinutes) {
+                const normalized = ((Number(totalMinutes) % 1440) + 1440) % 1440;
+                return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
+            },
+            addMinutesToTime(timeValue, minutes) {
+                return this.minutesToTime(this.timeToMinutes(timeValue) + Number(minutes || 0));
+            },
+            formatTime(timeValue = '') {
+                const minutes = this.timeToMinutes(timeValue);
+                const date = new Date();
+                date.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+                return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            },
+            occursOn(schedule, date) {
+                if (!schedule || schedule.active === false) return false;
+                const dateKey = this.localDateKey(date);
+                const startDate = schedule.startDate || schedule.date;
+                if (!startDate || dateKey < startDate) return false;
+                const recurrence = schedule.recurrence || 'one_time';
+                if (recurrence === 'one_time') return dateKey === startDate;
+                if (recurrence === 'daily') return true;
+                if (recurrence === 'selected_days' || recurrence === 'after_class') {
+                    return Array.isArray(schedule.days) && schedule.days.includes(this.dayNames[date.getDay()]);
+                }
+                return false;
+            },
+            occurrenceKey(schedule, date) {
+                return `${schedule.id || 'schedule'}_${this.localDateKey(date)}`;
+            },
+            nextOccurrence(schedule, fromDate = new Date(), daysAhead = 45) {
+                const cursor = new Date(fromDate);
+                cursor.setHours(0, 0, 0, 0);
+                for (let i = 0; i <= daysAhead; i += 1) {
+                    const date = new Date(cursor);
+                    date.setDate(cursor.getDate() + i);
+                    if (this.occursOn(schedule, date)) return date;
+                }
+                return null;
+            },
+            recurrenceLabel(schedule) {
+                const recurrence = schedule.recurrence || 'one_time';
+                if (recurrence === 'one_time') return 'One-time session';
+                if (recurrence === 'daily') return 'Every day';
+                if (recurrence === 'after_class') return `After class • ${(schedule.days || []).join(', ')}`;
+                return `Every ${(schedule.days || []).join(', ')}`;
+            },
+            localFeedback(answer, mode) {
+                const text = String(answer || '').trim();
+                const lower = text.toLowerCase();
+                const wordCount = text ? text.split(/\s+/).length : 0;
+                const sentenceCount = Math.max(1, (text.match(/[.!?]+/g) || []).length);
+                const hasAnswer = /^(yes|no|the|it|he|she|they|there|under|based|the action|the accused|the petitioner|the respondent)/i.test(text) || /\b(answer|liable|valid|invalid|entitled|not entitled)\b/i.test(text.slice(0, 180));
+                const hasLegalBasis = /\b(article|section|rule|under|pursuant|according to|supreme court|held that|doctrine|law provides|requisites?|elements?)\b/i.test(text);
+                const hasApplication = /\b(in this case|applying|because|considering|given that|the facts|here,|therefore,? the element|this shows)\b/i.test(text);
+                const hasConclusion = /\b(therefore|thus|accordingly|consequently|for these reasons|in conclusion)\b/i.test(text) || /\b(should be|cannot be|may be held|is liable|is not liable)\b/i.test(text.slice(-180));
+                const fillerMatches = lower.match(/\b(um|uh|like|basically|actually|you know|so so)\b/g) || [];
+                const longSentencePenalty = wordCount / sentenceCount > 38 ? 1 : 0;
+                const scores = {
+                    answer: hasAnswer ? 4 : 2,
+                    legalBasis: hasLegalBasis ? 4 : 2,
+                    application: hasApplication ? 4 : 2,
+                    conclusion: hasConclusion ? 4 : 2,
+                    grammar: Math.max(2, 4 - longSentencePenalty),
+                    clarity: wordCount >= 40 ? 4 : 3,
+                    conciseness: wordCount > 500 ? 2 : (wordCount > 250 ? 3 : 4),
+                    legalStyle: hasLegalBasis && hasApplication ? 4 : 3
+                };
+                const improvements = [];
+                if (!hasAnswer) improvements.push('Begin with a direct and definite answer to the legal question.');
+                if (!hasLegalBasis) improvements.push('State the controlling law, rule, article, or doctrine.');
+                if (!hasApplication) improvements.push('Connect the material facts to each element of the legal rule.');
+                if (!hasConclusion) improvements.push('End with a clear conclusion consistent with your analysis.');
+                if (longSentencePenalty) improvements.push('Break long sentences into shorter, more precise legal propositions.');
+                if (fillerMatches.length) improvements.push(`Reduce filler words detected in the transcript (${fillerMatches.length}).`);
+                const overall = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / (Object.keys(scores).length * 5) * 100);
+                return {
+                    scores,
+                    overall,
+                    strengths: [hasLegalBasis ? 'You identified a legal basis.' : 'You attempted to address the issue.', hasConclusion ? 'Your answer contains a recognizable conclusion.' : 'Your response can be strengthened through a clearer conclusion.'],
+                    improvements: improvements.length ? improvements : ['Continue practicing concise factual application and precise legal language.'],
+                    correctedAnswer: '',
+                    overallFeedback: mode === 'oral_alac' ? `Transcript contains ${wordCount} words and ${fillerMatches.length} detected filler words.` : `Your response contains ${wordCount} words.`,
+                    wordCount,
+                    fillerWordCount: fillerMatches.length
+                };
+            }
+        };
+
+        const AdvocacyReminderService = {
+            unsubscribe: null,
+            interval: null,
+            schedules: [],
+            start() {
+                this.stop();
+                if (!currentUser) return;
+                this.unsubscribe = AppDB.subscribe('advocacy_schedules', snapshot => {
+                    this.schedules = [];
+                    snapshot.forEach(item => this.schedules.push({ id: item.id, ...item.data() }));
+                    this.check();
+                });
+                this.interval = setInterval(() => this.check(), 60 * 1000);
+            },
+            stop() {
+                if (typeof this.unsubscribe === 'function') this.unsubscribe();
+                this.unsubscribe = null;
+                if (this.interval) clearInterval(this.interval);
+                this.interval = null;
+                this.schedules = [];
+            },
+            async requestPermission() {
+                if (!('Notification' in window)) {
+                    alert('Browser notifications are not supported on this device.');
+                    return;
+                }
+                const result = await Notification.requestPermission();
+                alert(result === 'granted' ? 'Lex practice reminders are enabled while the app is running.' : 'Notification permission was not granted.');
+                if (views.advocacy_lab) views.advocacy_lab.updateNotificationButton();
+            },
+            check() {
+                if (!currentUser || !('Notification' in window) || Notification.permission !== 'granted') return;
+                const now = new Date();
+                const today = AdvocacyUtils.localDateKey(now);
+                this.schedules.filter(schedule => schedule.active !== false && AdvocacyUtils.occursOn(schedule, now)).forEach(schedule => {
+                    const start = AdvocacyUtils.combineDateTime(today, schedule.startTime || schedule.time || '18:00');
+                    const reminderMinutes = Number(schedule.reminderMinutes ?? 15);
+                    const reminderAt = new Date(start.getTime() - reminderMinutes * 60000);
+                    const windowEnds = new Date(start.getTime() + 5 * 60000);
+                    if (now < reminderAt || now > windowEnds) return;
+                    const occurrenceKey = AdvocacyUtils.occurrenceKey(schedule, now);
+                    const storageKey = `lex_advocacy_notified_${currentUser.uid}_${occurrenceKey}`;
+                    if (localStorage.getItem(storageKey)) return;
+                    localStorage.setItem(storageKey, String(Date.now()));
+                    const type = ADVOCACY_PRACTICE_TYPES[schedule.practiceType]?.label || 'Advocacy Practice';
+                    const notification = new Notification('Lex Advocacy Practice', {
+                        body: `${type}: ${schedule.title || schedule.topic || 'Scheduled practice'} at ${AdvocacyUtils.formatTime(schedule.startTime)}.`,
+                        icon: './LEX.png',
+                        tag: occurrenceKey
+                    });
+                    notification.onclick = () => {
+                        window.focus();
+                        if (window.appHandlers) {
+                            window.appHandlers.navigate('advocacy_lab');
+                            setTimeout(() => window.appHandlers.startScheduledAdvocacy(schedule.id, today), 300);
+                        }
+                        notification.close();
+                    };
+                });
             }
         };
 
@@ -978,6 +1166,319 @@ const cleanAiJsonResponse = (text) => {
             }
         }
 
+        class AdvocacyLabView {
+            constructor() {
+                this.unsubscribeSchedules = null;
+                this.unsubscribeSessions = null;
+                this.unsubscribeSubjects = null;
+                this.unsubscribeClasses = null;
+                this.schedules = [];
+                this.sessions = [];
+                this.subjects = [];
+                this.classes = [];
+                this.activePractice = null;
+                this.practiceTimer = null;
+                this.speechRecognition = null;
+                this.speakingStartedAt = null;
+                this.speechBaseText = '';
+            }
+            render() {
+                return `
+                <div class="max-w-7xl mx-auto pb-24">
+                    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h3 class="text-2xl font-bold text-slate-800 flex items-center gap-3"><i class="fas fa-comments text-indigo-600"></i> Lex Advocacy Lab</h3>
+                            <p class="text-sm text-slate-500 mt-1">English fluency, legal writing, oral recitation, and ALAC answering practice.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="window.appHandlers.scheduleAdvocacyPractice()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-calendar-plus mr-2"></i>Schedule Practice</button>
+                            <button onclick="window.appHandlers.scheduleAdvocacyAfterClass()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-person-walking-arrow-right mr-2"></i>After Class</button>
+                            <button onclick="window.appHandlers.quickAdvocacyPractice()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-bolt mr-2"></i>Quick 10-Minute</button>
+                            <button id="adv-notification-btn" onclick="window.appHandlers.requestAdvocacyNotifications()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-bell mr-2"></i>Enable Reminders</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Due Today</p><p id="adv-stat-today" class="text-3xl font-bold text-indigo-700 mt-2">0</p></div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Completed This Week</p><p id="adv-stat-week" class="text-3xl font-bold text-green-700 mt-2">0</p></div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Practice Streak</p><p id="adv-stat-streak" class="text-3xl font-bold text-amber-600 mt-2">0 <span class="text-sm text-slate-400">days</span></p></div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><p class="text-xs font-bold uppercase tracking-wider text-slate-400">Average Score</p><p id="adv-stat-score" class="text-3xl font-bold text-blue-700 mt-2">—</p></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        <div class="xl:col-span-2 space-y-6">
+                            <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="px-5 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                                    <div><h4 class="font-bold text-slate-800"><i class="fas fa-calendar-day text-indigo-600 mr-2"></i>Today’s Practice</h4><p class="text-xs text-slate-500 mt-1">Complete, reschedule, or record a missed session.</p></div>
+                                </div>
+                                <div id="adv-today-list" class="p-5 space-y-3"></div>
+                            </section>
+
+                            <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                    <div><h4 class="font-bold text-slate-800"><i class="fas fa-scale-balanced text-amber-500 mr-2"></i>Practice Workspace</h4><p class="text-xs text-slate-500 mt-1">Choose a mode or start one of today’s scheduled sessions.</p></div>
+                                    <span id="adv-practice-timer" class="hidden font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg">10:00</span>
+                                </div>
+                                <div id="adv-practice-workspace" class="p-6 min-h-[420px]"></div>
+                            </section>
+                        </div>
+
+                        <div class="space-y-6">
+                            <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="px-5 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center"><h4 class="font-bold text-slate-800"><i class="fas fa-calendar-check text-blue-600 mr-2"></i>Practice Schedule</h4></div>
+                                <div id="adv-schedule-list" class="p-4 space-y-3 max-h-[480px] overflow-y-auto"></div>
+                            </section>
+                            <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                <div class="px-5 py-4 border-b border-slate-100 bg-slate-50"><h4 class="font-bold text-slate-800"><i class="fas fa-chart-line text-green-600 mr-2"></i>Recent Progress</h4></div>
+                                <div id="adv-progress-list" class="p-4 space-y-3"></div>
+                            </section>
+                        </div>
+                    </div>
+                </div>`;
+            }
+            init() {
+                this.renderPracticeChooser();
+                this.unsubscribeSubjects = AppDB.subscribe('subjects', snapshot => {
+                    this.subjects = [];
+                    snapshot.forEach(item => {
+                        const subject = { id: item.id, ...item.data() };
+                        if (!subject.archived && (!AppState.activeSemesterId || subject.semesterId === AppState.activeSemesterId || !subject.semesterId)) this.subjects.push(subject);
+                    });
+                    this.subjects.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                });
+                this.unsubscribeClasses = AppDB.subscribe('schedule', snapshot => {
+                    this.classes = [];
+                    snapshot.forEach(item => this.classes.push({ id: item.id, ...item.data() }));
+                });
+                this.unsubscribeSchedules = AppDB.subscribe('advocacy_schedules', snapshot => {
+                    this.schedules = [];
+                    snapshot.forEach(item => this.schedules.push({ id: item.id, ...item.data() }));
+                    this.schedules.sort((a, b) => `${a.startDate || ''}${a.startTime || ''}`.localeCompare(`${b.startDate || ''}${b.startTime || ''}`));
+                    this.refresh();
+                });
+                this.unsubscribeSessions = AppDB.subscribe('advocacy_sessions', snapshot => {
+                    this.sessions = [];
+                    snapshot.forEach(item => this.sessions.push({ id: item.id, ...item.data() }));
+                    this.sessions.sort((a, b) => Utils.timestampMillis(b.completedAt || b.created) - Utils.timestampMillis(a.completedAt || a.created));
+                    this.refresh();
+                });
+                this.updateNotificationButton();
+            }
+            destroy() {
+                if (this.practiceTimer) clearInterval(this.practiceTimer);
+                this.practiceTimer = null;
+                if (this.speechRecognition) {
+                    try { this.speechRecognition.stop(); } catch (error) {}
+                }
+                this.speechRecognition = null;
+            }
+            updateNotificationButton() {
+                const button = document.getElementById('adv-notification-btn');
+                if (!button) return;
+                const enabled = 'Notification' in window && Notification.permission === 'granted';
+                button.innerHTML = enabled ? '<i class="fas fa-bell text-green-600 mr-2"></i>Reminders Enabled' : '<i class="fas fa-bell mr-2"></i>Enable Reminders';
+                button.className = enabled
+                    ? 'bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg text-sm font-bold'
+                    : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold';
+            }
+            refresh() {
+                this.renderToday();
+                this.renderSchedules();
+                this.renderProgress();
+            }
+            completedOccurrenceKeys() {
+                return new Set(this.sessions.filter(session => session.status === 'completed' && session.occurrenceKey).map(session => session.occurrenceKey));
+            }
+            renderToday() {
+                const container = document.getElementById('adv-today-list');
+                if (!container) return;
+                const today = new Date();
+                const todayKey = AdvocacyUtils.localDateKey(today);
+                const completed = this.completedOccurrenceKeys();
+                const due = this.schedules.filter(schedule => AdvocacyUtils.occursOn(schedule, today));
+                document.getElementById('adv-stat-today').innerText = String(due.filter(schedule => !completed.has(AdvocacyUtils.occurrenceKey(schedule, today))).length);
+                if (!due.length) {
+                    container.innerHTML = `<div class="text-center py-8 text-slate-400"><i class="fas fa-mug-hot text-4xl opacity-30 mb-3"></i><p class="font-medium">No advocacy session is scheduled today.</p><button onclick="window.appHandlers.quickAdvocacyPractice()" class="mt-3 text-indigo-600 font-bold hover:underline">Start a quick practice instead</button></div>`;
+                    return;
+                }
+                container.innerHTML = due.map(schedule => {
+                    const occurrenceKey = AdvocacyUtils.occurrenceKey(schedule, today);
+                    const isComplete = completed.has(occurrenceKey);
+                    const type = ADVOCACY_PRACTICE_TYPES[schedule.practiceType] || ADVOCACY_PRACTICE_TYPES.guided_alac;
+                    return `<div class="border ${isComplete ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-white'} rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div class="flex items-start gap-3"><div class="w-10 h-10 rounded-lg ${isComplete ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'} flex items-center justify-center"><i class="fas ${isComplete ? 'fa-check' : type.icon}"></i></div><div><p class="font-bold text-slate-800">${Security.escapeHTML(schedule.title || type.label)}</p><p class="text-xs text-slate-500 mt-1">${Security.escapeHTML(schedule.subjectName || 'General')} • ${AdvocacyUtils.formatTime(schedule.startTime)} • ${Number(schedule.durationMinutes || 20)} minutes</p><p class="text-xs text-slate-400 mt-1">${Security.escapeHTML(schedule.topic || type.label)}</p></div></div>
+                        <div class="flex gap-2">${isComplete ? '<span class="text-xs font-bold text-green-700 bg-white border border-green-200 px-3 py-2 rounded-lg">Completed</span>' : `<button onclick="window.appHandlers.startScheduledAdvocacy('${schedule.id}', '${todayKey}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-play mr-1"></i>Start</button><button onclick="window.appHandlers.markAdvocacyMissed('${schedule.id}', '${todayKey}')" class="bg-white border border-slate-200 text-slate-500 hover:text-red-600 px-3 py-2 rounded-lg text-sm" title="Mark missed"><i class="fas fa-xmark"></i></button>`}</div>
+                    </div>`;
+                }).join('');
+            }
+            renderSchedules() {
+                const container = document.getElementById('adv-schedule-list');
+                if (!container) return;
+                if (!this.schedules.length) {
+                    container.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">No practice schedule yet.</div>`;
+                    return;
+                }
+                container.innerHTML = this.schedules.map(schedule => {
+                    const type = ADVOCACY_PRACTICE_TYPES[schedule.practiceType] || ADVOCACY_PRACTICE_TYPES.guided_alac;
+                    const next = AdvocacyUtils.nextOccurrence(schedule);
+                    return `<div class="border border-slate-200 rounded-xl p-4 ${schedule.active === false ? 'opacity-50 bg-slate-50' : 'bg-white'}">
+                        <div class="flex justify-between items-start gap-3"><div><p class="font-bold text-sm text-slate-800"><i class="fas ${type.icon} text-indigo-600 mr-2"></i>${Security.escapeHTML(schedule.title || type.label)}</p><p class="text-xs text-slate-500 mt-2">${Security.escapeHTML(AdvocacyUtils.recurrenceLabel(schedule))}</p><p class="text-xs text-slate-500 mt-1">${AdvocacyUtils.formatTime(schedule.startTime)} • ${Number(schedule.durationMinutes || 20)} min</p>${next ? `<p class="text-[11px] text-indigo-600 font-bold mt-2">Next: ${next.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' })}</p>` : ''}</div><div class="flex gap-1"><button onclick="window.appHandlers.toggleAdvocacySchedule('${schedule.id}', ${schedule.active === false ? 'true' : 'false'})" class="text-slate-400 hover:text-green-600 p-1.5" title="${schedule.active === false ? 'Activate' : 'Pause'}"><i class="fas ${schedule.active === false ? 'fa-play' : 'fa-pause'}"></i></button><button onclick="window.appHandlers.editAdvocacySchedule('${schedule.id}')" class="text-slate-400 hover:text-amber-600 p-1.5"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.deleteAdvocacySchedule('${schedule.id}')" class="text-slate-400 hover:text-red-600 p-1.5"><i class="fas fa-trash"></i></button></div></div>
+                    </div>`;
+                }).join('');
+            }
+            renderProgress() {
+                const progress = document.getElementById('adv-progress-list');
+                if (!progress) return;
+                const completed = this.sessions.filter(session => session.status === 'completed');
+                const now = new Date();
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() - 6);
+                weekStart.setHours(0, 0, 0, 0);
+                const completedThisWeek = completed.filter(session => {
+                    const millis = Utils.timestampMillis(session.completedAt || session.created);
+                    return millis >= weekStart.getTime();
+                });
+                document.getElementById('adv-stat-week').innerText = String(completedThisWeek.length);
+                const scored = completed.filter(session => Number.isFinite(Number(session.overallScore)));
+                document.getElementById('adv-stat-score').innerText = scored.length ? `${Math.round(scored.reduce((sum, session) => sum + Number(session.overallScore), 0) / scored.length)}%` : '—';
+                const completionDates = new Set(completed.map(session => session.completedDate || (Utils.timestampMillis(session.completedAt) ? AdvocacyUtils.localDateKey(new Date(Utils.timestampMillis(session.completedAt))) : '')).filter(Boolean));
+                let streak = 0;
+                const cursor = new Date();
+                cursor.setHours(0, 0, 0, 0);
+                while (completionDates.has(AdvocacyUtils.localDateKey(cursor))) {
+                    streak += 1;
+                    cursor.setDate(cursor.getDate() - 1);
+                }
+                document.getElementById('adv-stat-streak').innerHTML = `${streak} <span class="text-sm text-slate-400">days</span>`;
+                if (!completed.length) {
+                    progress.innerHTML = `<div class="text-center py-6 text-slate-400 text-sm">Your completed sessions and scores will appear here.</div>`;
+                    return;
+                }
+                progress.innerHTML = completed.slice(0, 5).map(session => `<div class="border-b border-slate-100 pb-3 last:border-0 last:pb-0"><div class="flex justify-between gap-3"><div><p class="font-bold text-sm text-slate-700">${Security.escapeHTML(session.title || ADVOCACY_PRACTICE_TYPES[session.practiceType]?.label || 'Practice')}</p><p class="text-xs text-slate-400 mt-1">${Security.escapeHTML(session.subjectName || 'General')} • ${Security.escapeHTML(session.completedDate || '')}</p></div><span class="font-bold text-sm ${Number(session.overallScore || 0) >= 75 ? 'text-green-600' : 'text-amber-600'}">${Number.isFinite(Number(session.overallScore)) ? `${session.overallScore}%` : 'Done'}</span></div></div>`).join('');
+            }
+            renderPracticeChooser() {
+                const container = document.getElementById('adv-practice-workspace');
+                if (!container) return;
+                container.innerHTML = `<div class="h-full flex flex-col justify-center"><div class="text-center mb-8"><i class="fas fa-comments text-6xl text-indigo-100 mb-4"></i><h4 class="text-xl font-bold text-slate-800">Choose a Practice Mode</h4><p class="text-sm text-slate-500 mt-2">You can begin immediately or use a scheduled session above.</p></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto w-full">${Object.entries(ADVOCACY_PRACTICE_TYPES).map(([id, type]) => `<button onclick="window.appHandlers.openAdvocacyPractice('${id}')" class="text-left border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 rounded-xl p-5 transition"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center"><i class="fas ${type.icon} text-xl"></i></div><div><p class="font-bold text-slate-800">${type.label}</p><p class="text-xs text-slate-500 mt-1">${id === 'guided_alac' ? 'Build your answer one ALAC section at a time.' : id === 'free_alac' ? 'Write one continuous legal answer for analysis.' : id === 'oral_alac' ? 'Practice spoken English and oral legal reasoning.' : 'Read a legal passage aloud and compare your transcript.'}</p></div></div></button>`).join('')}</div></div>`;
+            }
+            openPractice(config = {}) {
+                const type = ADVOCACY_PRACTICE_TYPES[config.practiceType] || ADVOCACY_PRACTICE_TYPES.guided_alac;
+                this.activePractice = {
+                    practiceType: config.practiceType || 'guided_alac',
+                    title: config.title || type.label,
+                    subjectId: config.subjectId || '',
+                    subjectName: config.subjectName || '',
+                    topic: config.topic || '',
+                    question: config.question || '',
+                    durationMinutes: Number(config.durationMinutes || 10),
+                    scheduleId: config.scheduleId || '',
+                    occurrenceDate: config.occurrenceDate || AdvocacyUtils.localDateKey(),
+                    occurrenceKey: config.occurrenceKey || '',
+                    difficulty: config.difficulty || 'Intermediate',
+                    startedAtMillis: Date.now()
+                };
+                this.renderPracticeWorkspace();
+                this.startPracticeTimer(this.activePractice.durationMinutes);
+            }
+            renderPracticeWorkspace() {
+                const container = document.getElementById('adv-practice-workspace');
+                if (!container || !this.activePractice) return;
+                const practice = this.activePractice;
+                const type = ADVOCACY_PRACTICE_TYPES[practice.practiceType];
+                const subjectOptions = [`<option value="">General Legal Practice</option>`, ...this.subjects.map(subject => `<option value="${subject.id}" ${practice.subjectId === subject.id ? 'selected' : ''}>${Security.escapeHTML(subject.name)}</option>`)].join('');
+                let answerArea = '';
+                if (practice.practiceType === 'guided_alac') {
+                    answerArea = `<div class="grid grid-cols-1 gap-4"><div><label class="block text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">A — Direct Answer</label><textarea id="adv-answer" rows="3" class="w-full p-3 border border-blue-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Answer the legal question immediately and definitively."></textarea></div><div><label class="block text-xs font-bold text-amber-700 uppercase tracking-wider mb-1">L — Legal Basis</label><textarea id="adv-legal-basis" rows="4" class="w-full p-3 border border-amber-200 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" placeholder="State the controlling law, article, rule, elements, or doctrine."></textarea></div><div><label class="block text-xs font-bold text-green-700 uppercase tracking-wider mb-1">A — Application</label><textarea id="adv-application" rows="5" class="w-full p-3 border border-green-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500" placeholder="Connect each material fact to the applicable rule or element."></textarea></div><div><label class="block text-xs font-bold text-purple-700 uppercase tracking-wider mb-1">C — Conclusion</label><textarea id="adv-conclusion" rows="3" class="w-full p-3 border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-500" placeholder="State the final legal result consistently with your application."></textarea></div></div>`;
+                } else if (practice.practiceType === 'read_aloud') {
+                    answerArea = `<div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4"><p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Reading Passage</p><p id="adv-reading-passage" class="serif-text leading-relaxed text-slate-800">${Security.escapeHTML(practice.question || 'The rule of law requires legal arguments to be stated clearly, supported by authority, and applied faithfully to the material facts.')}</p></div><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Speech Transcript</label><textarea id="adv-transcript" rows="8" class="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Your speech transcript will appear here. You may also type corrections."></textarea>`;
+                } else if (practice.practiceType === 'oral_alac') {
+                    answerArea = `<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Oral Answer Transcript</label><textarea id="adv-transcript" rows="12" class="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Click Start Microphone and answer orally using ALAC."></textarea>`;
+                } else {
+                    answerArea = `<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Your ALAC Answer</label><textarea id="adv-free-answer" rows="14" class="w-full p-4 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 serif-text leading-relaxed" placeholder="Write one continuous answer. Begin with a direct answer, state the legal basis, apply it to the facts, and conclude."></textarea>`;
+                }
+                const microphoneButtons = ['oral_alac', 'read_aloud'].includes(practice.practiceType) ? `<div class="flex gap-2"><button id="adv-mic-start" onclick="window.appHandlers.startAdvocacySpeech()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-microphone mr-2"></i>Start Microphone</button><button onclick="window.appHandlers.stopAdvocacySpeech()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-stop mr-2"></i>Stop</button></div>` : '';
+                container.innerHTML = `<div class="space-y-5"><div class="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><p class="text-xs font-bold text-indigo-600 uppercase tracking-wider"><i class="fas ${type.icon} mr-2"></i>${type.label}</p><h4 class="text-xl font-bold text-slate-800 mt-1">${Security.escapeHTML(practice.title)}</h4></div><button onclick="window.appHandlers.showAdvocacyChooser()" class="text-sm text-slate-500 hover:text-indigo-600 font-bold"><i class="fas fa-arrow-left mr-1"></i>Choose Another Mode</button></div><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select id="adv-practice-subject" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white">${subjectOptions}</select></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Topic</label><input id="adv-practice-topic" value="${Security.escapeHTML(practice.topic)}" class="w-full p-2.5 border border-slate-200 rounded-lg" placeholder="e.g. Delay, Due Process"></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Difficulty</label><select id="adv-practice-difficulty" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white"><option>Basic</option><option ${practice.difficulty === 'Intermediate' ? 'selected' : ''}>Intermediate</option><option>Bar-Level</option></select></div></div><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key mr-1"></i>Gemini API Key for AI questions and feedback</label><input type="password" id="advocacy-api-key" value="${Security.escapeHTML(localStorage.getItem('gemini_api_key') || '')}" class="w-full p-2 border border-blue-200 rounded-lg text-sm" placeholder="Optional — local feedback works without a key"></div><div><div class="flex justify-between items-center mb-2"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Question or Exercise</label><button onclick="window.appHandlers.generateAdvocacyQuestion()" id="adv-generate-question" class="text-xs font-bold text-indigo-600 hover:text-indigo-800"><i class="fas fa-wand-magic-sparkles mr-1"></i>Generate Question</button></div><textarea id="adv-question" rows="4" class="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter a legal question, hypothetical, or reading passage.">${Security.escapeHTML(practice.question)}</textarea></div>${answerArea}<div class="flex flex-col md:flex-row justify-between gap-3 pt-2">${microphoneButtons}<div class="flex gap-2 ml-auto"><button onclick="window.appHandlers.saveAdvocacyDraft()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-floppy-disk mr-2"></i>Save Draft</button><button onclick="window.appHandlers.evaluateAdvocacyPractice()" id="adv-evaluate-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-check-double mr-2"></i>Evaluate & Complete</button></div></div><div id="adv-feedback" class="hidden"></div></div>`;
+            }
+            startPracticeTimer(minutes) {
+                if (this.practiceTimer) clearInterval(this.practiceTimer);
+                let seconds = Math.max(1, Number(minutes || 10)) * 60;
+                const display = document.getElementById('adv-practice-timer');
+                if (!display) return;
+                display.classList.remove('hidden');
+                const update = () => {
+                    display.innerText = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+                    if (seconds <= 0) {
+                        clearInterval(this.practiceTimer);
+                        this.practiceTimer = null;
+                        display.innerText = 'TIME';
+                        display.classList.add('bg-red-50', 'text-red-700', 'border-red-200');
+                        return;
+                    }
+                    seconds -= 1;
+                };
+                update();
+                this.practiceTimer = setInterval(update, 1000);
+            }
+        }
+
+        const AdvocacyForms = {
+            subjectOptions(selectedId = '') {
+                return `<option value="">General Legal Practice</option>` + views.advocacy_lab.subjects.map(subject => `<option value="${subject.id}" ${selectedId === subject.id ? 'selected' : ''}>${Security.escapeHTML(subject.name)}</option>`).join('');
+            },
+            typeOptions(selected = 'guided_alac') {
+                return Object.entries(ADVOCACY_PRACTICE_TYPES).map(([id, type]) => `<option value="${id}" ${selected === id ? 'selected' : ''}>${type.label}</option>`).join('');
+            },
+            schedule(existing = null) {
+                const today = AdvocacyUtils.localDateKey();
+                const startTime = existing?.startTime || '19:30';
+                const recurrence = existing?.recurrence || 'selected_days';
+                const selectedDays = existing?.days || ['Monday', 'Wednesday', 'Friday'];
+                Modal.show({
+                    title: `<i class="fas fa-calendar-plus text-indigo-600"></i> ${existing ? 'Edit' : 'Schedule'} Advocacy Practice`,
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Practice Title</label><input id="adv-sch-title" value="${Security.escapeHTML(existing?.title || 'English & ALAC Practice')}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Practice Type</label><select id="adv-sch-type" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${this.typeOptions(existing?.practiceType)}</select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><select id="adv-sch-subject" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${this.subjectOptions(existing?.subjectId)}</select></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Topic or Goal</label><input id="adv-sch-topic" value="${Security.escapeHTML(existing?.topic || '')}" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. Practice direct answers and factual application"></div><div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Start Date</label><input type="date" id="adv-sch-date" value="${existing?.startDate || today}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Time</label><input type="time" id="adv-sch-time" value="${startTime}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Duration</label><input type="number" min="5" max="180" id="adv-sch-duration" value="${Number(existing?.durationMinutes || 20)}" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Reminder</label><select id="adv-sch-reminder" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="0" ${Number(existing?.reminderMinutes) === 0 ? 'selected' : ''}>At start</option><option value="5" ${Number(existing?.reminderMinutes) === 5 ? 'selected' : ''}>5 min before</option><option value="15" ${!existing || Number(existing?.reminderMinutes) === 15 ? 'selected' : ''}>15 min before</option><option value="30" ${Number(existing?.reminderMinutes) === 30 ? 'selected' : ''}>30 min before</option></select></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Recurrence</label><select id="adv-sch-recurrence" onchange="document.getElementById('adv-sch-days').classList.toggle('hidden', this.value !== 'selected_days')" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="one_time" ${recurrence === 'one_time' ? 'selected' : ''}>One time</option><option value="daily" ${recurrence === 'daily' ? 'selected' : ''}>Every day</option><option value="selected_days" ${['selected_days','after_class'].includes(recurrence) ? 'selected' : ''}>Selected weekdays</option></select></div><div id="adv-sch-days" class="mt-3 ${recurrence === 'selected_days' || recurrence === 'after_class' ? '' : 'hidden'}"><label class="block text-sm font-medium text-slate-700 mb-2">Practice Days</label><div class="grid grid-cols-2 md:grid-cols-4 gap-2">${AdvocacyUtils.dayNames.map(day => `<label class="flex items-center gap-2 p-2 border border-slate-200 rounded-lg text-sm"><input type="checkbox" name="adv-sch-day" value="${day}" ${selectedDays.includes(day) ? 'checked' : ''}>${day}</label>`).join('')}</div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Difficulty</label><select id="adv-sch-difficulty" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option>Basic</option><option ${!existing || existing?.difficulty === 'Intermediate' ? 'selected' : ''}>Intermediate</option><option ${existing?.difficulty === 'Bar-Level' ? 'selected' : ''}>Bar-Level</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Commitment Mode</label><select id="adv-sch-strictness" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="flexible" ${existing?.strictness === 'flexible' ? 'selected' : ''}>Flexible</option><option value="standard" ${!existing || existing?.strictness === 'standard' ? 'selected' : ''}>Standard</option><option value="accountability" ${existing?.strictness === 'accountability' ? 'selected' : ''}>Accountability</option></select></div></div>`,
+                    submitText: existing ? 'Update Schedule' : 'Create Schedule',
+                    onSubmit: async () => {
+                        const title = document.getElementById('adv-sch-title').value.trim();
+                        const startDate = document.getElementById('adv-sch-date').value;
+                        const startTimeValue = document.getElementById('adv-sch-time').value;
+                        if (!title || !startDate || !startTimeValue) throw new Error('Title, date, and time are required.');
+                        const subjectSelect = document.getElementById('adv-sch-subject');
+                        const subjectId = subjectSelect.value;
+                        const subjectName = subjectId ? (views.advocacy_lab.subjects.find(subject => subject.id === subjectId)?.name || '') : 'General';
+                        const recurrenceValue = document.getElementById('adv-sch-recurrence').value;
+                        const days = Array.from(document.querySelectorAll('input[name="adv-sch-day"]:checked')).map(input => input.value);
+                        if (recurrenceValue === 'selected_days' && !days.length) throw new Error('Select at least one practice day.');
+                        const data = { title, practiceType: document.getElementById('adv-sch-type').value, subjectId, subjectName, topic: document.getElementById('adv-sch-topic').value.trim(), startDate, startTime: startTimeValue, durationMinutes: Number(document.getElementById('adv-sch-duration').value || 20), reminderMinutes: Number(document.getElementById('adv-sch-reminder').value || 0), recurrence: recurrenceValue, days: recurrenceValue === 'selected_days' ? days : [], difficulty: document.getElementById('adv-sch-difficulty').value, strictness: document.getElementById('adv-sch-strictness').value, active: existing?.active !== false, updated: serverTimestamp() };
+                        if (existing) await AppDB.update('advocacy_schedules', existing.id, data);
+                        else await AppDB.add('advocacy_schedules', { ...data, created: serverTimestamp() });
+                    }
+                });
+            },
+            afterClass() {
+                const classes = views.advocacy_lab.classes;
+                if (!classes.length) {
+                    alert('Add your class schedule on the Dashboard first, then create an after-class advocacy routine.');
+                    return;
+                }
+                const classOptions = classes.map(item => `<option value="${item.id}">${Security.escapeHTML(item.day || '')} • ${Security.escapeHTML(item.subject || 'Class')} • ${Security.escapeHTML(item.time || '')}</option>`).join('');
+                Modal.show({
+                    title: '<i class="fas fa-person-walking-arrow-right text-indigo-600"></i> Schedule Practice After Class',
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Choose Class</label><select id="adv-after-class" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${classOptions}</select></div><div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Class End Time</label><input type="time" id="adv-after-end" value="18:00" class="w-full p-2 border border-slate-300 rounded-lg"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Begin After</label><select id="adv-after-offset" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="0">Immediately</option><option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="60">1 hour</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Duration</label><input type="number" min="5" max="120" id="adv-after-duration" value="20" class="w-full p-2 border border-slate-300 rounded-lg"></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Practice Type</label><select id="adv-after-type" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${this.typeOptions('oral_alac')}</select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Reminder</label><select id="adv-after-reminder" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="0">At start</option><option value="5">5 minutes before</option><option value="15" selected>15 minutes before</option></select></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Topic or Goal</label><input id="adv-after-topic" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. Review today’s lesson through oral ALAC"></div><p class="text-xs text-slate-400 mt-3">This creates a weekly practice session on the selected class day.</p>`,
+                    submitText: 'Create After-Class Routine',
+                    onSubmit: async () => {
+                        const classId = document.getElementById('adv-after-class').value;
+                        const classItem = classes.find(item => item.id === classId);
+                        if (!classItem) throw new Error('Select a class.');
+                        const endTime = document.getElementById('adv-after-end').value;
+                        if (!endTime) throw new Error('Enter the class end time.');
+                        const startTime = AdvocacyUtils.addMinutesToTime(endTime, Number(document.getElementById('adv-after-offset').value || 0));
+                        const practiceType = document.getElementById('adv-after-type').value;
+                        await AppDB.add('advocacy_schedules', { title: `${classItem.subject || 'Class'} — After-Class Practice`, practiceType, subjectId: classItem.subjectId || '', subjectName: classItem.subject || 'General', topic: document.getElementById('adv-after-topic').value.trim() || `Review the day’s ${classItem.subject || 'law'} lesson`, startDate: AdvocacyUtils.localDateKey(), startTime, durationMinutes: Number(document.getElementById('adv-after-duration').value || 20), reminderMinutes: Number(document.getElementById('adv-after-reminder').value || 15), recurrence: 'after_class', days: [classItem.day], sourceClassId: classId, classEndTime: endTime, difficulty: 'Intermediate', strictness: 'standard', active: true, created: serverTimestamp(), updated: serverTimestamp() });
+                    }
+                });
+            }
+        };
+
         // --- PASTE THIS MISSING CLASS HERE ---
         class ReviewView {
             constructor() { this.unsubscribe = null; }
@@ -987,7 +1488,7 @@ const cleanAiJsonResponse = (text) => {
         // ------------------------------------
         
        const views = {
-            dashboard: new DashboardView(), semesters: new SemestersView(), subjects: new SubjectsView(), subject_notebook: new SubjectNotebookView(), matrix: new DoctrineMatrixView(),
+            dashboard: new DashboardView(), semesters: new SemestersView(), subjects: new SubjectsView(), subject_notebook: new SubjectNotebookView(), advocacy_lab: new AdvocacyLabView(), matrix: new DoctrineMatrixView(),
             lex_vocab: new LexVocabView(), // <-- ADD THIS LINE HERE
             codal_trainer: new CodalTrainerView(), mnemonic: new MnemonicView(), issue_tree: new IssueTreeView(), ai_search: new AiSearchView(), digests: new DigestsView(),
             case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView(),
@@ -997,7 +1498,7 @@ const cleanAiJsonResponse = (text) => {
         const sidebarNav = document.querySelector('nav'); const contentArea = document.getElementById('content-area'); const pageTitle = document.getElementById('page-title');
         
        const navItems = [
-            { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' }, { id: 'semesters', label: 'Semesters', icon: 'fa-calendar-days' }, { id: 'subjects', label: 'Subjects', icon: 'fa-book' }, { id: 'matrix', label: 'Doctrine Matrix', icon: 'fa-table' },
+            { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' }, { id: 'semesters', label: 'Semesters', icon: 'fa-calendar-days' }, { id: 'subjects', label: 'Subjects', icon: 'fa-book' }, { id: 'advocacy_lab', label: 'Advocacy Lab', icon: 'fa-comments' }, { id: 'matrix', label: 'Doctrine Matrix', icon: 'fa-table' },
             { id: 'lex_vocab', label: 'Lex-Vocab', icon: 'fa-language' }, // <-- ADD THIS LINE HERE
             { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' }, { id: 'codal_trainer', label: 'Codal Trainer', icon: 'fa-eye-slash' }, { id: 'mnemonic', label: 'Mnemonic Maker', icon: 'fa-lightbulb' },
             { id: 'issue_tree', label: 'Issue Trees', icon: 'fa-project-diagram' }, { id: 'ai_search', label: 'AI Legal Search', icon: 'fa-search' }, { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' }, 
@@ -1660,6 +2161,202 @@ const cleanAiJsonResponse = (text) => {
             },
             downloadText: (filename, textContent) => { const cleanText = typeof textContent === 'string' ? textContent.replace(/\\n/g, '\n') : textContent; const element = document.createElement('a'); element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(cleanText)); element.setAttribute('download', filename); element.style.display = 'none'; document.body.appendChild(element); element.click(); document.body.removeChild(element); },
             
+            requestAdvocacyNotifications: async () => await AdvocacyReminderService.requestPermission(),
+            scheduleAdvocacyPractice: () => AdvocacyForms.schedule(),
+            editAdvocacySchedule: (id) => {
+                const schedule = views.advocacy_lab.schedules.find(item => item.id === id);
+                if (schedule) AdvocacyForms.schedule(schedule);
+            },
+            scheduleAdvocacyAfterClass: () => AdvocacyForms.afterClass(),
+            toggleAdvocacySchedule: async (id, active) => await AppDB.update('advocacy_schedules', id, { active, updated: serverTimestamp() }),
+            deleteAdvocacySchedule: (id) => Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete Practice Schedule', content: '<p>Delete this advocacy practice schedule? Completed practice history will be preserved.</p>', submitText: 'Delete Schedule', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('advocacy_schedules', id) }),
+            openAdvocacyPractice: (practiceType) => views.advocacy_lab.openPractice({ practiceType, durationMinutes: 10 }),
+            showAdvocacyChooser: () => { views.advocacy_lab.activePractice = null; if (views.advocacy_lab.practiceTimer) clearInterval(views.advocacy_lab.practiceTimer); const timer = document.getElementById('adv-practice-timer'); if (timer) timer.classList.add('hidden'); views.advocacy_lab.renderPracticeChooser(); },
+            quickAdvocacyPractice: () => {
+                Modal.show({
+                    title: '<i class="fas fa-bolt text-amber-500"></i> Quick 10-Minute Practice',
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Practice Type</label><select id="adv-quick-type" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${AdvocacyForms.typeOptions('guided_alac')}</select></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Subject</label><select id="adv-quick-subject" class="w-full p-2 border border-slate-300 rounded-lg bg-white">${AdvocacyForms.subjectOptions()}</select></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Topic</label><input id="adv-quick-topic" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="Optional topic"></div>`,
+                    submitText: 'Start Practice',
+                    onSubmit: async () => {
+                        const subjectId = document.getElementById('adv-quick-subject').value;
+                        const subjectName = subjectId ? (views.advocacy_lab.subjects.find(subject => subject.id === subjectId)?.name || '') : 'General';
+                        views.advocacy_lab.openPractice({ practiceType: document.getElementById('adv-quick-type').value, subjectId, subjectName, topic: document.getElementById('adv-quick-topic').value.trim(), durationMinutes: 10 });
+                    }
+                });
+            },
+            startScheduledAdvocacy: (scheduleId, occurrenceDate) => {
+                const schedule = views.advocacy_lab.schedules.find(item => item.id === scheduleId) || AdvocacyReminderService.schedules.find(item => item.id === scheduleId);
+                if (!schedule) return;
+                const date = AdvocacyUtils.parseLocalDate(occurrenceDate);
+                views.advocacy_lab.openPractice({ ...schedule, scheduleId, occurrenceDate, occurrenceKey: AdvocacyUtils.occurrenceKey(schedule, date) });
+            },
+            markAdvocacyMissed: (scheduleId, occurrenceDate) => {
+                const schedule = views.advocacy_lab.schedules.find(item => item.id === scheduleId);
+                if (!schedule) return;
+                const requireReason = schedule.strictness === 'accountability';
+                Modal.show({
+                    title: '<i class="fas fa-calendar-xmark text-red-500"></i> Mark Practice as Missed',
+                    content: `<p class="text-sm text-slate-600">This session will be recorded as missed.</p>${requireReason ? '<div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Reason</label><select id="adv-missed-reason" class="w-full p-2 border border-slate-300 rounded-lg"><option value="">Select a reason</option><option>Class or work conflict</option><option>Emergency</option><option>Feeling unwell</option><option>Reschedule for later</option><option>Other</option></select></div>' : ''}`,
+                    submitText: 'Record Missed',
+                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg',
+                    onSubmit: async () => {
+                        const reason = requireReason ? document.getElementById('adv-missed-reason').value : '';
+                        if (requireReason && !reason) throw new Error('Choose a reason before skipping an accountability session.');
+                        await AppDB.add('advocacy_sessions', { scheduleId, occurrenceKey: `${scheduleId}_${occurrenceDate}`, scheduledDate: occurrenceDate, completedDate: occurrenceDate, title: schedule.title, practiceType: schedule.practiceType, subjectId: schedule.subjectId || '', subjectName: schedule.subjectName || '', topic: schedule.topic || '', status: 'missed', missedReason: reason, created: serverTimestamp() });
+                    }
+                });
+            },
+            generateAdvocacyQuestion: async () => {
+                const practice = views.advocacy_lab.activePractice;
+                if (!practice) return;
+                const questionEl = document.getElementById('adv-question');
+                const apiKey = document.getElementById('advocacy-api-key')?.value.trim();
+                const subjectSelect = document.getElementById('adv-practice-subject');
+                const subjectName = subjectSelect?.value ? (views.advocacy_lab.subjects.find(subject => subject.id === subjectSelect.value)?.name || 'Philippine Law') : 'Philippine Law';
+                const topic = document.getElementById('adv-practice-topic')?.value.trim() || 'a foundational legal issue';
+                const difficulty = document.getElementById('adv-practice-difficulty')?.value || 'Intermediate';
+                const button = document.getElementById('adv-generate-question');
+                if (button) button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Generating...';
+                try {
+                    if (!apiKey) {
+                        const localQuestions = {
+                            guided_alac: `A party alleges a violation involving ${topic}. Resolve the issue using a direct Answer, the controlling Legal Basis, an Application to the material facts, and a clear Conclusion.`,
+                            free_alac: `Discuss whether the claim involving ${topic} should prosper under the applicable principles of ${subjectName}.`,
+                            oral_alac: `Explain the general rule, elements, exceptions, and practical application of ${topic} in ninety seconds.`,
+                            read_aloud: `A persuasive legal answer begins with a direct response, identifies the controlling legal basis, applies the rule to the material facts, and ends with a definite conclusion.`
+                        };
+                        questionEl.value = localQuestions[practice.practiceType];
+                        if (practice.practiceType === 'read_aloud') document.getElementById('adv-reading-passage').innerText = questionEl.value;
+                        return;
+                    }
+                    localStorage.setItem('gemini_api_key', apiKey);
+                    const prompt = `You are a Philippine law professor and English fluency coach. Create one ${difficulty} practice exercise for ${subjectName}, focused on ${topic}. Mode: ${ADVOCACY_PRACTICE_TYPES[practice.practiceType].label}. ${practice.practiceType === 'read_aloud' ? 'Write a clear 90-130 word legal English passage suitable for reading aloud.' : practice.practiceType === 'oral_alac' ? 'Create one concise recitation question or hypothetical answerable orally using ALAC.' : 'Create one legal hypothetical that requires an ALAC answer.'} Return only the exercise text, without headings or commentary.`;
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }) });
+                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                    const data = await response.json();
+                    questionEl.value = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                    if (practice.practiceType === 'read_aloud') document.getElementById('adv-reading-passage').innerText = questionEl.value;
+                } catch (error) {
+                    alert(`Unable to generate the exercise: ${error.message}`);
+                } finally {
+                    if (button) button.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-1"></i>Generate Question';
+                }
+            },
+            startAdvocacySpeech: () => {
+                const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!Recognition) {
+                    alert('Speech recognition is not supported by this browser. Chrome or Edge on desktop is recommended.');
+                    return;
+                }
+                if (views.advocacy_lab.speechRecognition) {
+                    try { views.advocacy_lab.speechRecognition.stop(); } catch (error) {}
+                }
+                const transcriptEl = document.getElementById('adv-transcript');
+                if (!transcriptEl) return;
+                const recognition = new Recognition();
+                recognition.lang = 'en-PH';
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                views.advocacy_lab.speechBaseText = transcriptEl.value.trim();
+                views.advocacy_lab.speakingStartedAt = Date.now();
+                recognition.onresult = event => {
+                    let finalText = '';
+                    let interimText = '';
+                    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+                        const text = event.results[index][0].transcript;
+                        if (event.results[index].isFinal) finalText += `${text} `;
+                        else interimText += text;
+                    }
+                    if (finalText) views.advocacy_lab.speechBaseText = `${views.advocacy_lab.speechBaseText} ${finalText}`.trim();
+                    transcriptEl.value = `${views.advocacy_lab.speechBaseText}${interimText ? ` ${interimText}` : ''}`.trim();
+                };
+                recognition.onerror = event => alert(`Microphone error: ${event.error}`);
+                recognition.onend = () => {
+                    const button = document.getElementById('adv-mic-start');
+                    if (button) button.innerHTML = '<i class="fas fa-microphone mr-2"></i>Start Microphone';
+                };
+                views.advocacy_lab.speechRecognition = recognition;
+                recognition.start();
+                const button = document.getElementById('adv-mic-start');
+                if (button) button.innerHTML = '<i class="fas fa-circle text-xs animate-pulse mr-2"></i>Listening...';
+            },
+            stopAdvocacySpeech: () => {
+                if (views.advocacy_lab.speechRecognition) {
+                    try { views.advocacy_lab.speechRecognition.stop(); } catch (error) {}
+                    views.advocacy_lab.speechRecognition = null;
+                }
+            },
+            saveAdvocacyDraft: async () => {
+                const practice = views.advocacy_lab.activePractice;
+                if (!practice) return;
+                const answer = window.appHandlers.collectAdvocacyAnswer();
+                const subjectSelect = document.getElementById('adv-practice-subject');
+                const subjectId = subjectSelect?.value || practice.subjectId || '';
+                const subjectName = subjectId ? (views.advocacy_lab.subjects.find(subject => subject.id === subjectId)?.name || practice.subjectName || '') : 'General';
+                await AppDB.add('advocacy_sessions', { ...practice, question: document.getElementById('adv-question')?.value.trim() || '', answer, subjectId, subjectName, topic: document.getElementById('adv-practice-topic')?.value.trim() || '', status: 'draft', created: serverTimestamp() });
+                alert('Practice draft saved.');
+            },
+            collectAdvocacyAnswer: () => {
+                const practice = views.advocacy_lab.activePractice;
+                if (!practice) return '';
+                if (practice.practiceType === 'guided_alac') {
+                    return `ANSWER:\n${document.getElementById('adv-answer')?.value.trim() || ''}\n\nLEGAL BASIS:\n${document.getElementById('adv-legal-basis')?.value.trim() || ''}\n\nAPPLICATION:\n${document.getElementById('adv-application')?.value.trim() || ''}\n\nCONCLUSION:\n${document.getElementById('adv-conclusion')?.value.trim() || ''}`;
+                }
+                if (practice.practiceType === 'free_alac') return document.getElementById('adv-free-answer')?.value.trim() || '';
+                return document.getElementById('adv-transcript')?.value.trim() || '';
+            },
+            evaluateAdvocacyPractice: async () => {
+                const practice = views.advocacy_lab.activePractice;
+                if (!practice) return;
+                const answer = window.appHandlers.collectAdvocacyAnswer();
+                if (!answer || answer.replace(/(ANSWER|LEGAL BASIS|APPLICATION|CONCLUSION):/g, '').trim().length < 15) {
+                    alert('Complete your answer or transcript before evaluation.');
+                    return;
+                }
+                const question = document.getElementById('adv-question')?.value.trim() || '';
+                const apiKey = document.getElementById('advocacy-api-key')?.value.trim();
+                const button = document.getElementById('adv-evaluate-btn');
+                const feedbackEl = document.getElementById('adv-feedback');
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Evaluating...';
+                feedbackEl.classList.remove('hidden');
+                feedbackEl.innerHTML = '<div class="p-5 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 animate-pulse">Lex is reviewing your ALAC structure, English, clarity, and legal style...</div>';
+                let evaluation = AdvocacyUtils.localFeedback(answer, practice.practiceType);
+                try {
+                    if (apiKey) {
+                        localStorage.setItem('gemini_api_key', apiKey);
+                        const prompt = `You are a strict but constructive Philippine law professor and legal English coach. Evaluate the student's response using ALAC: Answer, Legal Basis, Application, Conclusion. Also assess English grammar, clarity, conciseness, and professional legal style. Do not invent legal authorities. Question: ${question}\nStudent response: ${answer}\nReturn ONLY valid JSON in this exact structure: {"scores":{"answer":1,"legalBasis":1,"application":1,"conclusion":1,"grammar":1,"clarity":1,"conciseness":1,"legalStyle":1},"strengths":[""],"improvements":[""],"correctedAnswer":"","overallFeedback":""}. Scores must be integers from 1 to 5.`;
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } }) });
+                        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                        const data = await response.json();
+                        const parsed = JSON.parse(cleanAiJsonResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || '{}'));
+                        const scoreValues = Object.values(parsed.scores || {}).map(Number).filter(Number.isFinite);
+                        parsed.overall = scoreValues.length ? Math.round(scoreValues.reduce((sum, value) => sum + value, 0) / (scoreValues.length * 5) * 100) : evaluation.overall;
+                        parsed.wordCount = evaluation.wordCount;
+                        parsed.fillerWordCount = evaluation.fillerWordCount;
+                        evaluation = { ...evaluation, ...parsed };
+                    }
+                    const subjectSelect = document.getElementById('adv-practice-subject');
+                    const subjectId = subjectSelect?.value || practice.subjectId || '';
+                    const subjectName = subjectId ? (views.advocacy_lab.subjects.find(subject => subject.id === subjectId)?.name || practice.subjectName || '') : 'General';
+                    const topic = document.getElementById('adv-practice-topic')?.value.trim() || practice.topic || '';
+                    const completedDate = AdvocacyUtils.localDateKey();
+                    const speakingSeconds = views.advocacy_lab.speakingStartedAt ? Math.max(1, Math.round((Date.now() - views.advocacy_lab.speakingStartedAt) / 1000)) : null;
+                    const wordsPerMinute = speakingSeconds ? Math.round((Number(evaluation.wordCount || 0) / speakingSeconds) * 60) : null;
+                    await AppDB.add('advocacy_sessions', { ...practice, question, answer, subjectId, subjectName, topic, scores: evaluation.scores || {}, overallScore: evaluation.overall, feedback: evaluation.overallFeedback || '', strengths: evaluation.strengths || [], improvements: evaluation.improvements || [], correctedAnswer: evaluation.correctedAnswer || '', wordCount: evaluation.wordCount || 0, fillerWordCount: evaluation.fillerWordCount || 0, speakingSeconds, wordsPerMinute, status: 'completed', completedDate, completedAt: serverTimestamp(), created: serverTimestamp() });
+                    if (views.advocacy_lab.practiceTimer) clearInterval(views.advocacy_lab.practiceTimer);
+                    const scoreCards = Object.entries(evaluation.scores || {}).map(([key, value]) => `<div class="bg-white border border-slate-200 rounded-lg p-3"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">${Security.escapeHTML(key.replace(/([A-Z])/g, ' $1'))}</p><p class="text-xl font-bold text-indigo-700 mt-1">${Number(value)}/5</p></div>`).join('');
+                    feedbackEl.innerHTML = `<div class="mt-6 bg-indigo-50 border border-indigo-200 rounded-xl p-5"><div class="flex items-center justify-between gap-4 mb-4"><div><p class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Evaluation Result</p><h5 class="text-xl font-bold text-slate-800 mt-1">Overall Score: ${evaluation.overall}%</h5></div>${wordsPerMinute ? `<div class="text-right"><p class="text-xs text-slate-500">Speaking pace</p><p class="font-bold text-indigo-700">${wordsPerMinute} WPM</p></div>` : ''}</div><div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">${scoreCards}</div><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="bg-white rounded-lg border border-green-100 p-4"><h6 class="font-bold text-green-700 text-sm mb-2"><i class="fas fa-check-circle mr-1"></i>Strengths</h6><ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">${(evaluation.strengths || []).map(item => `<li>${Security.escapeHTML(item)}</li>`).join('')}</ul></div><div class="bg-white rounded-lg border border-amber-100 p-4"><h6 class="font-bold text-amber-700 text-sm mb-2"><i class="fas fa-arrow-trend-up mr-1"></i>Improve Next</h6><ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">${(evaluation.improvements || []).map(item => `<li>${Security.escapeHTML(item)}</li>`).join('')}</ul></div></div>${evaluation.overallFeedback ? `<div class="mt-4 text-sm text-slate-700 leading-relaxed">${Security.escapeHTML(evaluation.overallFeedback)}</div>` : ''}${evaluation.correctedAnswer ? `<details class="mt-4 bg-white border border-indigo-100 rounded-lg p-4"><summary class="cursor-pointer font-bold text-indigo-700">View Improved Sample Answer</summary><p class="mt-3 whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">${Security.escapeHTML(evaluation.correctedAnswer)}</p></details>` : ''}</div>`;
+                } catch (error) {
+                    feedbackEl.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">Evaluation could not be completed: ${Security.escapeHTML(error.message)}</div>`;
+                } finally {
+                    button.disabled = false;
+                    button.innerHTML = '<i class="fas fa-check-double mr-2"></i>Evaluate & Complete';
+                }
+            },
+
             login: async () => { try { await signInWithPopup(auth, provider); } catch (e) { alert("Login failed. Check Authorized Domains in Firebase Console."); } },
             logout: async () => { try { await signOut(auth); } catch (e) {} },
             navigate: (viewId) => { 
@@ -2688,9 +3385,9 @@ generateReview: async () => {
             if (user) {
                 currentUser = user; document.getElementById('user-display').innerText = user.displayName || "Counsel";
                 loginScreen.classList.add('opacity-0', 'pointer-events-none'); setTimeout(() => loginScreen.classList.add('hidden'), 300);
-                AppState.init().finally(() => { window.appHandlers.navigate('dashboard'); window.appHandlers.updatePomoUI(); });
+                AppState.init().finally(() => { AdvocacyReminderService.start(); window.appHandlers.navigate('dashboard'); window.appHandlers.updatePomoUI(); });
             } else {
-                cleanupView(views[currentView]); currentUser = null; AppState.activeSemesterId = null; AppState.activeSemester = null;
+                cleanupView(views[currentView]); AdvocacyReminderService.stop(); currentUser = null; AppState.activeSemesterId = null; AppState.activeSemester = null;
                 loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
             }
         });
