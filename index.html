@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lex: Law School Companion V2.5</title>
+    <title>Lex: Law School Companion V2.9</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -54,6 +54,17 @@
         #note-content-editor ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-bottom: 0.5rem !important; }
         #note-content-editor ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-bottom: 0.5rem !important; }
         #note-content-editor li { margin-bottom: 0.25rem !important; display: list-item !important; }
+        .material-generated-content h1 { font-family: 'Merriweather', serif; font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 0.65rem; color: #1e293b; }
+        .material-generated-content h2 { font-family: 'Merriweather', serif; font-size: 1.25rem; font-weight: 700; margin: 1.2rem 0 0.6rem; color: #1e3a8a; }
+        .material-generated-content h3, .material-generated-content h4 { font-weight: 700; margin: 1rem 0 0.45rem; color: #334155; }
+        .material-generated-content p { margin-bottom: 0.75rem; text-align: justify; }
+        .material-generated-content ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0 0.9rem; }
+        .material-generated-content ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0 0.9rem; }
+        .material-generated-content li { margin-bottom: 0.35rem; }
+        .material-generated-content blockquote { border-left: 4px solid #10b981; background: #ecfdf5; padding: 0.85rem 1rem; margin: 0.85rem 0; border-radius: 0 0.5rem 0.5rem 0; }
+        .material-generated-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        .material-generated-content th, .material-generated-content td { border: 1px solid #cbd5e1; padding: 0.65rem; vertical-align: top; }
+        .material-generated-content th { background: #f1f5f9; font-weight: 700; }
         .notebook-section-heading { position: sticky; top: 0; z-index: 5; }
         .note-template-block h1 { font-family: 'Merriweather', serif; font-size: 1.65rem; font-weight: 700; margin: 0 0 .75rem; color: #0f172a; }
         .note-template-block h2 { font-family: 'Merriweather', serif; font-size: 1.15rem; font-weight: 700; margin: 1rem 0 .35rem; color: #1e293b; }
@@ -207,7 +218,7 @@
         }
     
 
-        /* V2.6 — Class and Advocacy Alarm Center */
+        /* V2.7 — Resilient Advocacy Speech Recognition */
         #lex-alarm-overlay { z-index: 360; }
         #lex-alarm-card { animation: lexAlarmEnter .22s ease-out; }
         .lex-alarm-pulse { animation: lexAlarmPulse 1.15s ease-in-out infinite; }
@@ -359,6 +370,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDoc, getDocs, writeBatch, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDxKEf2v5P2LN_a2BcR_ODYDGINZMmVPWk",
@@ -374,6 +386,7 @@
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
         const db = getFirestore(app);
+        const storage = getStorage(app);
         
         let currentUser = null;
         let currentView = 'dashboard';
@@ -412,10 +425,168 @@
                 .replace(/'/g, '&#039;'),
             sanitizeAI: (html = '') => window.DOMPurify
                 ? DOMPurify.sanitize(String(html), {
-                    ALLOWED_TAGS: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 'h3', 'h4', 'blockquote', 'mark'],
-                    ALLOWED_ATTR: ['class']
+                    ALLOWED_TAGS: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'blockquote', 'mark', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'details', 'summary'],
+                    ALLOWED_ATTR: ['class', 'colspan', 'rowspan']
                 })
                 : Security.escapeHTML(html).replace(/\n/g, '<br>')
+        };
+
+
+        // Central Gemini client: discovers models available to the user's API key
+        // instead of relying on a single hardcoded model name that may return 404.
+        const GeminiService = {
+            cache: new Map(),
+            staticFallbackModels: [
+                'models/gemini-flash-latest',
+                'models/gemini-3.5-flash',
+                'models/gemini-2.5-flash',
+                'models/gemini-3-flash-preview'
+            ],
+            cacheKey(apiKey) {
+                return String(apiKey || '').slice(-12);
+            },
+            normalizeModelName(name = '') {
+                const value = String(name || '').trim();
+                return value.startsWith('models/') ? value : `models/${value}`;
+            },
+            isUsableTextModel(model) {
+                const name = String(model?.name || model?.baseModelId || '').toLowerCase();
+                const methods = model?.supportedGenerationMethods || model?.supportedActions || [];
+                if (!methods.includes('generateContent')) return false;
+                if (!name.includes('gemini')) return false;
+                return !/(embedding|imagen|veo|image|tts|audio|live|robotics|computer-use)/i.test(name);
+            },
+            modelScore(model) {
+                const name = String(model?.name || '').replace(/^models\//, '').toLowerCase();
+                const preferred = [
+                    'gemini-flash-latest',
+                    'gemini-3.5-flash',
+                    'gemini-2.5-flash',
+                    'gemini-3-flash-preview'
+                ];
+                const exact = preferred.indexOf(name);
+                if (exact >= 0) return exact;
+                let score = 50;
+                if (name.includes('flash')) score -= 25;
+                if (name.includes('lite')) score -= 4;
+                if (name.includes('pro')) score += 12;
+                if (name.includes('latest')) score -= 5;
+                if (name.includes('preview')) score += 5;
+                if (name.includes('exp')) score += 20;
+                return score;
+            },
+            async readError(response) {
+                let payload = null;
+                try { payload = await response.json(); } catch (_) {}
+                const message = payload?.error?.message || payload?.message || `Gemini API error ${response.status}`;
+                const error = new Error(message);
+                error.status = response.status;
+                error.payload = payload;
+                return error;
+            },
+            async listAvailableModels(apiKey) {
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(apiKey)}`;
+                const response = await fetch(endpoint);
+                if (!response.ok) throw await this.readError(response);
+                const data = await response.json();
+                return (data.models || [])
+                    .filter(model => this.isUsableTextModel(model))
+                    .sort((a, b) => this.modelScore(a) - this.modelScore(b))
+                    .map(model => this.normalizeModelName(model.name || model.baseModelId));
+            },
+            async candidateModels(apiKey, refresh = false) {
+                const key = this.cacheKey(apiKey);
+                if (!refresh && this.cache.has(key)) return this.cache.get(key);
+                let models = [];
+                try {
+                    models = await this.listAvailableModels(apiKey);
+                } catch (error) {
+                    console.warn('Could not list Gemini models; trying safe fallbacks.', error);
+                }
+                const combined = [...models, ...this.staticFallbackModels]
+                    .map(name => this.normalizeModelName(name));
+                const unique = [...new Set(combined)];
+                this.cache.set(key, unique);
+                return unique;
+            },
+            async callModel(apiKey, modelName, requestBody) {
+                const model = this.normalizeModelName(modelName);
+                const endpoint = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                if (!response.ok) throw await this.readError(response);
+                const data = await response.json();
+                const text = data?.candidates?.[0]?.content?.parts
+                    ?.map(part => part?.text || '')
+                    .join('')
+                    .trim();
+                if (!text) {
+                    const blockReason = data?.promptFeedback?.blockReason;
+                    throw new Error(blockReason ? `Gemini blocked the request: ${blockReason}` : 'Gemini returned an empty response.');
+                }
+                data._lexModel = model.replace(/^models\//, '');
+                return data;
+            },
+            async generate(apiKey, requestBody) {
+                if (!apiKey) throw new Error('Enter your Gemini API key first.');
+                const key = this.cacheKey(apiKey);
+                let candidates = await this.candidateModels(apiKey);
+                let lastError = null;
+
+                // Try a small number of available models. A 404 simply moves to the next model.
+                for (const model of candidates.slice(0, 8)) {
+                    try {
+                        const data = await this.callModel(apiKey, model, requestBody);
+                        const reordered = [model, ...candidates.filter(item => item !== model)];
+                        this.cache.set(key, reordered);
+                        return data;
+                    } catch (error) {
+                        lastError = error;
+                        console.warn(`Gemini model ${model} failed:`, error);
+
+                        // Some models may reject JSON response mode. Retry the same model without it.
+                        if (error.status === 400 && requestBody?.generationConfig?.responseMimeType) {
+                            const compatibleBody = JSON.parse(JSON.stringify(requestBody));
+                            delete compatibleBody.generationConfig.responseMimeType;
+                            try {
+                                const data = await this.callModel(apiKey, model, compatibleBody);
+                                const reordered = [model, ...candidates.filter(item => item !== model)];
+                                this.cache.set(key, reordered);
+                                return data;
+                            } catch (retryError) {
+                                lastError = retryError;
+                            }
+                        }
+
+                        // These errors may be model-specific or temporary, so another listed model may work.
+                        if (![403, 404, 429, 500, 503, 504].includes(Number(lastError?.status))) {
+                            throw lastError;
+                        }
+                    }
+                }
+
+                this.cache.delete(key);
+                const status = Number(lastError?.status || 0);
+                if (status === 404) {
+                    throw new Error('No compatible Gemini text model was found for this API key. Lex checked the models available to your key automatically. Try creating a fresh key in Google AI Studio.');
+                }
+                if (status === 429) {
+                    throw new Error('The Gemini free-tier limit was reached. Please wait a minute and try again.');
+                }
+                if (status === 403) {
+                    throw new Error('This Gemini API key is not permitted to generate content. Check that the key is active and belongs to a Google AI Studio project.');
+                }
+                throw lastError || new Error('Unable to connect to Gemini.');
+            },
+            text(data) {
+                return data?.candidates?.[0]?.content?.parts
+                    ?.map(part => part?.text || '')
+                    .join('')
+                    .trim() || '';
+            }
         };
 
         const AppState = {
@@ -486,6 +657,201 @@
             excerpt: (value = '', maxLength = 1200) => {
                 const textValue = String(value || '').trim();
                 return textValue.length > maxLength ? `${textValue.slice(0, maxLength).trim()}…` : textValue;
+            }
+        };
+
+        const MaterialUtils = {
+            maxFileBytes: 30 * 1024 * 1024,
+            maxPages: 400,
+            maxExtractedCharacters: 1800000,
+            chunkCharacters: 14000,
+            formatBytes(bytes = 0) {
+                const value = Number(bytes || 0);
+                if (value < 1024) return `${value} B`;
+                if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+                return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+            },
+            safeFilename(filename = 'material.pdf') {
+                return String(filename || 'material.pdf')
+                    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+                    .replace(/_+/g, '_')
+                    .slice(-140);
+            },
+            pageLabel(chunk) {
+                const start = Number(chunk?.pageStart || 1);
+                const end = Number(chunk?.pageEnd || start);
+                return start === end ? `p. ${start}` : `pp. ${start}–${end}`;
+            },
+            async extractPdf(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const pages = [];
+                let totalCharacters = 0;
+                const pageLimit = Math.min(pdf.numPages, this.maxPages);
+                for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber++) {
+                    const page = await pdf.getPage(pageNumber);
+                    const textContent = await page.getTextContent();
+                    const text = textContent.items
+                        .map(item => item.str || '')
+                        .join(' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    const remaining = this.maxExtractedCharacters - totalCharacters;
+                    if (remaining <= 0) break;
+                    const kept = text.slice(0, remaining);
+                    pages.push({ pageNumber, text: kept });
+                    totalCharacters += kept.length;
+                }
+                const usefulPages = pages.filter(page => page.text.length >= 20).length;
+                const scannedLikely = totalCharacters < Math.max(120, pdf.numPages * 25) || usefulPages === 0;
+                return {
+                    pageCount: pdf.numPages,
+                    processedPages: pages.length,
+                    totalCharacters,
+                    scannedLikely,
+                    truncated: pdf.numPages > pageLimit || totalCharacters >= this.maxExtractedCharacters,
+                    pages
+                };
+            },
+            makeChunks(pages = []) {
+                const chunks = [];
+                let buffer = '';
+                let pageStart = null;
+                let pageEnd = null;
+                const flush = () => {
+                    const clean = buffer.trim();
+                    if (!clean) return;
+                    chunks.push({
+                        order: chunks.length,
+                        pageStart: pageStart || 1,
+                        pageEnd: pageEnd || pageStart || 1,
+                        text: clean
+                    });
+                    buffer = '';
+                    pageStart = null;
+                    pageEnd = null;
+                };
+                pages.forEach(page => {
+                    const pageText = String(page.text || '').trim();
+                    if (!pageText) return;
+                    const segments = [];
+                    for (let offset = 0; offset < pageText.length; offset += this.chunkCharacters) {
+                        segments.push(pageText.slice(offset, offset + this.chunkCharacters));
+                    }
+                    segments.forEach(segment => {
+                        const addition = `${buffer ? '\n' : ''}[Page ${page.pageNumber}] ${segment}`;
+                        if (buffer && buffer.length + addition.length > this.chunkCharacters) flush();
+                        if (pageStart === null) pageStart = page.pageNumber;
+                        pageEnd = page.pageNumber;
+                        buffer += `${buffer ? '\n' : ''}[Page ${page.pageNumber}] ${segment}`;
+                        if (buffer.length >= this.chunkCharacters) flush();
+                    });
+                });
+                flush();
+                return chunks;
+            },
+            async saveChunks(materialId, subjectId, semesterId, chunks = []) {
+                if (!currentUser || !chunks.length) return;
+                const root = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks');
+                for (let start = 0; start < chunks.length; start += 400) {
+                    const batch = writeBatch(db);
+                    chunks.slice(start, start + 400).forEach(chunk => {
+                        const chunkRef = doc(root);
+                        batch.set(chunkRef, {
+                            materialId,
+                            subjectId,
+                            semesterId: semesterId || null,
+                            order: Number(chunk.order || 0),
+                            pageStart: Number(chunk.pageStart || 1),
+                            pageEnd: Number(chunk.pageEnd || chunk.pageStart || 1),
+                            text: String(chunk.text || ''),
+                            created: serverTimestamp()
+                        });
+                    });
+                    await batch.commit();
+                }
+            },
+            async getChunks(materialId) {
+                if (!currentUser) return [];
+                const snapshot = await getDocs(query(
+                    collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks'),
+                    where('materialId', '==', materialId)
+                ));
+                const chunks = [];
+                snapshot.forEach(record => chunks.push({ id: record.id, ...record.data() }));
+                return chunks.sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+            },
+            async deleteChunks(materialId) {
+                if (!currentUser) return;
+                const snapshot = await getDocs(query(
+                    collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks'),
+                    where('materialId', '==', materialId)
+                ));
+                const records = snapshot.docs;
+                for (let start = 0; start < records.length; start += 450) {
+                    const batch = writeBatch(db);
+                    records.slice(start, start + 450).forEach(record => batch.delete(record.ref));
+                    await batch.commit();
+                }
+            },
+            tokenize(value = '') {
+                const stop = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'what', 'when', 'where', 'which', 'into', 'under', 'about', 'does', 'have', 'been', 'were', 'will', 'shall', 'your', 'their', 'there', 'upon', 'also', 'only']);
+                return [...new Set(String(value || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\s-]/g, ' ')
+                    .split(/\s+/)
+                    .filter(word => word.length >= 3 && !stop.has(word))
+                )];
+            },
+            relevantChunks(chunks = [], queryText = '', limit = 8, maxCharacters = 48000) {
+                if (!chunks.length) return [];
+                const keywords = this.tokenize(queryText);
+                let ranked;
+                if (!keywords.length) {
+                    const desired = Math.min(limit, chunks.length);
+                    const indexes = new Set([0, chunks.length - 1]);
+                    if (desired > 2) {
+                        for (let index = 1; index < desired - 1; index++) {
+                            indexes.add(Math.round(index * (chunks.length - 1) / (desired - 1)));
+                        }
+                    }
+                    ranked = [...indexes].sort((a, b) => a - b).map(index => ({ chunk: chunks[index], score: 1 }));
+                } else {
+                    ranked = chunks.map(chunk => {
+                        const lower = String(chunk.text || '').toLowerCase();
+                        let score = 0;
+                        keywords.forEach(keyword => {
+                            const matches = lower.split(keyword).length - 1;
+                            score += Math.min(matches, 8) * (keyword.length > 6 ? 3 : 2);
+                        });
+                        const phrase = String(queryText || '').trim().toLowerCase();
+                        if (phrase.length > 8 && lower.includes(phrase)) score += 20;
+                        return { chunk, score };
+                    }).sort((a, b) => b.score - a.score || Number(a.chunk.order || 0) - Number(b.chunk.order || 0));
+                    if (!ranked[0] || ranked[0].score === 0) ranked = chunks.slice(0, limit).map(chunk => ({ chunk, score: 1 }));
+                }
+                const selected = [];
+                let usedCharacters = 0;
+                for (const item of ranked) {
+                    if (selected.length >= limit) break;
+                    const length = String(item.chunk.text || '').length;
+                    if (selected.length && usedCharacters + length > maxCharacters) continue;
+                    selected.push(item.chunk);
+                    usedCharacters += length;
+                }
+                return selected.sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+            },
+            context(material, chunks = []) {
+                return chunks.map(chunk => `SOURCE: ${material.title} (${this.pageLabel(chunk)})\n${chunk.text}`).join('\n\n---\n\n');
+            },
+            sourcePages(chunks = []) {
+                const values = [];
+                chunks.forEach(chunk => {
+                    const start = Number(chunk.pageStart || 1);
+                    const end = Number(chunk.pageEnd || start);
+                    for (let page = start; page <= end; page++) values.push(page);
+                });
+                return [...new Set(values)].sort((a, b) => a - b);
             }
         };
 
@@ -1194,6 +1560,7 @@
                 this.unsubscribeNotes = null;
                 this.unsubscribeDigests = null;
                 this.unsubscribeDoctrines = null;
+                this.unsubscribeMaterials = null;
                 this.subjectId = null;
                 this.subjectName = '';
                 this.activeNoteId = null;
@@ -1201,6 +1568,8 @@
                 this.notesData = [];
                 this.digestsData = [];
                 this.doctrinesData = [];
+                this.materialsData = [];
+                this.currentMaterialId = null;
             }
             render() {
                 return `<div class="h-[calc(100vh-4rem)] flex flex-col -m-8 pb-10 subject-notebook-shell">
@@ -1213,6 +1582,7 @@
                             <button onclick="window.appHandlers.toggleNotebookPages()" class="lg:hidden bg-white border border-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-list mr-2"></i>Pages</button>
                             <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 subject-tabs">
                                 <button id="subject-tab-notebook" onclick="window.appHandlers.showSubjectOverview()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-book-open mr-1"></i>Notebook</button>
+                                <button id="subject-tab-materials" onclick="window.appHandlers.showSubjectMaterials()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-folder-open mr-1"></i>Materials</button>
                                 <button id="subject-tab-digests" onclick="window.appHandlers.showSubjectDigests()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-gavel mr-1"></i>Case Digests</button>
                                 <button id="subject-tab-doctrines" onclick="window.appHandlers.showSubjectDoctrines()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-table mr-1"></i>Doctrine Matrix</button>
                             </div>
@@ -1234,6 +1604,8 @@
                 this.notesData = [];
                 this.digestsData = [];
                 this.doctrinesData = [];
+                this.materialsData = [];
+                this.currentMaterialId = null;
                 document.getElementById('content-area').innerHTML = this.render();
                 this.refreshTabStyles();
 
@@ -1255,19 +1627,27 @@
                     if (this.activePanel === 'doctrines') this.showDoctrines();
                     else if (this.activePanel === 'overview') this.showOverview();
                 });
+                this.unsubscribeMaterials = AppDB.subscribeQuery('materials', 'subjectId', '==', subjectId, snapshot => {
+                    this.materialsData = [];
+                    snapshot.forEach(record => this.materialsData.push({ id: record.id, ...record.data() }));
+                    this.materialsData.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+                    if (this.activePanel === 'materials' && !this.currentMaterialId) this.showMaterials();
+                    else if (this.activePanel === 'overview') this.showOverview();
+                });
             }
             refreshTabStyles() {
                 const notebookTab = document.getElementById('subject-tab-notebook');
+                const materialsTab = document.getElementById('subject-tab-materials');
                 const digestTab = document.getElementById('subject-tab-digests');
                 const doctrineTab = document.getElementById('subject-tab-doctrines');
                 const activeClasses = ['bg-white', 'text-blue-700', 'shadow-sm'];
                 const inactiveClasses = ['text-slate-500', 'hover:text-slate-800'];
-                [notebookTab, digestTab, doctrineTab].forEach(tab => {
+                [notebookTab, materialsTab, digestTab, doctrineTab].forEach(tab => {
                     if (!tab) return;
                     tab.classList.remove(...activeClasses, ...inactiveClasses);
                     tab.classList.add(...inactiveClasses);
                 });
-                const activeTab = this.activePanel === 'digests' ? digestTab : this.activePanel === 'doctrines' ? doctrineTab : notebookTab;
+                const activeTab = this.activePanel === 'materials' ? materialsTab : this.activePanel === 'digests' ? digestTab : this.activePanel === 'doctrines' ? doctrineTab : notebookTab;
                 if (activeTab) {
                     activeTab.classList.remove(...inactiveClasses);
                     activeTab.classList.add(...activeClasses);
@@ -1332,19 +1712,88 @@
                 const total = this.notesData.length;
                 const digestCount = this.linkedDigests().length;
                 const doctrineCount = this.linkedDoctrines().length;
+                const materialCount = this.materialsData.length;
                 const sectionCards = DEFAULT_NOTE_SECTIONS.filter(section => section.id !== 'dashboard').map(section => {
                     const count = this.notesData.filter(note => (note.sectionId || 'class_notes') === section.id).length;
                     return `<button onclick="window.appHandlers.addNote('${this.subjectId}', '${section.id}')" class="text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition"><div class="flex justify-between items-center"><i class="fas ${section.icon} text-blue-500"></i><span class="text-2xl font-bold text-slate-700">${count}</span></div><p class="text-xs font-bold text-slate-500 mt-3">${Security.escapeHTML(section.label.replace(/^\d+ — /, ''))}</p></button>`;
                 }).join('');
                 area.innerHTML = `<div class="p-8 overflow-y-auto"><div class="max-w-6xl mx-auto">
                     <div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg"><p class="text-xs uppercase tracking-widest text-blue-200 font-bold">Subject Notebook</p><h3 class="text-3xl font-bold serif-text mt-2">${Security.escapeHTML(this.subjectName)}</h3><p class="text-blue-100 mt-2">${total} organized page${total === 1 ? '' : 's'} in ${Security.escapeHTML(AppState.activeLabel())}</p><button onclick="window.appHandlers.addNote('${this.subjectId}')" class="mt-5 bg-white text-blue-800 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Create a Page</button></div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                        <button onclick="window.appHandlers.showSubjectMaterials()" class="bg-white border border-emerald-200 rounded-xl p-5 text-left hover:shadow-md hover:border-emerald-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-emerald-600">Grounded Study Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Subject Materials</h4></div><span class="text-4xl font-bold text-emerald-600">${materialCount}</span></div><p class="text-sm text-slate-500 mt-3">Upload PDFs, search their text, generate notes, and prepare professor-style questions.</p></button>
                         <button onclick="window.appHandlers.showSubjectDigests()" class="bg-white border border-amber-200 rounded-xl p-5 text-left hover:shadow-md hover:border-amber-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Case Digests</h4></div><span class="text-4xl font-bold text-amber-600">${digestCount}</span></div><p class="text-sm text-slate-500 mt-3">The same records shown in Consolidated Case Digests—no duplicate copies.</p></button>
                         <button onclick="window.appHandlers.showSubjectDoctrines()" class="bg-white border border-blue-200 rounded-xl p-5 text-left hover:shadow-md hover:border-blue-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-blue-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Doctrine Matrix</h4></div><span class="text-4xl font-bold text-blue-600">${doctrineCount}</span></div><p class="text-sm text-slate-500 mt-3">Edit once and the doctrine updates globally and inside this subject.</p></button>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-6">${sectionCards}</div>
                     <div class="mt-6 bg-gradient-to-r from-indigo-700 to-slate-900 rounded-xl p-6 text-white shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4"><div><p class="text-xs uppercase tracking-widest text-indigo-200 font-bold">Final Consolidated Reviewer</p><h4 class="text-xl font-bold serif-text mt-1">Subject Master Reviewer</h4><p class="text-sm text-indigo-100 mt-2 max-w-2xl">Create a structured blank reviewer or compile your existing notes, linked case digests, and linked doctrines into one editable page.</p></div><div class="flex flex-wrap gap-2 flex-shrink-0"><button onclick="window.appHandlers.addNote('${this.subjectId}', 'master_outline')" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-file-lines mr-2"></i>Use Template</button><button onclick="window.appHandlers.generateMasterReviewer('${this.subjectId}')" class="bg-amber-400 hover:bg-amber-300 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-wand-magic-sparkles mr-2"></i>Generate from Materials</button></div></div>
                     <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-5"><h4 class="font-bold text-amber-800"><i class="fas fa-link mr-2"></i>One record, multiple views</h4><p class="text-sm text-amber-900/80 mt-2">Use the linked Case Digests and Doctrine Matrix tabs for master records. Use notebook sections 05 and 06 only for personal analysis, professor comments, and class synthesis.</p></div>
+                </div></div>`;
+            }
+            showMaterials() {
+                this.activeNoteId = null;
+                this.activePanel = 'materials';
+                this.currentMaterialId = null;
+                this.renderSidebar();
+                this.refreshTabStyles();
+                const area = document.getElementById('notebook-editor-area');
+                if (!area) return;
+                const cards = this.materialsData.map(material => {
+                    const status = material.extractionStatus || material.status || 'uploaded';
+                    const ready = status === 'ready';
+                    const scanned = status === 'scanned';
+                    const statusClass = ready ? 'bg-green-100 text-green-700' : scanned ? 'bg-amber-100 text-amber-700' : status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700';
+                    const statusLabel = ready ? 'Searchable' : scanned ? 'Scanned PDF' : status === 'failed' ? 'Extraction failed' : status === 'extracting' ? 'Extracting text' : 'Uploaded';
+                    const tags = Array.isArray(material.tags) ? material.tags : [];
+                    return `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden hover:border-emerald-300 transition">
+                        <div class="p-5">
+                            <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap gap-2 mb-2"><span class="${statusClass} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">${statusLabel}</span><span class="bg-slate-100 text-slate-600 px-2 py-1 rounded text-[10px] font-bold uppercase">${Security.escapeHTML(material.materialType || 'Reference')}</span></div>
+                                    <h4 class="text-lg font-bold text-slate-800 serif-text truncate">${Security.escapeHTML(material.title || material.filename || 'Untitled Material')}</h4>
+                                    <p class="text-xs text-slate-500 mt-1">${material.pageCount ? `${Number(material.pageCount)} pages • ` : ''}${MaterialUtils.formatBytes(material.sizeBytes || 0)}${material.topic ? ` • ${Security.escapeHTML(material.topic)}` : ''}</p>
+                                    ${material.author ? `<p class="text-xs text-slate-500 mt-1"><i class="fas fa-user-pen mr-1"></i>${Security.escapeHTML(material.author)}</p>` : ''}
+                                    ${tags.length ? `<div class="flex flex-wrap gap-1 mt-3">${tags.slice(0, 6).map(tag => `<span class="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-[10px]">${Security.escapeHTML(tag)}</span>`).join('')}</div>` : ''}
+                                    ${scanned ? `<p class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3"><i class="fas fa-triangle-exclamation mr-1"></i>This PDF appears to contain scanned images. You can preview it, but searchable AI tools require OCR text.</p>` : ''}
+                                    ${material.extractionError ? `<p class="mt-3 text-xs text-red-600">${Security.escapeHTML(material.extractionError)}</p>` : ''}
+                                </div>
+                                <div class="flex flex-wrap gap-2 flex-shrink-0">
+                                    ${ready ? `<button onclick="window.appHandlers.openSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"><i class="fas fa-graduation-cap mr-1"></i>Study</button>` : ''}
+                                    ${material.downloadURL ? `<button onclick="window.open('${Security.escapeHTML(material.downloadURL)}', '_blank', 'noopener')" class="px-3 py-2 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-file-pdf mr-1"></i>Preview</button>` : ''}
+                                    <button onclick="window.appHandlers.editSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"><i class="fas fa-pen"></i></button>
+                                    <button onclick="window.appHandlers.deleteSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-red-50 text-red-600 hover:bg-red-100"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-emerald-600">Subject Reference Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Materials</h3><p class="text-sm text-slate-500 mt-1">Upload PDF readings and use their extracted pages as the primary basis for notes and class questions.</p></div><button onclick="window.appHandlers.uploadSubjectMaterial()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-cloud-arrow-up mr-2"></i>Upload PDF</button></div>
+                    <div class="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900"><i class="fas fa-shield-halved mr-2"></i><b>Material-grounded mode:</b> Lex sends only selected relevant passages to Gemini and instructs it not to invent information outside the PDF. Page references are retained in the output.</div>
+                    ${this.materialsData.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-folder-open text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No materials uploaded yet</h4><p class="text-sm text-slate-500 mt-2 max-w-lg mx-auto">Upload a text-based PDF such as a handout, codal compilation, assigned reading, or professor's outline.</p><button onclick="window.appHandlers.uploadSubjectMaterial()" class="mt-5 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Add First Material</button></div>`}
+                </div></div>`;
+            }
+            showMaterialWorkspace(materialId) {
+                const material = this.materialsData.find(item => item.id === materialId);
+                if (!material) return;
+                this.activeNoteId = null;
+                this.activePanel = 'materials';
+                this.currentMaterialId = materialId;
+                this.renderSidebar();
+                this.refreshTabStyles();
+                const savedKey = localStorage.getItem('gemini_api_key') || '';
+                const area = document.getElementById('notebook-editor-area');
+                if (!area) return;
+                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-7xl mx-auto">
+                    <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-6"><div><button onclick="window.appHandlers.showSubjectMaterials()" class="text-sm font-bold text-slate-500 hover:text-emerald-700 mb-3"><i class="fas fa-arrow-left mr-2"></i>Back to Materials</button><p class="text-xs uppercase tracking-widest font-bold text-emerald-600">Discussion Assist</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(material.title || 'Subject Material')}</h3><p class="text-sm text-slate-500 mt-1">${Number(material.pageCount || 0)} pages • ${Security.escapeHTML(material.topic || material.materialType || 'Reference material')}</p></div><div class="flex flex-wrap gap-2">${material.downloadURL ? `<button onclick="window.open('${Security.escapeHTML(material.downloadURL)}', '_blank', 'noopener')" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-file-pdf mr-2"></i>Open PDF</button>` : ''}<button onclick="window.appHandlers.uploadSubjectMaterial()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Add Material</button></div></div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        <div class="xl:col-span-1 space-y-5">
+                            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Gemini API Key</label><input type="password" id="material-api-key" value="${Security.escapeHTML(savedKey)}" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Used only for AI generation"><p class="text-[11px] text-slate-400 mt-2">Without a key, Lex will still show the most relevant source passages.</p></div>
+                            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-magnifying-glass text-emerald-600 mr-2"></i>Ask This Material</h4><textarea id="material-question" rows="5" class="w-full mt-3 p-3 border border-slate-300 rounded-lg text-sm resize-y outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Type a professor's question, e.g. What are the requisites of self-defense?"></textarea><button onclick="window.appHandlers.askSubjectMaterial('${material.id}')" id="btn-material-ask" class="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-message mr-2"></i>Answer from PDF</button></div>
+                            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-notes-medical text-blue-600 mr-2"></i>Generate Notes</h4><input id="material-notes-topic" class="w-full mt-3 p-2.5 border border-slate-300 rounded-lg text-sm" placeholder="Topic or coverage (optional)"><select id="material-notes-style" class="w-full mt-2 p-2.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="recitation-ready">Recitation-ready notes</option><option value="comprehensive">Comprehensive discussion notes</option><option value="concise">Concise class outline</option><option value="codal">Codal, elements, and exceptions</option><option value="exam">Exam reviewer</option></select><button onclick="window.appHandlers.generateMaterialNotes('${material.id}')" id="btn-material-notes" class="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-wand-magic-sparkles mr-2"></i>Generate Notes</button></div>
+                            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-person-chalkboard text-amber-600 mr-2"></i>Professor Questions</h4><input id="material-questions-topic" class="w-full mt-3 p-2.5 border border-slate-300 rounded-lg text-sm" placeholder="Topic or coverage (optional)"><select id="material-question-style" class="w-full mt-2 p-2.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="mixed">Mixed recitation set</option><option value="definitions">Definitions and enumerations</option><option value="rules">Rules, exceptions, and distinctions</option><option value="hypotheticals">Hypotheticals and ALAC</option><option value="strict">Strict professor follow-ups</option></select><button onclick="window.appHandlers.generateMaterialQuestions('${material.id}')" id="btn-material-questions" class="w-full mt-3 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-question mr-2"></i>Generate Questions</button></div>
+                        </div>
+                        <div class="xl:col-span-2"><div id="material-assistant-output" class="bg-white border border-slate-200 rounded-xl shadow-sm min-h-[680px] p-6 relative"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-center p-8"><i class="fas fa-book-open-reader text-6xl mb-4 opacity-20"></i><h4 class="font-bold text-slate-600">Material-grounded study workspace</h4><p class="text-sm mt-2 max-w-md">Ask a live class question, generate structured notes, or prepare possible recitation questions. Lex will show the PDF pages used.</p></div></div></div>
+                    </div>
                 </div></div>`;
             }
             showDigests() {
@@ -1483,13 +1932,13 @@
 
         class MnemonicView {
             constructor() { this.unsubscribe = null; this.generatedTitle = ""; this.generatedContent = ""; this.subjects = []; }
-            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-lightbulb text-amber-500"></i> AI Mnemonic Maker</h3><p class="text-xs text-slate-500 mt-1">Turn boring legal elements into unforgettable stories and acronyms.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="mnem-api-key" class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Concept / Topic</label><input type="text" id="mnem-topic" placeholder="e.g., Requisites of Fortuitous Event" class="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Elements to Memorize</label><textarea id="mnem-elements" rows="5" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-amber-500" placeholder="1. Independent of human will\n2. Unforeseeable or unavoidable..."></textarea></div><button onclick="window.appHandlers.generateMnemonic()" id="btn-generate-mnem" class="mt-auto w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Create Mnemonic</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="mnem-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-brain text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Enter your elements on the left.</p></div></div></div></div>`; }
+            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-lightbulb text-amber-500"></i> AI Mnemonic Maker</h3><p class="text-xs text-slate-500 mt-1">Turn boring legal elements into unforgettable stories and acronyms.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="mnem-api-key" class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Concept / Topic</label><input type="text" id="mnem-topic" placeholder="e.g., Requisites of Fortuitous Event" class="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Elements to Memorize</label><textarea id="mnem-elements" rows="5" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-amber-500" placeholder="1. Independent of human will\n2. Unforeseeable or unavoidable..."></textarea></div><button onclick="window.appHandlers.generateMnemonic()" id="btn-generate-mnem" class="mt-auto w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Create Mnemonic</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="mnem-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-brain text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Enter your elements on the left.</p></div></div></div></div>`; }
             init() { this.unsubscribe = AppDB.subscribe('subjects', (snapshot) => { this.subjects = []; if (!snapshot.empty) { snapshot.forEach(doc => this.subjects.push({ id: doc.id, ...doc.data() })); } const select = document.getElementById('mnem-subject-select'); if (select) { const currentVal = select.value; select.innerHTML = '<option value="">Select Notebook to Save...</option>' + this.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join(''); select.value = currentVal; } }); }
         }
 
         class IssueTreeView {
             constructor() { this.unsubscribe = null; }
-            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-project-diagram text-blue-600"></i> AI Issue Trees</h3><p class="text-xs text-slate-500 mt-1">Generate visual mental maps of rules, elements, and exceptions.</p></div></div><div class="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="tree-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Topic to Map</label><textarea id="tree-topic" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Article 1170 (Breach of Obligations)"></textarea></div><button onclick="window.appHandlers.generateTree()" id="btn-generate-tree" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-sitemap mr-1"></i> Draw Visual Tree</button></div><div class="md:col-span-3 bg-white border border-slate-200 rounded-xl p-6 overflow-auto relative shadow-inner" id="tree-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-project-diagram text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide a topic on the left to map it out.</p></div></div></div></div>`; }
+            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-project-diagram text-blue-600"></i> AI Issue Trees</h3><p class="text-xs text-slate-500 mt-1">Generate visual mental maps of rules, elements, and exceptions.</p></div></div><div class="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="tree-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Topic to Map</label><textarea id="tree-topic" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Article 1170 (Breach of Obligations)"></textarea></div><button onclick="window.appHandlers.generateTree()" id="btn-generate-tree" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-sitemap mr-1"></i> Draw Visual Tree</button></div><div class="md:col-span-3 bg-white border border-slate-200 rounded-xl p-6 overflow-auto relative shadow-inner" id="tree-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-project-diagram text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide a topic on the left to map it out.</p></div></div></div></div>`; }
         }
 
         class AiSearchView {
@@ -1510,7 +1959,7 @@
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
                             <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 h-full overflow-y-auto">
                                 <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg flex-shrink-0">
-                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label>
+                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label>
                                     <input type="password" id="search-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
                                 </div>
                                 <div class="flex-1 flex flex-col min-h-[200px]">
@@ -1615,7 +2064,7 @@
                     </optgroup>
                 `;
 
-                return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-magic text-amber-500"></i> AI Case Digester</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="gemini-api-key" placeholder="Paste key here..." class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+                return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-magic text-amber-500"></i> AI Case Digester</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="gemini-api-key" placeholder="Paste key here..." class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
                 
                 <div class="grid grid-cols-1 gap-3 border-t border-slate-100 pt-3">
                     <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook Subject <span class="text-red-500">*</span></label><select id="digest-subject" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white">${subjectOptions}</select></div>
@@ -1742,6 +2191,11 @@ const cleanAiJsonResponse = (text) => {
                 this.speechRecognition = null;
                 this.speakingStartedAt = null;
                 this.speechBaseText = '';
+                this.speechShouldRestart = false;
+                this.speechRestartTimer = null;
+                this.speechRetryCount = 0;
+                this.speechHadResult = false;
+                this.speechFatalError = false;
             }
             render() {
                 return `
@@ -1828,8 +2282,14 @@ const cleanAiJsonResponse = (text) => {
             destroy() {
                 if (this.practiceTimer) clearInterval(this.practiceTimer);
                 this.practiceTimer = null;
+                this.speechShouldRestart = false;
+                this.speechFatalError = false;
+                if (this.speechRestartTimer) {
+                    clearTimeout(this.speechRestartTimer);
+                    this.speechRestartTimer = null;
+                }
                 if (this.speechRecognition) {
-                    try { this.speechRecognition.stop(); } catch (error) {}
+                    try { this.speechRecognition.abort(); } catch (error) {}
                 }
                 this.speechRecognition = null;
             }
@@ -1957,8 +2417,13 @@ const cleanAiJsonResponse = (text) => {
                 } else {
                     answerArea = `<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Your ALAC Answer</label><textarea id="adv-free-answer" rows="14" class="w-full p-4 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 serif-text leading-relaxed" placeholder="Write one continuous answer. Begin with a direct answer, state the legal basis, apply it to the facts, and conclude."></textarea>`;
                 }
-                const microphoneButtons = ['oral_alac', 'read_aloud'].includes(practice.practiceType) ? `<div class="flex gap-2"><button id="adv-mic-start" onclick="window.appHandlers.startAdvocacySpeech()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-microphone mr-2"></i>Start Microphone</button><button onclick="window.appHandlers.stopAdvocacySpeech()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-stop mr-2"></i>Stop</button></div>` : '';
-                container.innerHTML = `<div class="space-y-5"><div class="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><p class="text-xs font-bold text-indigo-600 uppercase tracking-wider"><i class="fas ${type.icon} mr-2"></i>${type.label}</p><h4 class="text-xl font-bold text-slate-800 mt-1">${Security.escapeHTML(practice.title)}</h4></div><button onclick="window.appHandlers.showAdvocacyChooser()" class="text-sm text-slate-500 hover:text-indigo-600 font-bold"><i class="fas fa-arrow-left mr-1"></i>Choose Another Mode</button></div><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select id="adv-practice-subject" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white">${subjectOptions}</select></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Topic</label><input id="adv-practice-topic" value="${Security.escapeHTML(practice.topic)}" class="w-full p-2.5 border border-slate-200 rounded-lg" placeholder="e.g. Delay, Due Process"></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Difficulty</label><select id="adv-practice-difficulty" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white"><option>Basic</option><option ${practice.difficulty === 'Intermediate' ? 'selected' : ''}>Intermediate</option><option>Bar-Level</option></select></div></div><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key mr-1"></i>Gemini API Key for AI questions and feedback</label><input type="password" id="advocacy-api-key" value="${Security.escapeHTML(localStorage.getItem('gemini_api_key') || '')}" class="w-full p-2 border border-blue-200 rounded-lg text-sm" placeholder="Optional — local feedback works without a key"></div><div><div class="flex justify-between items-center mb-2"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Question or Exercise</label><button onclick="window.appHandlers.generateAdvocacyQuestion()" id="adv-generate-question" class="text-xs font-bold text-indigo-600 hover:text-indigo-800"><i class="fas fa-wand-magic-sparkles mr-1"></i>Generate Question</button></div><textarea id="adv-question" rows="4" class="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter a legal question, hypothetical, or reading passage.">${Security.escapeHTML(practice.question)}</textarea></div>${answerArea}<div class="flex flex-col md:flex-row justify-between gap-3 pt-2">${microphoneButtons}<div class="flex gap-2 ml-auto"><button onclick="window.appHandlers.saveAdvocacyDraft()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-floppy-disk mr-2"></i>Save Draft</button><button onclick="window.appHandlers.evaluateAdvocacyPractice()" id="adv-evaluate-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-check-double mr-2"></i>Evaluate & Complete</button></div></div><div id="adv-feedback" class="hidden"></div></div>`;
+                const microphoneButtons = ['oral_alac', 'read_aloud'].includes(practice.practiceType) ? `<div class="w-full md:w-auto"><div class="flex flex-col sm:flex-row gap-2"><button id="adv-mic-start" onclick="window.appHandlers.startAdvocacySpeech()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-microphone mr-2"></i>Start Microphone</button><button id="adv-mic-stop" onclick="window.appHandlers.stopAdvocacySpeech()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-stop mr-2"></i>Stop</button><select id="adv-speech-language" class="p-2 border border-slate-200 rounded-lg bg-white text-sm" title="Speech recognition language"><option value="en-PH">English (Philippines)</option><option value="en-US">English (United States)</option><option value="en-GB">English (United Kingdom)</option></select></div><div id="adv-speech-status" class="mt-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><i class="fas fa-circle-info mr-1"></i>Tap Start Microphone, wait for “Listening,” then begin speaking immediately.</div></div>` : '';
+                container.innerHTML = `<div class="space-y-5"><div class="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><p class="text-xs font-bold text-indigo-600 uppercase tracking-wider"><i class="fas ${type.icon} mr-2"></i>${type.label}</p><h4 class="text-xl font-bold text-slate-800 mt-1">${Security.escapeHTML(practice.title)}</h4></div><button onclick="window.appHandlers.showAdvocacyChooser()" class="text-sm text-slate-500 hover:text-indigo-600 font-bold"><i class="fas fa-arrow-left mr-1"></i>Choose Another Mode</button></div><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select id="adv-practice-subject" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white">${subjectOptions}</select></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Topic</label><input id="adv-practice-topic" value="${Security.escapeHTML(practice.topic)}" class="w-full p-2.5 border border-slate-200 rounded-lg" placeholder="e.g. Delay, Due Process"></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Difficulty</label><select id="adv-practice-difficulty" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white"><option>Basic</option><option ${practice.difficulty === 'Intermediate' ? 'selected' : ''}>Intermediate</option><option>Bar-Level</option></select></div></div><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key mr-1"></i>Gemini API Key — model selected automatically</label><input type="password" id="advocacy-api-key" value="${Security.escapeHTML(localStorage.getItem('gemini_api_key') || '')}" class="w-full p-2 border border-blue-200 rounded-lg text-sm" placeholder="Optional — local feedback works without a key"></div><div><div class="flex justify-between items-center mb-2"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Question or Exercise</label><button onclick="window.appHandlers.generateAdvocacyQuestion()" id="adv-generate-question" class="text-xs font-bold text-indigo-600 hover:text-indigo-800"><i class="fas fa-wand-magic-sparkles mr-1"></i>Generate Question</button></div><textarea id="adv-question" rows="4" class="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter a legal question, hypothetical, or reading passage.">${Security.escapeHTML(practice.question)}</textarea></div>${answerArea}<div class="flex flex-col md:flex-row justify-between gap-3 pt-2">${microphoneButtons}<div class="flex gap-2 ml-auto"><button onclick="window.appHandlers.saveAdvocacyDraft()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-floppy-disk mr-2"></i>Save Draft</button><button onclick="window.appHandlers.evaluateAdvocacyPractice()" id="adv-evaluate-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-check-double mr-2"></i>Evaluate & Complete</button></div></div><div id="adv-feedback" class="hidden"></div></div>`;
+                const savedSpeechLanguage = localStorage.getItem('lex_speech_language');
+                const speechLanguageSelect = document.getElementById('adv-speech-language');
+                if (speechLanguageSelect && savedSpeechLanguage && Array.from(speechLanguageSelect.options).some(option => option.value === savedSpeechLanguage)) {
+                    speechLanguageSelect.value = savedSpeechLanguage;
+                }
             }
             startPracticeTimer(minutes) {
                 if (this.practiceTimer) clearInterval(this.practiceTimer);
@@ -2043,7 +2508,7 @@ const cleanAiJsonResponse = (text) => {
         // --- PASTE THIS MISSING CLASS HERE ---
         class ReviewView {
             constructor() { this.unsubscribe = null; }
-            render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review</h3><p class="text-xs text-slate-500 mt-1">Generate flashcards or mock bar exams from your notes.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key</label><input type="password" id="review-api-key" class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${localStorage.getItem('gemini_api_key') || ''}"></div><div><label class="block text-sm font-medium text-slate-700 mb-2">Review Mode</label><div class="flex gap-2"><button id="btn-recit" onclick="window.appHandlers.setMode('recit')" class="flex-1 px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Flashcards</button><button id="btn-exam" onclick="window.appHandlers.setMode('exam')" class="flex-1 px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Mock Exam</button></div></div><div class="border-t border-slate-100 pt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Material</label><textarea id="review-textarea" rows="6" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste your notes or codal provisions here..."></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative"><input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)"><i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i><p class="text-xs text-slate-500">Click to upload PDF</p></div><div id="file-name-display" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div></div><button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Generate AI Review</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto relative" id="review-output"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-graduation-cap text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide material to generate a review.</p></div></div></div></div>`; }
+            render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review</h3><p class="text-xs text-slate-500 mt-1">Generate flashcards or mock bar exams from your notes.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="review-api-key" class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${localStorage.getItem('gemini_api_key') || ''}"></div><div><label class="block text-sm font-medium text-slate-700 mb-2">Review Mode</label><div class="flex gap-2"><button id="btn-recit" onclick="window.appHandlers.setMode('recit')" class="flex-1 px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Flashcards</button><button id="btn-exam" onclick="window.appHandlers.setMode('exam')" class="flex-1 px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Mock Exam</button></div></div><div class="border-t border-slate-100 pt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Material</label><textarea id="review-textarea" rows="6" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste your notes or codal provisions here..."></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative"><input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)"><i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i><p class="text-xs text-slate-500">Click to upload PDF</p></div><div id="file-name-display" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div></div><button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Generate AI Review</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto relative" id="review-output"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-graduation-cap text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide material to generate a review.</p></div></div></div></div>`; }
             init() { window.appHandlers.reviewMode = 'recit'; }
         }
         // ------------------------------------
@@ -2322,27 +2787,11 @@ const cleanAiJsonResponse = (text) => {
                     let currentContext = [...views.ai_search.chatHistory]; 
                     currentContext.push({ role: "user", parts: [{ text: promptText }] });
 
-                    // SECURE URL: Split to prevent Markdown conversion during copy-paste
-                    const apiUrl = 'https://' + 'generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-
-                    const response = await fetch(apiUrl, { 
-                        method: 'POST', 
-                        headers: { 
-                            'Content-Type': 'application/json'
-                        }, 
-                        body: JSON.stringify({ 
-                            contents: currentContext,
-                            generationConfig: { temperature: 0.1 }
-                        })
+                    const data = await GeminiService.generate(apiKey, {
+                        contents: currentContext,
+                        generationConfig: { temperature: 0.1 }
                     });
-                    
-                    if (!response.ok) { 
-                        const errData = await response.json(); 
-                        throw new Error(errData.error?.message || "API Error"); 
-                    }
-                    
-                    const data = await response.json(); 
-                    const rawResponse = data.candidates[0].content.parts[0].text;
+                    const rawResponse = GeminiService.text(data);
                     let answerHtml = rawResponse.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
                     answerHtml = answerHtml.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>'); // Catch any stray markdown
                     
@@ -2403,22 +2852,10 @@ const cleanAiJsonResponse = (text) => {
                     4. Use <br> tags inside the quotes for line breaks if the text is long.
                     5. Output ONLY the raw Mermaid code. Do not include markdown backticks (\`\`\`) or any conversational text.`;
 
-                    // Safe URL assembly to prevent copy-paste bugs
-                    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
-
-                    const response = await fetch(apiUrl, {
-                        method: 'POST', 
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] }) 
+                    const data = await GeminiService.generate(apiKey, {
+                        contents: [{ role: "user", parts: [{ text: promptText }] }]
                     });
-                                        
-                    if (!response.ok) { 
-                        const errData = await response.json(); 
-                        throw new Error(errData.error?.message || "API Error"); 
-                    }
-                    
-                    const data = await response.json(); 
-                    let mermaidSyntax = data.candidates[0].content.parts[0].text;
+                    let mermaidSyntax = GeminiService.text(data);
                     
                     // AGGRESSIVE CLEANUP: Detects and isolates the code even if Gemini adds conversation
                     const match = mermaidSyntax.match(/```(?:mermaid)?([\s\S]*?)```/);
@@ -2461,17 +2898,11 @@ const cleanAiJsonResponse = (text) => {
                 try {
                     const promptText = `You are a creative memory coach for law students. I need to memorize the elements of: "${topic}". Here are the elements: ${elements}. Create TWO things: 1. A catchy ACRONYM (if possible) using the first letters of the key words. 2. A bizarre, vivid, ridiculous, and highly memorable short story that links all these elements together. The weirder, the better the brain remembers it. Format the output strictly in valid JSON format like this: {"acronym": "The acronym and what it stands for", "story": "The vivid story"}. Do NOT use markdown blocks like \`\`\`json.`;
                     
-                    // SECURE URL: Split to prevent Markdown conversion during copy-paste
-                    const apiUrl = 'https://' + 'generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
-
-                    const response = await fetch(apiUrl, { 
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } }) 
+                    const data = await GeminiService.generate(apiKey, {
+                        contents: [{ role: "user", parts: [{ text: promptText }] }],
+                        generationConfig: { responseMimeType: "application/json" }
                     });
-                    
-                    if (!response.ok) { const errData = await response.json(); throw new Error(errData.error?.message || "API Error"); }
-                    
-                    const data = await response.json(); let jsonString = data.candidates[0].content.parts[0].text;
+                    let jsonString = GeminiService.text(data);
                     jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); 
                     const parsed = JSON.parse(jsonString);
                     
@@ -2529,22 +2960,9 @@ const cleanAiJsonResponse = (text) => {
                     }]
                     Do NOT use markdown. Output raw JSON only.`;
 
-                    // SECURE URL
-                    const apiUrl = ['https:/', '/generativelanguage.googleapis.com', '/v1beta/models/gemini-2.5-flash:generateContent?key=', apiKey].join('');
-
-                    const response = await fetch(apiUrl, { 
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] }) 
-                    });
-                    
-                    // NEW: Handle Rate Limits (429) specifically
-                    if (response.status === 429) {
-                        throw new Error("You're going too fast! The AI needs a break. Please wait 1 minute before trying again.");
-                    }
-
-                    if (!response.ok) throw new Error("API Error: " + response.statusText);
-                    
-                    const data = await response.json(); 
+                    const data = await GeminiService.generate(apiKey, {
+                        contents: [{ role: "user", parts: [{ text: promptText }] }]
+                    }); 
                     
                     if (!data.candidates || !data.candidates[0].content) {
                         throw new Error("The AI returned an empty response. Try a different topic.");
@@ -2808,75 +3226,225 @@ const cleanAiJsonResponse = (text) => {
                 const topic = document.getElementById('adv-practice-topic')?.value.trim() || 'a foundational legal issue';
                 const difficulty = document.getElementById('adv-practice-difficulty')?.value || 'Intermediate';
                 const button = document.getElementById('adv-generate-question');
+                const localQuestions = {
+                    guided_alac: `A party alleges a violation involving ${topic}. Resolve the issue using a direct Answer, the controlling Legal Basis, an Application to the material facts, and a clear Conclusion.`,
+                    free_alac: `Discuss whether the claim involving ${topic} should prosper under the applicable principles of ${subjectName}.`,
+                    oral_alac: `Explain the general rule, elements, exceptions, and practical application of ${topic} in ninety seconds.`,
+                    read_aloud: `A persuasive legal answer begins with a direct response, identifies the controlling legal basis, applies the rule to the material facts, and ends with a definite conclusion.`
+                };
+                const applyQuestion = value => {
+                    questionEl.value = value;
+                    if (practice.practiceType === 'read_aloud') {
+                        const passage = document.getElementById('adv-reading-passage');
+                        if (passage) passage.innerText = value;
+                    }
+                };
                 if (button) button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Generating...';
+                document.getElementById('adv-ai-fallback-notice')?.remove();
                 try {
                     if (!apiKey) {
-                        const localQuestions = {
-                            guided_alac: `A party alleges a violation involving ${topic}. Resolve the issue using a direct Answer, the controlling Legal Basis, an Application to the material facts, and a clear Conclusion.`,
-                            free_alac: `Discuss whether the claim involving ${topic} should prosper under the applicable principles of ${subjectName}.`,
-                            oral_alac: `Explain the general rule, elements, exceptions, and practical application of ${topic} in ninety seconds.`,
-                            read_aloud: `A persuasive legal answer begins with a direct response, identifies the controlling legal basis, applies the rule to the material facts, and ends with a definite conclusion.`
-                        };
-                        questionEl.value = localQuestions[practice.practiceType];
-                        if (practice.practiceType === 'read_aloud') document.getElementById('adv-reading-passage').innerText = questionEl.value;
+                        applyQuestion(localQuestions[practice.practiceType]);
                         return;
                     }
                     localStorage.setItem('gemini_api_key', apiKey);
                     const prompt = `You are a Philippine law professor and English fluency coach. Create one ${difficulty} practice exercise for ${subjectName}, focused on ${topic}. Mode: ${ADVOCACY_PRACTICE_TYPES[practice.practiceType].label}. ${practice.practiceType === 'read_aloud' ? 'Write a clear 90-130 word legal English passage suitable for reading aloud.' : practice.practiceType === 'oral_alac' ? 'Create one concise recitation question or hypothetical answerable orally using ALAC.' : 'Create one legal hypothetical that requires an ALAC answer.'} Return only the exercise text, without headings or commentary.`;
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }) });
-                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                    const data = await response.json();
-                    questionEl.value = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-                    if (practice.practiceType === 'read_aloud') document.getElementById('adv-reading-passage').innerText = questionEl.value;
+                    const data = await GeminiService.generate(apiKey, {
+                        contents: [{ role: 'user', parts: [{ text: prompt }] }]
+                    });
+                    applyQuestion(GeminiService.text(data) || localQuestions[practice.practiceType]);
                 } catch (error) {
-                    alert(`Unable to generate the exercise: ${error.message}`);
+                    console.warn('Advocacy AI generation failed. Using offline exercise.', error);
+                    applyQuestion(localQuestions[practice.practiceType]);
+                    const noticeId = 'adv-ai-fallback-notice';
+                    document.getElementById(noticeId)?.remove();
+                    const notice = document.createElement('div');
+                    notice.id = noticeId;
+                    notice.className = 'mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2';
+                    notice.innerHTML = `<i class="fas fa-wifi mr-1"></i>Gemini was unavailable, so Lex loaded an offline exercise instead. ${Security.escapeHTML(error.message)}`;
+                    questionEl.insertAdjacentElement('afterend', notice);
                 } finally {
                     if (button) button.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-1"></i>Generate Question';
                 }
             },
-            startAdvocacySpeech: () => {
+            startAdvocacySpeech: async () => {
                 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const lab = views.advocacy_lab;
+                const transcriptEl = document.getElementById('adv-transcript');
+                const statusEl = document.getElementById('adv-speech-status');
+                const startButton = document.getElementById('adv-mic-start');
+                const languageSelect = document.getElementById('adv-speech-language');
+
+                const setSpeechStatus = (message, tone = 'neutral') => {
+                    if (!statusEl) return;
+                    const tones = {
+                        neutral: 'text-slate-600 bg-slate-50 border-slate-200',
+                        listening: 'text-green-700 bg-green-50 border-green-200',
+                        warning: 'text-amber-700 bg-amber-50 border-amber-200',
+                        error: 'text-red-700 bg-red-50 border-red-200'
+                    };
+                    statusEl.className = `mt-2 text-xs border rounded-lg px-3 py-2 ${tones[tone] || tones.neutral}`;
+                    statusEl.innerHTML = message;
+                };
+
                 if (!Recognition) {
-                    alert('Speech recognition is not supported by this browser. Chrome or Edge on desktop is recommended.');
+                    setSpeechStatus('<i class="fas fa-triangle-exclamation mr-1"></i>Speech recognition is not supported in this browser. Use Safari, Chrome, or Edge and keep Lex open in the browser tab.', 'error');
                     return;
                 }
-                if (views.advocacy_lab.speechRecognition) {
-                    try { views.advocacy_lab.speechRecognition.stop(); } catch (error) {}
-                }
-                const transcriptEl = document.getElementById('adv-transcript');
                 if (!transcriptEl) return;
-                const recognition = new Recognition();
-                recognition.lang = 'en-PH';
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                views.advocacy_lab.speechBaseText = transcriptEl.value.trim();
-                views.advocacy_lab.speakingStartedAt = Date.now();
-                recognition.onresult = event => {
-                    let finalText = '';
-                    let interimText = '';
-                    for (let index = event.resultIndex; index < event.results.length; index += 1) {
-                        const text = event.results[index][0].transcript;
-                        if (event.results[index].isFinal) finalText += `${text} `;
-                        else interimText += text;
+
+                // Stop any previous recognition session and pending automatic restart.
+                lab.speechShouldRestart = false;
+                lab.speechFatalError = false;
+                if (lab.speechRestartTimer) {
+                    clearTimeout(lab.speechRestartTimer);
+                    lab.speechRestartTimer = null;
+                }
+                if (lab.speechRecognition) {
+                    try { lab.speechRecognition.abort(); } catch (error) {}
+                    lab.speechRecognition = null;
+                }
+
+                setSpeechStatus('<i class="fas fa-spinner fa-spin mr-1"></i>Checking microphone permission…');
+
+                // Explicitly request microphone permission first. This produces clearer errors on mobile browsers.
+                if (navigator.mediaDevices?.getUserMedia) {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        stream.getTracks().forEach(track => track.stop());
+                        // Give mobile Safari a moment to release the permission-check stream before recognition starts.
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                    } catch (error) {
+                        const message = error?.name === 'NotAllowedError'
+                            ? 'Microphone access was blocked. Open the browser site settings for this GitHub Pages address and allow Microphone.'
+                            : error?.name === 'NotFoundError'
+                                ? 'No microphone was found on this device.'
+                                : `The microphone could not be opened: ${error?.message || error?.name || 'Unknown error'}`;
+                        setSpeechStatus(`<i class="fas fa-microphone-slash mr-1"></i>${Security.escapeHTML(message)}`, 'error');
+                        return;
                     }
-                    if (finalText) views.advocacy_lab.speechBaseText = `${views.advocacy_lab.speechBaseText} ${finalText}`.trim();
-                    transcriptEl.value = `${views.advocacy_lab.speechBaseText}${interimText ? ` ${interimText}` : ''}`.trim();
+                }
+
+                lab.speechShouldRestart = true;
+                lab.speechRetryCount = 0;
+                lab.speechHadResult = false;
+                lab.speechFatalError = false;
+                lab.speechBaseText = transcriptEl.value.trim();
+                lab.speakingStartedAt = Date.now();
+                localStorage.setItem('lex_speech_language', languageSelect?.value || 'en-PH');
+
+                const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+                const beginRecognitionCycle = () => {
+                    if (!lab.speechShouldRestart || lab.speechFatalError) return;
+
+                    const recognition = new Recognition();
+                    recognition.lang = languageSelect?.value || localStorage.getItem('lex_speech_language') || 'en-PH';
+                    // Continuous mode is unreliable on iPhone/iPad. Lex automatically restarts short recognition cycles instead.
+                    recognition.continuous = !isAppleMobile;
+                    recognition.interimResults = true;
+                    recognition.maxAlternatives = 1;
+                    lab.speechRecognition = recognition;
+                    lab.speechHadResult = false;
+
+                    recognition.onstart = () => {
+                        if (startButton) startButton.innerHTML = '<i class="fas fa-circle text-xs animate-pulse mr-2"></i>Listening…';
+                        setSpeechStatus('<i class="fas fa-ear-listen mr-1"></i><strong>Listening.</strong> Begin speaking now. Speak clearly and keep Lex in the foreground.', 'listening');
+                    };
+                    recognition.onaudiostart = () => {
+                        setSpeechStatus('<i class="fas fa-wave-square mr-1"></i>Microphone active. Waiting for your voice…', 'listening');
+                    };
+                    recognition.onspeechstart = () => {
+                        setSpeechStatus('<i class="fas fa-comment-dots mr-1"></i>Speech detected. Continue speaking.', 'listening');
+                    };
+                    recognition.onresult = event => {
+                        let finalText = '';
+                        let interimText = '';
+                        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+                            const text = event.results[index][0].transcript;
+                            if (event.results[index].isFinal) finalText += `${text} `;
+                            else interimText += text;
+                        }
+                        if (finalText || interimText) {
+                            lab.speechHadResult = true;
+                            lab.speechRetryCount = 0;
+                        }
+                        if (finalText) lab.speechBaseText = `${lab.speechBaseText} ${finalText}`.trim();
+                        transcriptEl.value = `${lab.speechBaseText}${interimText ? ` ${interimText}` : ''}`.trim();
+                        transcriptEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    };
+                    recognition.onnomatch = () => {
+                        setSpeechStatus('<i class="fas fa-volume-low mr-1"></i>Your voice was heard but the words were unclear. Move closer to the microphone and try again.', 'warning');
+                    };
+                    recognition.onerror = event => {
+                        const code = event.error;
+                        if (code === 'no-speech') {
+                            lab.speechRetryCount += 1;
+                            setSpeechStatus('<i class="fas fa-volume-xmark mr-1"></i>No speech was detected. Lex will retry automatically—begin speaking as soon as “Listening” appears.', 'warning');
+                            return;
+                        }
+                        if (code === 'aborted' && !lab.speechShouldRestart) return;
+
+                        const messages = {
+                            'not-allowed': 'Microphone or speech recognition permission is blocked. Allow Microphone in the browser site settings. On iPad/iPhone, also make sure Siri & Dictation are enabled.',
+                            'service-not-allowed': 'The browser speech-recognition service is unavailable. Try opening Lex directly in Safari rather than from an embedded browser or Home Screen app.',
+                            'audio-capture': 'Lex cannot receive audio from the microphone. Check whether another application is using it, then retry.',
+                            'network': 'Speech recognition needs a stable internet connection in this browser. Check your connection and retry.',
+                            'language-not-supported': 'The selected speech language is not supported. Try English (United States).',
+                            'bad-grammar': 'The speech service rejected the recognition grammar.',
+                            'phrases-not-supported': 'This browser does not support contextual speech phrases.'
+                        };
+                        lab.speechFatalError = true;
+                        lab.speechShouldRestart = false;
+                        setSpeechStatus(`<i class="fas fa-triangle-exclamation mr-1"></i>${Security.escapeHTML(messages[code] || `Speech recognition error: ${code}`)}`, 'error');
+                    };
+                    recognition.onend = () => {
+                        lab.speechRecognition = null;
+                        if (lab.speechShouldRestart && !lab.speechFatalError) {
+                            const delay = lab.speechHadResult ? 250 : Math.min(1200, 350 + (lab.speechRetryCount * 250));
+                            if (lab.speechRetryCount >= 4 && !lab.speechHadResult) {
+                                lab.speechShouldRestart = false;
+                                setSpeechStatus('<i class="fas fa-circle-exclamation mr-1"></i>Lex repeatedly heard silence. Tap Start again and speak immediately after “Listening.” You may also switch to English (United States).', 'warning');
+                                if (startButton) startButton.innerHTML = '<i class="fas fa-rotate-right mr-2"></i>Retry Microphone';
+                                return;
+                            }
+                            lab.speechRestartTimer = setTimeout(beginRecognitionCycle, delay);
+                        } else if (startButton) {
+                            startButton.innerHTML = '<i class="fas fa-microphone mr-2"></i>Start Microphone';
+                        }
+                    };
+
+                    try {
+                        recognition.start();
+                    } catch (error) {
+                        lab.speechFatalError = true;
+                        lab.speechShouldRestart = false;
+                        setSpeechStatus(`<i class="fas fa-triangle-exclamation mr-1"></i>Unable to start speech recognition: ${Security.escapeHTML(error?.message || 'Please wait a moment and retry.')}`, 'error');
+                        if (startButton) startButton.innerHTML = '<i class="fas fa-microphone mr-2"></i>Start Microphone';
+                    }
                 };
-                recognition.onerror = event => alert(`Microphone error: ${event.error}`);
-                recognition.onend = () => {
-                    const button = document.getElementById('adv-mic-start');
-                    if (button) button.innerHTML = '<i class="fas fa-microphone mr-2"></i>Start Microphone';
-                };
-                views.advocacy_lab.speechRecognition = recognition;
-                recognition.start();
-                const button = document.getElementById('adv-mic-start');
-                if (button) button.innerHTML = '<i class="fas fa-circle text-xs animate-pulse mr-2"></i>Listening...';
+
+                beginRecognitionCycle();
             },
             stopAdvocacySpeech: () => {
-                if (views.advocacy_lab.speechRecognition) {
-                    try { views.advocacy_lab.speechRecognition.stop(); } catch (error) {}
-                    views.advocacy_lab.speechRecognition = null;
+                const lab = views.advocacy_lab;
+                lab.speechShouldRestart = false;
+                lab.speechFatalError = false;
+                if (lab.speechRestartTimer) {
+                    clearTimeout(lab.speechRestartTimer);
+                    lab.speechRestartTimer = null;
+                }
+                if (lab.speechRecognition) {
+                    try { lab.speechRecognition.stop(); } catch (error) {
+                        try { lab.speechRecognition.abort(); } catch (abortError) {}
+                    }
+                    lab.speechRecognition = null;
+                }
+                const button = document.getElementById('adv-mic-start');
+                if (button) button.innerHTML = '<i class="fas fa-microphone mr-2"></i>Start Microphone';
+                const status = document.getElementById('adv-speech-status');
+                if (status) {
+                    status.className = 'mt-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2';
+                    status.innerHTML = '<i class="fas fa-stop-circle mr-1"></i>Microphone stopped. Your transcript has been kept.';
                 }
             },
             saveAdvocacyDraft: async () => {
@@ -2919,11 +3487,11 @@ const cleanAiJsonResponse = (text) => {
                     if (apiKey) {
                         localStorage.setItem('gemini_api_key', apiKey);
                         const prompt = `You are a strict but constructive Philippine law professor and legal English coach. Evaluate the student's response using ALAC: Answer, Legal Basis, Application, Conclusion. Also assess English grammar, clarity, conciseness, and professional legal style. Do not invent legal authorities. Question: ${question}\nStudent response: ${answer}\nReturn ONLY valid JSON in this exact structure: {"scores":{"answer":1,"legalBasis":1,"application":1,"conclusion":1,"grammar":1,"clarity":1,"conciseness":1,"legalStyle":1},"strengths":[""],"improvements":[""],"correctedAnswer":"","overallFeedback":""}. Scores must be integers from 1 to 5.`;
-                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-                        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json' } }) });
-                        if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                        const data = await response.json();
-                        const parsed = JSON.parse(cleanAiJsonResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || '{}'));
+                        const data = await GeminiService.generate(apiKey, {
+                            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                            generationConfig: { responseMimeType: 'application/json' }
+                        });
+                        const parsed = JSON.parse(cleanAiJsonResponse(GeminiService.text(data) || '{}'));
                         const scoreValues = Object.values(parsed.scores || {}).map(Number).filter(Number.isFinite);
                         parsed.overall = scoreValues.length ? Math.round(scoreValues.reduce((sum, value) => sum + value, 0) / (scoreValues.length * 5) * 100) : evaluation.overall;
                         parsed.wordCount = evaluation.wordCount;
@@ -3241,8 +3809,230 @@ const cleanAiJsonResponse = (text) => {
             assignSubjectToActive: async (id) => { if (!AppState.activeSemesterId) return; await AppDB.update('subjects', id, { semesterId: AppState.activeSemesterId, updated: serverTimestamp() }); },
             openSubject: (id, name) => { closeResponsiveOverlays(); cleanupView(views[currentView]); currentView = 'subject_notebook'; renderSidebar(); updateMobileNav(); pageTitle.innerText = 'Notebook'; contentArea.scrollTo({ top: 0, left: 0, behavior: 'auto' }); views.subject_notebook.init(id, name); },
             showSubjectOverview: () => views.subject_notebook.showOverview(),
+            showSubjectMaterials: () => views.subject_notebook.showMaterials(),
+            openSubjectMaterial: (id) => views.subject_notebook.showMaterialWorkspace(id),
             showSubjectDigests: () => views.subject_notebook.showDigests(),
             showSubjectDoctrines: () => views.subject_notebook.showDoctrines(),
+            currentMaterialOutput: null,
+            uploadSubjectMaterial: () => {
+                const subject = window.appHandlers.getCurrentSubjectContext();
+                if (!subject.id) return;
+                Modal.show({
+                    title: '<i class="fas fa-cloud-arrow-up text-emerald-600"></i> Upload Subject Material',
+                    content: `<div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-900 mb-4">The PDF will be stored in Firebase Storage. Searchable text is extracted page by page and kept in your private user workspace.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">PDF File <span class="text-red-500">*</span></label><input type="file" id="material-file" accept="application/pdf,.pdf" class="w-full p-2 border border-slate-300 rounded-lg bg-white"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Display Title</label><input id="material-title" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="Defaults to the filename"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Material Type</label><select id="material-type" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option>Professor Handout</option><option>Textbook / Commentary</option><option>Codal / Statute</option><option>Case Compilation</option><option>Syllabus</option><option>Reviewer</option><option>Reference</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Coverage</label><input id="material-topic" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. Justifying Circumstances"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Author or Source</label><input id="material-author" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="Professor, author, agency, or source"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Tags</label><input id="material-tags" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="self-defense, Article 11, criminal law"></div><div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800"><i class="fas fa-circle-info mr-1"></i>Maximum file size: 30 MB. Text-based PDFs work immediately. Scanned-image PDFs require OCR outside Lex before they become searchable.</div>`,
+                    submitText: 'Upload & Extract Text',
+                    submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
+                    onSubmit: async () => {
+                        const file = document.getElementById('material-file')?.files?.[0];
+                        if (!file) throw new Error('Please select a PDF file.');
+                        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) throw new Error('Only PDF files are supported.');
+                        if (file.size > MaterialUtils.maxFileBytes) throw new Error('The PDF is larger than 30 MB. Please compress or divide it first.');
+                        const title = document.getElementById('material-title').value.trim() || file.name.replace(/\.pdf$/i, '');
+                        const tags = document.getElementById('material-tags').value.split(',').map(value => value.trim()).filter(Boolean);
+                        const materialRef = await AppDB.add('materials', {
+                            subjectId: subject.id,
+                            subjectName: subject.name,
+                            semesterId: subject.semesterId,
+                            title,
+                            filename: file.name,
+                            materialType: document.getElementById('material-type').value,
+                            topic: document.getElementById('material-topic').value.trim(),
+                            author: document.getElementById('material-author').value.trim(),
+                            tags,
+                            sizeBytes: file.size,
+                            status: 'uploading',
+                            extractionStatus: 'uploading',
+                            created: serverTimestamp(),
+                            updated: serverTimestamp()
+                        });
+                        const materialId = materialRef.id;
+                        const path = `artifacts/${appNamespace}/users/${currentUser.uid}/subjects/${subject.id}/materials/${materialId}/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
+                        const fileRef = storageRef(storage, path);
+                        try {
+                            await uploadBytes(fileRef, file, { contentType: 'application/pdf', customMetadata: { materialId, subjectId: subject.id } });
+                            const downloadURL = await getDownloadURL(fileRef);
+                            await AppDB.update('materials', materialId, { storagePath: path, downloadURL, status: 'extracting', extractionStatus: 'extracting', updated: serverTimestamp() });
+                            try {
+                                const extracted = await MaterialUtils.extractPdf(file);
+                                const chunks = MaterialUtils.makeChunks(extracted.pages);
+                                if (chunks.length) await MaterialUtils.saveChunks(materialId, subject.id, subject.semesterId, chunks);
+                                await AppDB.update('materials', materialId, {
+                                    status: 'ready',
+                                    extractionStatus: extracted.scannedLikely ? 'scanned' : 'ready',
+                                    pageCount: extracted.pageCount,
+                                    processedPages: extracted.processedPages,
+                                    extractedCharacters: extracted.totalCharacters,
+                                    chunkCount: chunks.length,
+                                    extractionTruncated: extracted.truncated,
+                                    extractionError: extracted.scannedLikely ? 'Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features.' : '',
+                                    updated: serverTimestamp()
+                                });
+                            } catch (extractionError) {
+                                console.error('Material extraction failed:', extractionError);
+                                await AppDB.update('materials', materialId, { status: 'uploaded', extractionStatus: 'failed', extractionError: extractionError.message || 'Unable to extract PDF text.', updated: serverTimestamp() });
+                            }
+                        } catch (uploadError) {
+                            try { await AppDB.delete('materials', materialId); } catch (_) {}
+                            throw new Error(`Upload failed. Check Firebase Storage rules and connection. ${uploadError.message || ''}`.trim());
+                        }
+                    }
+                });
+            },
+            editSubjectMaterial: (id) => {
+                const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                if (!material) return;
+                Modal.show({
+                    title: '<i class="fas fa-pen text-blue-600"></i> Edit Material Details',
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Title</label><input id="edit-material-title" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(material.title || '')}"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Material Type</label><input id="edit-material-type" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(material.materialType || '')}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Coverage</label><input id="edit-material-topic" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(material.topic || '')}"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Author or Source</label><input id="edit-material-author" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(material.author || '')}"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Tags</label><input id="edit-material-tags" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML((material.tags || []).join(', '))}"></div>`,
+                    onSubmit: async () => {
+                        const title = document.getElementById('edit-material-title').value.trim();
+                        if (!title) throw new Error('Title is required.');
+                        await AppDB.update('materials', id, {
+                            title,
+                            materialType: document.getElementById('edit-material-type').value.trim(),
+                            topic: document.getElementById('edit-material-topic').value.trim(),
+                            author: document.getElementById('edit-material-author').value.trim(),
+                            tags: document.getElementById('edit-material-tags').value.split(',').map(value => value.trim()).filter(Boolean),
+                            updated: serverTimestamp()
+                        });
+                    }
+                });
+            },
+            deleteSubjectMaterial: (id) => {
+                const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                if (!material) return;
+                Modal.show({
+                    title: '<i class="fas fa-trash text-red-600"></i> Delete Material',
+                    content: `<div class="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-900"><p class="font-bold">Delete ${Security.escapeHTML(material.title || 'this material')}?</p><p class="mt-2">The PDF and extracted search chunks will be permanently removed. Notes already generated from it will remain in the notebook.</p></div>`,
+                    submitText: 'Delete Permanently',
+                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-bold',
+                    onSubmit: async () => {
+                        await MaterialUtils.deleteChunks(id);
+                        if (material.storagePath) {
+                            try { await deleteObject(storageRef(storage, material.storagePath)); } catch (error) { console.warn('Storage deletion warning:', error); }
+                        }
+                        await AppDB.delete('materials', id);
+                        if (views.subject_notebook.currentMaterialId === id) views.subject_notebook.showMaterials();
+                    }
+                });
+            },
+            renderMaterialAssistantResult: (material, title, html, chunks, outputType, suggestedTitle, sectionId) => {
+                const output = document.getElementById('material-assistant-output');
+                if (!output) return;
+                const pages = MaterialUtils.sourcePages(chunks);
+                const sourceLabel = pages.length ? pages.map(page => `p. ${page}`).join(', ') : 'No page references';
+                const safeHtml = Security.sanitizeAI(html);
+                window.appHandlers.currentMaterialOutput = { materialId: material.id, materialTitle: material.title, title: suggestedTitle, html: safeHtml, outputType, sectionId, sourcePages: pages };
+                output.innerHTML = `<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 pb-4 mb-5"><div><p class="text-xs font-bold uppercase tracking-widest text-emerald-600">${Security.escapeHTML(outputType)}</p><h4 class="text-xl font-bold text-slate-800 serif-text mt-1">${Security.escapeHTML(title)}</h4><p class="text-xs text-slate-500 mt-2"><i class="fas fa-file-pdf mr-1"></i>${Security.escapeHTML(material.title)} • Sources: ${Security.escapeHTML(sourceLabel)}</p></div><button onclick="window.appHandlers.saveMaterialOutputToNotebook()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex-shrink-0"><i class="fas fa-floppy-disk mr-2"></i>Save to Notebook</button></div><div class="material-generated-content prose max-w-none text-sm leading-relaxed text-slate-700">${safeHtml}</div><div class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Source pages used</p><div class="flex flex-wrap gap-2 mt-2">${pages.length ? pages.map(page => `<span class="bg-white border border-slate-200 px-2 py-1 rounded text-xs text-slate-600">Page ${page}</span>`).join('') : '<span class="text-xs text-slate-400">No page references available.</span>'}</div></div>`;
+            },
+            askSubjectMaterial: async (id) => {
+                const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                const question = document.getElementById('material-question')?.value.trim();
+                if (!material || !question) { alert('Type the question you want Lex to answer.'); return; }
+                const button = document.getElementById('btn-material-ask');
+                const output = document.getElementById('material-assistant-output');
+                button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Searching PDF...';
+                output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Finding the most relevant pages and preparing an answer...</p></div>';
+                try {
+                    const chunks = MaterialUtils.relevantChunks(await MaterialUtils.getChunks(id), question, 8, 48000);
+                    if (!chunks.length) throw new Error('No searchable PDF text is available. The file may be scanned or extraction may have failed.');
+                    const apiKey = document.getElementById('material-api-key')?.value.trim();
+                    let html;
+                    if (apiKey) {
+                        localStorage.setItem('gemini_api_key', apiKey);
+                        const prompt = `You are a Philippine law professor's discussion assistant. Answer the student's question using ONLY the supplied PDF excerpts. Do not use outside knowledge. If the answer is not found, clearly say that it cannot be located in the selected material. Give a direct recitation-ready answer, then the legal basis or explanation, and cite source pages in square brackets such as [p. 12]. Use clean basic HTML only.\n\nQUESTION:\n${question}\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
+                        const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+                        html = GeminiService.text(data) || '';
+                    } else {
+                        html = `<div class="p-4 bg-amber-50 border border-amber-200 rounded-lg"><b>Relevant passages found:</b><p class="mt-2">Add a Gemini API key for a synthesized answer. For now, review the extracted passages below.</p></div>${chunks.map(chunk => `<blockquote><b>${MaterialUtils.pageLabel(chunk)}</b><br>${Security.escapeHTML(Utils.excerpt(chunk.text, 1800))}</blockquote>`).join('')}`;
+                    }
+                    window.appHandlers.renderMaterialAssistantResult(material, 'Answer from Selected Material', html, chunks, 'Material Q&A', `Material Q&A — ${question.slice(0, 70)}`, 'class_notes');
+                } catch (error) {
+                    output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
+                } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-message mr-2"></i>Answer from PDF'; }
+            },
+            generateMaterialNotes: async (id) => {
+                const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                if (!material) return;
+                const topic = document.getElementById('material-notes-topic')?.value.trim() || material.topic || material.title;
+                const style = document.getElementById('material-notes-style')?.value || 'recitation-ready';
+                const button = document.getElementById('btn-material-notes');
+                const output = document.getElementById('material-assistant-output');
+                button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Building Notes...';
+                output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Compiling source-grounded notes...</p></div>';
+                try {
+                    const allChunks = await MaterialUtils.getChunks(id);
+                    const chunks = MaterialUtils.relevantChunks(allChunks, topic, 10, 52000);
+                    if (!chunks.length) throw new Error('No searchable text is available for this PDF.');
+                    const apiKey = document.getElementById('material-api-key')?.value.trim();
+                    let html;
+                    if (apiKey) {
+                        localStorage.setItem('gemini_api_key', apiKey);
+                        const prompt = `Create ${style} law-school notes on "${topic}" using ONLY the supplied PDF excerpts. Organize the notes with: topic overview; governing provisions; general rules; elements or requisites; exceptions and qualifications; important distinctions; cases or examples stated in the material; possible professor emphasis; and a concise personal-review summary. Preserve uncertainty and do not invent provisions or cases. Add page citations in square brackets after important statements. Return clean basic HTML only.\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
+                        const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+                        html = GeminiService.text(data) || '';
+                    } else {
+                        html = `<h2>${Security.escapeHTML(topic)}</h2><p><b>Extracted outline (AI synthesis unavailable):</b></p>${chunks.map(chunk => `<h3>${MaterialUtils.pageLabel(chunk)}</h3><p>${Security.escapeHTML(Utils.excerpt(chunk.text, 2200))}</p>`).join('')}`;
+                    }
+                    window.appHandlers.renderMaterialAssistantResult(material, `${topic} — Generated Notes`, html, chunks, 'Generated Notes', `Material Notes — ${topic}`, 'class_notes');
+                } catch (error) {
+                    output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
+                } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i>Generate Notes'; }
+            },
+            generateMaterialQuestions: async (id) => {
+                const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                if (!material) return;
+                const topic = document.getElementById('material-questions-topic')?.value.trim() || material.topic || material.title;
+                const style = document.getElementById('material-question-style')?.value || 'mixed';
+                const button = document.getElementById('btn-material-questions');
+                const output = document.getElementById('material-assistant-output');
+                button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Preparing Questions...';
+                output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Preparing professor-style questions from the PDF...</p></div>';
+                try {
+                    const chunks = MaterialUtils.relevantChunks(await MaterialUtils.getChunks(id), topic, 10, 52000);
+                    if (!chunks.length) throw new Error('No searchable text is available for this PDF.');
+                    const apiKey = document.getElementById('material-api-key')?.value.trim();
+                    let html;
+                    if (apiKey) {
+                        localStorage.setItem('gemini_api_key', apiKey);
+                        const prompt = `Using ONLY the supplied PDF excerpts, prepare 15 ${style} law-school recitation questions about "${topic}". Include a balanced mix of definitions, enumerations, legal bases, rules and exceptions, distinctions, short hypotheticals, ALAC application questions, and strict follow-up questions when supported by the material. For every question, provide a concise suggested answer and cite the supporting page. Do not invent authorities not in the excerpts. Return clean HTML using numbered headings or an ordered list.\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
+                        const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+                        html = GeminiService.text(data) || '';
+                    } else {
+                        html = `<h2>Possible Recitation Questions — ${Security.escapeHTML(topic)}</h2><ol><li>State and explain the principal rule discussed in the selected pages.</li><li>What are the elements or requisites stated in the material?</li><li>What exceptions or qualifications are identified?</li><li>Distinguish the closely related concepts discussed in the reading.</li><li>Apply the rule to a short hypothetical using ALAC.</li></ol><h3>Source passages for preparation</h3>${chunks.map(chunk => `<p><b>${MaterialUtils.pageLabel(chunk)}:</b> ${Security.escapeHTML(Utils.excerpt(chunk.text, 1000))}</p>`).join('')}`;
+                    }
+                    window.appHandlers.renderMaterialAssistantResult(material, `${topic} — Possible Professor Questions`, html, chunks, 'Recitation Questions', `Recitation Questions — ${topic}`, 'recitation');
+                } catch (error) {
+                    output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
+                } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-question mr-2"></i>Generate Questions'; }
+            },
+            saveMaterialOutputToNotebook: async () => {
+                const result = window.appHandlers.currentMaterialOutput;
+                const subject = window.appHandlers.getCurrentSubjectContext();
+                if (!result || !subject.id) return;
+                const sourceText = result.sourcePages?.length ? result.sourcePages.map(page => `p. ${page}`).join(', ') : 'Page references unavailable';
+                const sourceBlock = `<div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg mb-5"><p><strong>Source Material:</strong> ${Security.escapeHTML(result.materialTitle)}</p><p><strong>Pages Used:</strong> ${Security.escapeHTML(sourceText)}</p></div>`;
+                const noteRef = await AppDB.add('notes', {
+                    semesterId: subject.semesterId,
+                    subjectId: subject.id,
+                    sectionId: result.sectionId || 'class_notes',
+                    title: result.title || 'Material-Grounded Note',
+                    content: sourceBlock + result.html,
+                    noteType: result.outputType || 'material_note',
+                    linkedMaterialIds: [result.materialId],
+                    sourcePages: result.sourcePages || [],
+                    created: serverTimestamp(),
+                    updated: serverTimestamp()
+                });
+                alert('Saved to the subject notebook.');
+                views.subject_notebook.activePanel = 'notes';
+                views.subject_notebook.activeNoteId = noteRef.id;
+                setTimeout(() => {
+                    const note = views.subject_notebook.notesData.find(item => item.id === noteRef.id);
+                    if (note) window.appHandlers.openNote(note.id, note.title, note.content, null);
+                    else views.subject_notebook.showOverview();
+                }, 500);
+            },
             getCurrentSubjectContext: () => ({
                 id: views.subject_notebook.subjectId,
                 name: views.subject_notebook.subjectName,
@@ -3822,7 +4612,7 @@ const cleanAiJsonResponse = (text) => {
             handleDigestUpload: async (input) => { const file = input.files[0]; if (!file) return; const display = document.getElementById('digest-filename'); const btn = document.getElementById('btn-process-digest'); display.innerText = file.name; display.classList.remove('hidden'); btn.innerText = "Reading PDF..."; btn.disabled = true; try { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; let fullText = ""; const maxPages = Math.min(pdf.numPages, 10); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' ') + "\n"; } window.appHandlers.digestText = fullText; document.getElementById('digest-textarea').value = ''; btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; } catch (e) { alert("Failed to read PDF."); btn.innerHTML = "Error"; } },
             processDigest: async () => { const titleInput = document.getElementById('digest-title').value.trim(); const subjectInput = document.getElementById('digest-subject').value;
             const topicInput = document.getElementById('digest-topic').value.trim(); // NEW
-            const textAreaInput = document.getElementById('digest-textarea').value.trim(); const apiKey = document.getElementById('gemini-api-key').value.trim(); if (!apiKey) { alert("Please enter your Gemini API Key."); return; } localStorage.setItem('gemini_api_key', apiKey); if (!titleInput || !subjectInput) { alert("Please enter both the Case Title and Subject Matter."); return; } let textToDigest = textAreaInput || window.appHandlers.digestText; if (!textToDigest) { alert("Please paste the full text of the case or upload a PDF."); return; } const area = document.getElementById('digest-results-area'); const btn = document.getElementById('btn-process-digest'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Gemini is Digesting...'; area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; try { const promptText = `You are an expert law professor. Digest the following legal case text. Focus your extraction of the Facts, Issue, and Ruling strictly in relation to: "${subjectInput}". Return the result STRICTLY as a raw JSON object with exactly three keys: "facts", "issue", and "ruling". Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text. Case Text: ${textToDigest.substring(0, 50000)}`; const apiUrl = 'https://' + 'generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey; const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } }) }); if (!response.ok) throw new Error(`API Error: ${response.status}`); const data = await response.json(); let jsonString = data.candidates[0].content.parts[0].text; jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); const parsedDigest = JSON.parse(jsonString); const facts = parsedDigest.facts || "Facts not found."; const issue = parsedDigest.issue || "Issue not found."; const ruling = parsedDigest.ruling || "Ruling not found."; await AppDB.add('digests', { 
+            const textAreaInput = document.getElementById('digest-textarea').value.trim(); const apiKey = document.getElementById('gemini-api-key').value.trim(); if (!apiKey) { alert("Please enter your Gemini API Key."); return; } localStorage.setItem('gemini_api_key', apiKey); if (!titleInput || !subjectInput) { alert("Please enter both the Case Title and Subject Matter."); return; } let textToDigest = textAreaInput || window.appHandlers.digestText; if (!textToDigest) { alert("Please paste the full text of the case or upload a PDF."); return; } const area = document.getElementById('digest-results-area'); const btn = document.getElementById('btn-process-digest'); btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Gemini is Digesting...'; area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; try { const promptText = `You are an expert law professor. Digest the following legal case text. Focus your extraction of the Facts, Issue, and Ruling strictly in relation to: "${subjectInput}". Return the result STRICTLY as a raw JSON object with exactly three keys: "facts", "issue", and "ruling". Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text. Case Text: ${textToDigest.substring(0, 50000)}`; const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } }); let jsonString = GeminiService.text(data); jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); const parsedDigest = JSON.parse(jsonString); const facts = parsedDigest.facts || "Facts not found."; const issue = parsedDigest.issue || "Issue not found."; const ruling = parsedDigest.ruling || "Ruling not found."; await AppDB.add('digests', { 
                 title: titleInput, 
                 subject: subjectInput, 
                 topic: topicInput, // NEW
@@ -3877,22 +4667,13 @@ generateReview: async () => {
         }
 
         /* --- 2. API REQUEST PHASE --- */
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-        
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                contents: [{ role: "user", parts: [{ text: promptText }] }],
-                generationConfig: { responseMimeType: "application/json" } // Force JSON response
-            })
+        const data = await GeminiService.generate(apiKey, {
+            contents: [{ role: "user", parts: [{ text: promptText }] }],
+            generationConfig: { responseMimeType: "application/json" }
         });
 
-        if (!response.ok) throw new Error(`API Error: ${response.status}`);
-
         /* --- 3. JSON PARSING & DATA PREP --- */
-        const data = await response.json();
-        const jsonString = cleanAiJsonResponse(data.candidates[0].content.parts[0].text);
+        const jsonString = cleanAiJsonResponse(GeminiService.text(data));
         let parsedData = JSON.parse(jsonString);
 
         // Enhance flashcard data with SRS (Space Repetition System) parameters
@@ -4021,7 +4802,7 @@ generateReview: async () => {
         window.appHandlers.pdfText = '';
     }
 },
-            evaluateAnswer: async (index, docId) => { const apiKey = localStorage.getItem('gemini_api_key'); if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; } const isLive = docId === null; const answerId = isLive ? `live-exam-answer-${index}` : `saved-exam-answer-${docId}-${index}`; const btnId = isLive ? `btn-eval-live-${index}` : `btn-eval-${docId}-${index}`; const resultId = isLive ? `eval-result-live-${index}` : `eval-result-${docId}-${index}`; const answerEl = document.getElementById(answerId); const userAnswer = answerEl.value.trim(); if (!userAnswer) { alert("Please type an answer first."); return; } const btn = document.getElementById(btnId); const resultDiv = document.getElementById(resultId); let reviewData; if (isLive && window.appHandlers.currentReviewData) { reviewData = window.appHandlers.currentReviewData.content[index]; } else if (!isLive && window.appHandlers.savedExamData[docId]) { reviewData = window.appHandlers.savedExamData[docId][index]; } if(!reviewData) return; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...'; resultDiv.classList.remove('hidden'); resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`; try { const promptText = `You are a strict but fair law professor grading a student's answer to a Bar Exam question. Question: ${reviewData.question} Suggested Correct Answer / Rubric: ${reviewData.suggested_answer} Student's Answer: ${userAnswer} Task: Provide a brief, constructive evaluation. Mention what they got right (Issue spotting, Rule application). Mention what they missed. Give a final score out of 100%. Keep formatting clean using basic HTML tags like <b> and <br>, do NOT use code blocks or markdown backticks.`; const apiUrl = 'https://' + 'generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey; const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: promptText }] }] }) }); if (!response.ok) throw new Error(`API Error: ${response.status}`); const data = await response.json(); let feedback = Security.sanitizeAI(data.candidates[0].content.parts[0].text); resultDiv.innerHTML = `<div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans mt-2"><h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>${feedback}</div>`; } catch (error) { resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer'; } },
+            evaluateAnswer: async (index, docId) => { const apiKey = localStorage.getItem('gemini_api_key'); if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; } const isLive = docId === null; const answerId = isLive ? `live-exam-answer-${index}` : `saved-exam-answer-${docId}-${index}`; const btnId = isLive ? `btn-eval-live-${index}` : `btn-eval-${docId}-${index}`; const resultId = isLive ? `eval-result-live-${index}` : `eval-result-${docId}-${index}`; const answerEl = document.getElementById(answerId); const userAnswer = answerEl.value.trim(); if (!userAnswer) { alert("Please type an answer first."); return; } const btn = document.getElementById(btnId); const resultDiv = document.getElementById(resultId); let reviewData; if (isLive && window.appHandlers.currentReviewData) { reviewData = window.appHandlers.currentReviewData.content[index]; } else if (!isLive && window.appHandlers.savedExamData[docId]) { reviewData = window.appHandlers.savedExamData[docId][index]; } if(!reviewData) return; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...'; resultDiv.classList.remove('hidden'); resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`; try { const promptText = `You are a strict but fair law professor grading a student's answer to a Bar Exam question. Question: ${reviewData.question} Suggested Correct Answer / Rubric: ${reviewData.suggested_answer} Student's Answer: ${userAnswer} Task: Provide a brief, constructive evaluation. Mention what they got right (Issue spotting, Rule application). Mention what they missed. Give a final score out of 100%. Keep formatting clean using basic HTML tags like <b> and <br>, do NOT use code blocks or markdown backticks.`; const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] }); let feedback = Security.sanitizeAI(GeminiService.text(data)); resultDiv.innerHTML = `<div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans mt-2"><h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>${feedback}</div>`; } catch (error) { resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer'; } },
             rateFlashcard: async (reviewId, cardIndex, rating) => { try { const reviewContent = window.appHandlers.savedReviewData[reviewId]; if (!reviewContent) return; let card = reviewContent[cardIndex]; const now = Date.now(); let newInterval = card.interval || 0; if (rating === 'hard') { newInterval = 1; } else if (rating === 'good') { newInterval = newInterval === 0 ? 3 : newInterval * 2; } else if (rating === 'easy') { newInterval = newInterval === 0 ? 7 : newInterval * 3; } card.interval = newInterval; card.nextReview = now + (newInterval * 24 * 60 * 60 * 1000); reviewContent[cardIndex] = card; await AppDB.update('reviews', reviewId, { content: reviewContent }); } catch(e) { console.error("Error updating flashcard:", e); alert("Failed to save flashcard rating."); } },
             saveCurrentReview: async () => { const title = document.getElementById('save-review-title').value.trim(); if (!title) { alert('Please enter a title to save this review.'); return; } if (!window.appHandlers.currentReviewData) return; const { mode, content } = window.appHandlers.currentReviewData; try { await AppDB.add('reviews', { title, type: mode, content: content, created: serverTimestamp() }); alert('Review saved successfully to your Saved Reviews tab!'); window.appHandlers.navigate('saved_reviews'); } catch (e) { console.error(e); alert('Failed to save review.'); } },
             deleteReview: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete Review', content: '<p>Are you sure you want to delete this saved review?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition shadow-sm', onSubmit: async () => await AppDB.delete('reviews', id) }); }
