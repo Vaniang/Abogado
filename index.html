@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lex: Law School Companion V2.9</title>
+    <title>Lex: Law School Companion V2.9.1</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -661,7 +661,7 @@
         };
 
         const MaterialUtils = {
-            maxFileBytes: 30 * 1024 * 1024,
+            maxFileBytes: 40 * 1024 * 1024,
             maxPages: 400,
             maxExtractedCharacters: 1800000,
             chunkCharacters: 14000,
@@ -3819,14 +3819,14 @@ const cleanAiJsonResponse = (text) => {
                 if (!subject.id) return;
                 Modal.show({
                     title: '<i class="fas fa-cloud-arrow-up text-emerald-600"></i> Upload Subject Material',
-                    content: `<div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-900 mb-4">The PDF will be stored in Firebase Storage. Searchable text is extracted page by page and kept in your private user workspace.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">PDF File <span class="text-red-500">*</span></label><input type="file" id="material-file" accept="application/pdf,.pdf" class="w-full p-2 border border-slate-300 rounded-lg bg-white"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Display Title</label><input id="material-title" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="Defaults to the filename"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Material Type</label><select id="material-type" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option>Professor Handout</option><option>Textbook / Commentary</option><option>Codal / Statute</option><option>Case Compilation</option><option>Syllabus</option><option>Reviewer</option><option>Reference</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Coverage</label><input id="material-topic" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. Justifying Circumstances"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Author or Source</label><input id="material-author" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="Professor, author, agency, or source"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Tags</label><input id="material-tags" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="self-defense, Article 11, criminal law"></div><div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800"><i class="fas fa-circle-info mr-1"></i>Maximum file size: 30 MB. Text-based PDFs work immediately. Scanned-image PDFs require OCR outside Lex before they become searchable.</div>`,
+                    content: `<div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-900 mb-4">The PDF will be stored in Firebase Storage. Searchable text is extracted page by page and kept in your private user workspace.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">PDF File <span class="text-red-500">*</span></label><input type="file" id="material-file" accept="application/pdf,.pdf" class="w-full p-2 border border-slate-300 rounded-lg bg-white"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Display Title</label><input id="material-title" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="Defaults to the filename"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Material Type</label><select id="material-type" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option>Professor Handout</option><option>Textbook / Commentary</option><option>Codal / Statute</option><option>Case Compilation</option><option>Syllabus</option><option>Reviewer</option><option>Reference</option></select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Coverage</label><input id="material-topic" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. Justifying Circumstances"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Author or Source</label><input id="material-author" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="Professor, author, agency, or source"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Tags</label><input id="material-tags" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="self-defense, Article 11, criminal law"></div><div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800"><i class="fas fa-circle-info mr-1"></i>Maximum file size: 40 MB. Text-based PDFs work immediately. Scanned-image PDFs require OCR outside Lex before they become searchable.</div>`,
                     submitText: 'Upload & Extract Text',
                     submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
                     onSubmit: async () => {
                         const file = document.getElementById('material-file')?.files?.[0];
                         if (!file) throw new Error('Please select a PDF file.');
                         if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) throw new Error('Only PDF files are supported.');
-                        if (file.size > MaterialUtils.maxFileBytes) throw new Error('The PDF is larger than 30 MB. Please compress or divide it first.');
+                        if (file.size > MaterialUtils.maxFileBytes) throw new Error('The PDF is larger than 40 MB. Please compress or divide it first.');
                         const title = document.getElementById('material-title').value.trim() || file.name.replace(/\.pdf$/i, '');
                         const tags = document.getElementById('material-tags').value.split(',').map(value => value.trim()).filter(Boolean);
                         const materialRef = await AppDB.add('materials', {
