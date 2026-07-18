@@ -1741,6 +1741,8 @@
                     const status = material.extractionStatus || material.status || 'uploaded';
                     const ready = status === 'ready';
                     const scanned = status === 'scanned';
+                    const canOpenWorkspace = Boolean(material.downloadURL || material.storagePath);
+                    const needsPreparation = canOpenWorkspace && !ready && !scanned && status !== 'extracting';
                     const statusClass = ready ? 'bg-green-100 text-green-700' : scanned ? 'bg-amber-100 text-amber-700' : status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700';
                     const statusLabel = ready ? 'Searchable' : scanned ? 'Scanned PDF' : status === 'failed' ? 'Extraction failed' : status === 'extracting' ? 'Extracting text' : 'Uploaded';
                     const tags = Array.isArray(material.tags) ? material.tags : [];
@@ -1757,7 +1759,9 @@
                                     ${material.extractionError ? `<p class="mt-3 text-xs text-red-600">${Security.escapeHTML(material.extractionError)}</p>` : ''}
                                 </div>
                                 <div class="flex flex-wrap gap-2 flex-shrink-0">
-                                    ${ready ? `<button onclick="window.appHandlers.openSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" title="Ask questions or generate notes from this PDF"><i class="fas fa-graduation-cap mr-1"></i>Use This Material</button>` : ''}
+                                    ${canOpenWorkspace ? `<button onclick="window.appHandlers.openSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700" title="Read the PDF beside its grounded study tools"><i class="fas fa-columns mr-1"></i>Study Workspace</button>` : ''}
+                                    ${needsPreparation ? `<button onclick="window.appHandlers.prepareSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200" title="Extract searchable text from the stored PDF"><i class="fas fa-wand-magic-sparkles mr-1"></i>Prepare for AI Study</button>` : ''}
+                                    ${!canOpenWorkspace ? `<button onclick="window.appHandlers.attachPdfToSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200" title="Attach the original PDF to this material"><i class="fas fa-paperclip mr-1"></i>Attach PDF</button>` : ''}
                                     ${material.downloadURL ? `<button onclick="window.open('${Security.escapeHTML(material.downloadURL)}', '_blank', 'noopener')" class="px-3 py-2 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-file-pdf mr-1"></i>Preview</button>` : ''}
                                     <button onclick="window.appHandlers.editSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"><i class="fas fa-pen"></i></button>
                                     <button onclick="window.appHandlers.deleteSubjectMaterial('${material.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-red-50 text-red-600 hover:bg-red-100"><i class="fas fa-trash"></i></button>
@@ -1786,14 +1790,15 @@
                 if (!area) return;
                 area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-7xl mx-auto">
                     <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-6"><div><button onclick="window.appHandlers.showSubjectMaterials()" class="text-sm font-bold text-slate-500 hover:text-emerald-700 mb-3"><i class="fas fa-arrow-left mr-2"></i>Back to Materials</button><p class="text-xs uppercase tracking-widest font-bold text-emerald-600">Discussion Assist</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(material.title || 'Subject Material')}</h3><p class="text-sm text-slate-500 mt-1">${Number(material.pageCount || 0)} pages • ${Security.escapeHTML(material.topic || material.materialType || 'Reference material')}</p></div><div class="flex flex-wrap gap-2">${material.downloadURL ? `<button onclick="window.open('${Security.escapeHTML(material.downloadURL)}', '_blank', 'noopener')" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-file-pdf mr-2"></i>Open PDF</button>` : ''}<button onclick="window.appHandlers.uploadSubjectMaterial()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Add Material</button></div></div>
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                        <div class="xl:col-span-1 space-y-5">
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden min-h-[760px] flex flex-col"><div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-200 bg-slate-50"><div><p class="text-xs font-bold uppercase tracking-widest text-slate-500">Original source</p><h4 class="font-bold text-slate-800 mt-1"><i class="fas fa-file-pdf text-red-500 mr-2"></i>PDF Viewer</h4></div>${material.downloadURL ? `<button onclick="window.open('${Security.escapeHTML(material.downloadURL)}', '_blank', 'noopener')" class="text-xs font-bold text-blue-700 hover:text-blue-900"><i class="fas fa-up-right-from-square mr-1"></i>Open</button>` : ''}</div>${material.downloadURL ? `<iframe src="${Security.escapeHTML(material.downloadURL)}#toolbar=1&navpanes=0" title="${Security.escapeHTML(material.title || 'Subject material')} PDF" class="w-full flex-1 min-h-[700px] bg-slate-100" loading="lazy"></iframe>` : `<div class="flex-1 min-h-[700px] flex flex-col items-center justify-center text-center p-8 text-slate-500"><i class="fas fa-file-circle-exclamation text-5xl text-slate-300 mb-4"></i><p class="font-bold text-slate-700">PDF preview unavailable</p><p class="text-sm mt-2">This material has no saved PDF link yet.</p></div>`}</div>
+                        <div class="space-y-5">${(material.extractionStatus || material.status) !== 'ready' ? `<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900"><div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><p><b>One step remaining:</b> the PDF is available to read, but Lex needs searchable text before it can ground AI answers in it.</p><button onclick="window.appHandlers.prepareSubjectMaterial('${material.id}')" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap"><i class="fas fa-wand-magic-sparkles mr-1"></i>Prepare for AI Study</button></div></div>` : ''}
                             <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Gemini API Key (optional)</label><input type="password" id="material-api-key" value="${Security.escapeHTML(savedKey)}" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Needed for AI-written answers"><p class="text-[11px] text-slate-400 mt-2">Without a key, Lex still finds and shows the most relevant source passages.</p></div>
                             <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-magnifying-glass text-emerald-600 mr-2"></i>Ask This Material</h4><p class="text-xs text-slate-500 mt-2">Ask a precise question and receive an answer grounded only in this PDF.</p><textarea id="material-question" rows="5" class="w-full mt-3 p-3 border border-slate-300 rounded-lg text-sm resize-y outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Type a professor's question, e.g. What are the requisites of self-defense?"></textarea><button onclick="window.appHandlers.askSubjectMaterial('${material.id}')" id="btn-material-ask" class="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-message mr-2"></i>Answer from PDF</button></div>
                             <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-notes-medical text-blue-600 mr-2"></i>Generate Notes</h4><p class="text-xs text-slate-500 mt-2">Turn selected coverage into an editable reviewer with source-page references.</p><input id="material-notes-topic" class="w-full mt-3 p-2.5 border border-slate-300 rounded-lg text-sm" placeholder="Topic or coverage (optional)"><select id="material-notes-style" class="w-full mt-2 p-2.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="recitation-ready">Recitation-ready notes</option><option value="comprehensive">Comprehensive discussion notes</option><option value="concise">Concise class outline</option><option value="codal">Codal, elements, and exceptions</option><option value="exam">Exam reviewer</option></select><button onclick="window.appHandlers.generateMaterialNotes('${material.id}')" id="btn-material-notes" class="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-wand-magic-sparkles mr-2"></i>Generate Notes</button></div>
                             <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-person-chalkboard text-amber-600 mr-2"></i>Professor Questions</h4><p class="text-xs text-slate-500 mt-2">Practise definitions, rules, hypotheticals, and professor follow-up questions.</p><input id="material-questions-topic" class="w-full mt-3 p-2.5 border border-slate-300 rounded-lg text-sm" placeholder="Topic or coverage (optional)"><select id="material-question-style" class="w-full mt-2 p-2.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="mixed">Mixed recitation set</option><option value="definitions">Definitions and enumerations</option><option value="rules">Rules, exceptions, and distinctions</option><option value="hypotheticals">Hypotheticals and ALAC</option><option value="strict">Strict professor follow-ups</option></select><button onclick="window.appHandlers.generateMaterialQuestions('${material.id}')" id="btn-material-questions" class="w-full mt-3 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-question mr-2"></i>Generate Questions</button></div>
+                            <div id="material-assistant-output" class="bg-white border border-slate-200 rounded-xl shadow-sm min-h-[460px] p-6 relative"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-center p-8"><i class="fas fa-book-open-reader text-6xl mb-4 opacity-20"></i><h4 class="font-bold text-slate-600">AI-grounded study tools</h4><p class="text-sm mt-2 max-w-md">Read the original PDF on the left, then ask a question, generate notes, or create recitation questions here. Results cite the PDF pages used.</p></div></div>
                         </div>
-                        <div class="xl:col-span-2"><div id="material-assistant-output" class="bg-white border border-slate-200 rounded-xl shadow-sm min-h-[680px] p-6 relative"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-center p-8"><i class="fas fa-book-open-reader text-6xl mb-4 opacity-20"></i><h4 class="font-bold text-slate-600">Material-grounded study workspace</h4><p class="text-sm mt-2 max-w-md">Ask a live class question, generate structured notes, or prepare possible recitation questions. Lex will show the PDF pages used.</p></div></div></div>
                     </div>
                 </div></div>`;
             }
@@ -3878,6 +3883,97 @@ const cleanAiJsonResponse = (text) => {
                         }
                     }
                 });
+            },
+            attachPdfToSubjectMaterial: (id) => {
+                const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                if (!material) return;
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'application/pdf,.pdf';
+                input.onchange = async () => {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) { alert('Only PDF files are supported.'); return; }
+                    if (file.size > MaterialUtils.maxFileBytes) { alert('The PDF is larger than 40 MB. Please compress or divide it first.'); return; }
+                    try {
+                        await AppDB.update('materials', id, { status: 'uploading', extractionStatus: 'uploading', extractionError: '', updated: serverTimestamp() });
+                        const path = `artifacts/${appNamespace}/users/${currentUser.uid}/subjects/${material.subjectId}/materials/${id}/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
+                        const fileRef = storageRef(storage, path);
+                        await uploadBytes(fileRef, file, { contentType: 'application/pdf', customMetadata: { materialId: id, subjectId: material.subjectId } });
+                        const downloadURL = await getDownloadURL(fileRef);
+                        const extracted = await MaterialUtils.extractPdf(file);
+                        const chunks = MaterialUtils.makeChunks(extracted.pages);
+                        await MaterialUtils.deleteChunks(id);
+                        if (chunks.length) await MaterialUtils.saveChunks(id, material.subjectId, material.semesterId, chunks);
+                        const update = {
+                            filename: file.name,
+                            sizeBytes: file.size,
+                            storagePath: path,
+                            downloadURL,
+                            status: 'ready',
+                            extractionStatus: extracted.scannedLikely ? 'scanned' : 'ready',
+                            pageCount: extracted.pageCount,
+                            processedPages: extracted.processedPages,
+                            extractedCharacters: extracted.totalCharacters,
+                            chunkCount: chunks.length,
+                            extractionTruncated: extracted.truncated,
+                            extractionError: extracted.scannedLikely ? 'Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features.' : '',
+                            updated: serverTimestamp()
+                        };
+                        await AppDB.update('materials', id, update);
+                        Object.assign(material, update);
+                        views.subject_notebook.showMaterialWorkspace(id);
+                    } catch (error) {
+                        const message = error.message || 'Unable to attach and prepare the PDF.';
+                        await AppDB.update('materials', id, { status: 'uploaded', extractionStatus: 'failed', extractionError: message, updated: serverTimestamp() });
+                        Object.assign(material, { status: 'uploaded', extractionStatus: 'failed', extractionError: message });
+                        views.subject_notebook.showMaterials();
+                    }
+                };
+                input.click();
+            },
+            prepareSubjectMaterial: async (id) => {
+                const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                if (!material) return;
+                const buttons = Array.from(document.querySelectorAll(`[onclick="window.appHandlers.prepareSubjectMaterial('${id}')"]`));
+                buttons.forEach(button => { button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Preparing...'; });
+                try {
+                    let downloadURL = material.downloadURL;
+                    if (!downloadURL && material.storagePath) downloadURL = await getDownloadURL(storageRef(storage, material.storagePath));
+                    if (!downloadURL) throw new Error('The stored PDF link is unavailable. Attach the PDF again to prepare this material.');
+                    await AppDB.update('materials', id, { downloadURL, status: 'extracting', extractionStatus: 'extracting', extractionError: '', updated: serverTimestamp() });
+                    const response = await fetch(downloadURL, { cache: 'no-store' });
+                    if (!response.ok) throw new Error(`Unable to read the stored PDF (HTTP ${response.status}).`);
+                    const blob = await response.blob();
+                    if (!blob.size) throw new Error('The stored PDF is empty. Attach the PDF again and retry.');
+                    const file = new File([blob], material.filename || 'material.pdf', { type: 'application/pdf' });
+                    const extracted = await MaterialUtils.extractPdf(file);
+                    const chunks = MaterialUtils.makeChunks(extracted.pages);
+                    await MaterialUtils.deleteChunks(id);
+                    if (chunks.length) await MaterialUtils.saveChunks(id, material.subjectId, material.semesterId, chunks);
+                    const update = {
+                        downloadURL,
+                        status: 'ready',
+                        extractionStatus: extracted.scannedLikely ? 'scanned' : 'ready',
+                        pageCount: extracted.pageCount,
+                        processedPages: extracted.processedPages,
+                        extractedCharacters: extracted.totalCharacters,
+                        chunkCount: chunks.length,
+                        extractionTruncated: extracted.truncated,
+                        extractionError: extracted.scannedLikely ? 'Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features.' : '',
+                        updated: serverTimestamp()
+                    };
+                    await AppDB.update('materials', id, update);
+                    Object.assign(material, update);
+                    views.subject_notebook.showMaterialWorkspace(id);
+                } catch (error) {
+                    const message = error.message || 'Unable to prepare the material for AI study.';
+                    await AppDB.update('materials', id, { status: 'uploaded', extractionStatus: 'failed', extractionError: message, updated: serverTimestamp() });
+                    Object.assign(material, { status: 'uploaded', extractionStatus: 'failed', extractionError: message });
+                    views.subject_notebook.showMaterialWorkspace(id);
+                } finally {
+                    buttons.forEach(button => { button.disabled = false; button.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-1"></i>Prepare for AI Study'; });
+                }
             },
             editSubjectMaterial: (id) => {
                 const material = views.subject_notebook.materialsData.find(item => item.id === id);
