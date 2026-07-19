@@ -4027,27 +4027,27 @@ const cleanAiJsonResponse = (text) => {
 
                 // Upload to Supabase
 
-                const { data, error } = await supabase.storage
-                    .from("materials")
-                    .upload(path, file, {
-                        upsert: true,
-                        contentType: "application/pdf"
-                    });
-                
-                console.log("UPLOAD DATA:", data);
-                console.log("UPLOAD ERROR:", error);
-                
-                if (error) {
-                    console.error(error);
-                    alert(JSON.stringify(error, null, 2));
-                    throw error;
-                }
+                const { data: uploadData, error } = await supabase.storage
+    .from("materials")
+    .upload(path, file, {
+        upsert: true,
+        contentType: "application/pdf"
+    });
 
-                const { data } = supabase.storage
-                    .from("materials")
-                    .getPublicUrl(path);
+console.log("UPLOAD DATA:", uploadData);
+console.log("UPLOAD ERROR:", error);
 
-                const downloadURL = data.publicUrl;
+if (error) {
+    console.error(error);
+    alert(JSON.stringify(error, null, 2));
+    throw error;
+}
+
+const { data: publicUrlData } = supabase.storage
+    .from("materials")
+    .getPublicUrl(path);
+
+const downloadURL = publicUrlData.publicUrl;
 
                 await AppDB.update("materials", materialId, {
 
