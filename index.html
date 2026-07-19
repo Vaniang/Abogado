@@ -368,7 +368,15 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+       import {
+                getAuth,
+                signInWithPopup,
+                signInWithRedirect,
+                getRedirectResult,
+                GoogleAuthProvider,
+                onAuthStateChanged,
+                signOut
+            } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDoc, getDocs, writeBatch, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
         
@@ -3529,7 +3537,36 @@ const cleanAiJsonResponse = (text) => {
                 }
             },
 
-            login: async () => { try { await signInWithPopup(auth, provider); } catch (e) { alert("Login failed. Check Authorized Domains in Firebase Console."); } },
+          login: async () => {
+    try {
+
+        // Detect phones and tablets
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+        if (isMobile) {
+
+            // iPhone / iPad / Android
+            await signInWithRedirect(auth, provider);
+
+        } else {
+
+            // Windows / Mac
+            await signInWithPopup(auth, provider);
+
+        }
+
+    } catch (error) {
+
+        console.error("Google Login Error:", error);
+
+        alert(
+            error.message ||
+            "Unable to sign in. Please try again."
+        );
+
+    }
+},
             logout: async () => { try { await signOut(auth); } catch (e) {} },
             toggleSidebar: () => {
                 const sidebar = document.getElementById('sidebar');
