@@ -4220,28 +4220,58 @@ const cleanAiJsonResponse = (text) => {
                 });
             },
             deleteSubjectMaterial: (id) => {
-                const material = views.subject_notebook.materialsData.find(item => item.id === id);
-                if (!material) return;
-                Modal.show({
-                    title: '<i class="fas fa-trash text-red-600"></i> Delete Material',
-                    content: `<div class="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-900"><p class="font-bold">Delete ${Security.escapeHTML(material.title || 'this material')}?</p><p class="mt-2">The PDF and extracted search chunks will be permanently removed. Notes already generated from it will remain in the notebook.</p></div>`,
-                    submitText: 'Delete Permanently',
-                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-bold',
-                    onSubmit: async () => {
-                        await MaterialUtils.deleteChunks(id);
-                        if (material.storagePath) {
-                            try { const { error } = await supabase.storage
-                                    .from("materials")
-                                    .remove([material.storagePath]);
-                                
-                                if (error) {
-                                    console.warn(error);
-                                }
-                        await AppDB.delete('materials', id);
-                        if (views.subject_notebook.currentMaterialId === id) views.subject_notebook.showMaterials();
+    const material = views.subject_notebook.materialsData.find(item => item.id === id);
+    if (!material) return;
+
+    Modal.show({
+        title: '<i class="fas fa-trash text-red-600"></i> Delete Material',
+        content: `<div class="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-900">
+            <p class="font-bold">Delete ${Security.escapeHTML(material.title || 'this material')}?</p>
+            <p class="mt-2">
+                The PDF and extracted search chunks will be permanently removed.
+                Notes already generated from it will remain in the notebook.
+            </p>
+        </div>`,
+
+        submitText: 'Delete Permanently',
+
+        submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-bold',
+
+        onSubmit: async () => {
+
+            await MaterialUtils.deleteChunks(id);
+
+            if (material.storagePath) {
+
+                try {
+
+                    const { error } = await supabase.storage
+                        .from("materials")
+                        .remove([material.storagePath]);
+
+                    if (error) {
+                        console.warn("Supabase delete:", error);
                     }
-                });
-            },
+
+                } catch (error) {
+
+                    console.warn("Delete failed:", error);
+
+                }
+
+            }
+
+            await AppDB.delete('materials', id);
+
+            if (views.subject_notebook.currentMaterialId === id) {
+                views.subject_notebook.showMaterials();
+            }
+
+        }
+
+    });
+
+},
             renderMaterialAssistantResult: (material, title, html, chunks, outputType, suggestedTitle, sectionId) => {
                 const output = document.getElementById('material-assistant-output');
                 if (!output) return;
