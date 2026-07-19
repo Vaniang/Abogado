@@ -370,8 +370,12 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDoc, getDocs, writeBatch, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
+        
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+        
         const firebaseConfig = {
             apiKey: "AIzaSyDxKEf2v5P2LN_a2BcR_ODYDGINZMmVPWk",
             authDomain: "abogado-ea708.firebaseapp.com",
@@ -386,7 +390,12 @@
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
         const db = getFirestore(app);
-        const storage = getStorage(app);
+        const SUPABASE_URL = "https://suzfwoclznsumtxvzpai.supabase.co";
+        const SUPABASE_KEY = "sb_publishable_CiBDva2nLm0nnlmnMWLpMw_WM9lMd4P";
+        const supabase = createClient(
+        "YOUR_SUPABASE_URL",
+        "YOUR_SUPABASE_ANON_KEY"
+);
         
         let currentUser = null;
         let currentView = 'dashboard';
@@ -3853,10 +3862,20 @@ const cleanAiJsonResponse = (text) => {
                         });
                         const materialId = materialRef.id;
                         const path = `artifacts/${appNamespace}/users/${currentUser.uid}/subjects/${subject.id}/materials/${materialId}/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
-                        const fileRef = storageRef(storage, path);
-                        try {
-                            await uploadBytes(fileRef, file, { contentType: 'application/pdf', customMetadata: { materialId, subjectId: subject.id } });
-                            const downloadURL = await getDownloadURL(fileRef);
+                        const { error } = await supabase.storage
+                                .from("materials")
+                                .upload(path, file, {
+                                    upsert: true,
+                                    contentType: "application/pdf"
+                                });
+                            
+                            if (error) throw error;
+                            
+                            const { data } = supabase.storage
+                                .from("materials")
+                                .getPublicUrl(path);
+                            
+                            const downloadURL = data.publicUrl;
                             await AppDB.update('materials', materialId, { storagePath: path, downloadURL, status: 'extracting', extractionStatus: 'extracting', updated: serverTimestamp() });
                             try {
                                 const extracted = await MaterialUtils.extractPdf(file);
@@ -3885,96 +3904,304 @@ const cleanAiJsonResponse = (text) => {
                 });
             },
             attachPdfToSubjectMaterial: (id) => {
-                const material = views.subject_notebook.materialsData.find(item => item.id === id);
-                if (!material) return;
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'application/pdf,.pdf';
-                input.onchange = async () => {
-                    const file = input.files?.[0];
-                    if (!file) return;
-                    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) { alert('Only PDF files are supported.'); return; }
-                    if (file.size > MaterialUtils.maxFileBytes) { alert('The PDF is larger than 40 MB. Please compress or divide it first.'); return; }
+                    const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                    if (!material) return;
+                
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'application/pdf,.pdf';
+                
+                    input.onchange = async () => {
+                
+                        const file = input.files?.[0];
+                
+                        if (!file) return;
+                
+                        if (file.type !== 'application/pdf' &&
+                            !file.name.toLowerCase().endsWith('.pdf')) {
+                            alert('Only PDF files are supported.');
+                            return;
+                        }
+                
+                        if (file.size > MaterialUtils.maxFileBytes) {
+                            alert('The PDF is larger than 40 MB.');
+                            return;
+                        }
+                
+                        try {
+                
+                            await AppDB.update('materials', id, {
+                                status: 'uploading',
+                                extractionStatus: 'uploading',
+                                extractionError: '',
+                                updated: serverTimestamp()
+                            });
+                
+                            const path =
+                                `artifacts/${appNamespace}/users/${currentUser.uid}/subjects/${material.subjectId}/materials/${id}/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
+                
+                            // ==========================
+                            // SUPABASE UPLOAD
+                            // ==========================
+                
+                            const { error } = await supabase.storage
+                                .from("materials")
+                                .upload(path, file, {
+                                    upsert: true,
+                                    contentType: "application/pdf"
+                                });
+                
+                            if (error) throw error;
+                
+                            // ==========================
+                            // GET PUBLIC URL
+                            // ==========================
+                
+                            const { data } = supabase.storage
+                                .from("materials")
+                                .getPublicUrl(path);
+                
+                            const downloadURL = data.publicUrl;
+                
+                            // ==========================
+                            // EXISTING AI EXTRACTION
+                            // ==========================
+                
+                            const extracted = await MaterialUtils.extractPdf(file);
+                
+                            const chunks = MaterialUtils.makeChunks(extracted.pages);
+                
+                            await MaterialUtils.deleteChunks(id);
+                
+                            if (chunks.length) {
+                                await MaterialUtils.saveChunks(
+                                    id,
+                                    material.subjectId,
+                                    material.semesterId,
+                                    chunks
+                                );
+                            }
+                
+                            const update = {
+                
+                                filename: file.name,
+                
+                                sizeBytes: file.size,
+                
+                                storagePath: path,
+                
+                                downloadURL,
+                
+                                status: 'ready',
+                
+                                extractionStatus:
+                                    extracted.scannedLikely
+                                        ? 'scanned'
+                                        : 'ready',
+                
+                                pageCount: extracted.pageCount,
+                
+                                processedPages:
+                                    extracted.processedPages,
+                
+                                extractedCharacters:
+                                    extracted.totalCharacters,
+                
+                                chunkCount:
+                                    chunks.length,
+                
+                                extractionTruncated:
+                                    extracted.truncated,
+                
+                                extractionError:
+                                    extracted.scannedLikely
+                                        ? 'Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features.'
+                                        : '',
+                
+                                updated: serverTimestamp()
+                
+                            };
+                
+                            await AppDB.update('materials', id, update);
+                
+                            Object.assign(material, update);
+                
+                            views.subject_notebook.showMaterialWorkspace(id);
+                
+                        } catch (error) {
+                
+                            console.error(error);
+                
+                            const message =
+                                error.message ||
+                                'Unable to attach and prepare the PDF.';
+                
+                            await AppDB.update('materials', id, {
+                
+                                status: 'uploaded',
+                
+                                extractionStatus: 'failed',
+                
+                                extractionError: message,
+                
+                                updated: serverTimestamp()
+                
+                            });
+                
+                            Object.assign(material, {
+                
+                                status: 'uploaded',
+                
+                                extractionStatus: 'failed',
+                
+                                extractionError: message
+                
+                            });
+                
+                            views.subject_notebook.showMaterials();
+                
+                        }
+                
+                    };
+                
+                    input.click();
+                
+                },
+          prepareSubjectMaterial: async (id) => {
+                    const material = views.subject_notebook.materialsData.find(item => item.id === id);
+                    if (!material) return;
+                
+                    const buttons = Array.from(
+                        document.querySelectorAll(
+                            `[onclick="window.appHandlers.prepareSubjectMaterial('${id}')"]`
+                        )
+                    );
+                
+                    buttons.forEach(button => {
+                        button.disabled = true;
+                        button.innerHTML =
+                            '<i class="fas fa-spinner fa-spin mr-1"></i>Preparing...';
+                    });
+                
                     try {
-                        await AppDB.update('materials', id, { status: 'uploading', extractionStatus: 'uploading', extractionError: '', updated: serverTimestamp() });
-                        const path = `artifacts/${appNamespace}/users/${currentUser.uid}/subjects/${material.subjectId}/materials/${id}/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
-                        const fileRef = storageRef(storage, path);
-                        await uploadBytes(fileRef, file, { contentType: 'application/pdf', customMetadata: { materialId: id, subjectId: material.subjectId } });
-                        const downloadURL = await getDownloadURL(fileRef);
-                        const extracted = await MaterialUtils.extractPdf(file);
-                        const chunks = MaterialUtils.makeChunks(extracted.pages);
-                        await MaterialUtils.deleteChunks(id);
-                        if (chunks.length) await MaterialUtils.saveChunks(id, material.subjectId, material.semesterId, chunks);
-                        const update = {
-                            filename: file.name,
-                            sizeBytes: file.size,
-                            storagePath: path,
+                
+                        let downloadURL = material.downloadURL;
+                
+                        // ===========================
+                        // SUPABASE VERSION
+                        // ===========================
+                        if (!downloadURL && material.storagePath) {
+                            const { data } = supabase.storage
+                                .from("materials")
+                                .getPublicUrl(material.storagePath);
+                
+                            downloadURL = data.publicUrl;
+                        }
+                
+                        if (!downloadURL)
+                            throw new Error(
+                                "The stored PDF link is unavailable. Attach the PDF again."
+                            );
+                
+                        await AppDB.update("materials", id, {
                             downloadURL,
-                            status: 'ready',
-                            extractionStatus: extracted.scannedLikely ? 'scanned' : 'ready',
+                            status: "extracting",
+                            extractionStatus: "extracting",
+                            extractionError: "",
+                            updated: serverTimestamp()
+                        });
+                
+                        const response = await fetch(downloadURL, {
+                            cache: "no-store"
+                        });
+                
+                        if (!response.ok)
+                            throw new Error(
+                                `Unable to read the stored PDF (HTTP ${response.status}).`
+                            );
+                
+                        const blob = await response.blob();
+                
+                        if (!blob.size)
+                            throw new Error(
+                                "The stored PDF is empty. Attach the PDF again."
+                            );
+                
+                        const file = new File(
+                            [blob],
+                            material.filename || "material.pdf",
+                            {
+                                type: "application/pdf"
+                            }
+                        );
+                
+                        const extracted = await MaterialUtils.extractPdf(file);
+                
+                        const chunks = MaterialUtils.makeChunks(extracted.pages);
+                
+                        await MaterialUtils.deleteChunks(id);
+                
+                        if (chunks.length)
+                            await MaterialUtils.saveChunks(
+                                id,
+                                material.subjectId,
+                                material.semesterId,
+                                chunks
+                            );
+                
+                        const update = {
+                            downloadURL,
+                            status: "ready",
+                            extractionStatus: extracted.scannedLikely
+                                ? "scanned"
+                                : "ready",
                             pageCount: extracted.pageCount,
                             processedPages: extracted.processedPages,
                             extractedCharacters: extracted.totalCharacters,
                             chunkCount: chunks.length,
                             extractionTruncated: extracted.truncated,
-                            extractionError: extracted.scannedLikely ? 'Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features.' : '',
+                            extractionError: extracted.scannedLikely
+                                ? "Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features."
+                                : "",
                             updated: serverTimestamp()
                         };
-                        await AppDB.update('materials', id, update);
+                
+                        await AppDB.update("materials", id, update);
+                
                         Object.assign(material, update);
+                
                         views.subject_notebook.showMaterialWorkspace(id);
+                
                     } catch (error) {
-                        const message = error.message || 'Unable to attach and prepare the PDF.';
-                        await AppDB.update('materials', id, { status: 'uploaded', extractionStatus: 'failed', extractionError: message, updated: serverTimestamp() });
-                        Object.assign(material, { status: 'uploaded', extractionStatus: 'failed', extractionError: message });
-                        views.subject_notebook.showMaterials();
+                
+                        const message =
+                            error.message || "Unable to prepare the material.";
+                
+                        await AppDB.update("materials", id, {
+                            status: "uploaded",
+                            extractionStatus: "failed",
+                            extractionError: message,
+                            updated: serverTimestamp()
+                        });
+                
+                        Object.assign(material, {
+                            status: "uploaded",
+                            extractionStatus: "failed",
+                            extractionError: message
+                        });
+                
+                        views.subject_notebook.showMaterialWorkspace(id);
+                
+                    } finally {
+                
+                        buttons.forEach(button => {
+                            button.disabled = false;
+                            button.innerHTML =
+                                '<i class="fas fa-wand-magic-sparkles mr-1"></i>Prepare for AI Study';
+                        });
+                
                     }
-                };
-                input.click();
-            },
-            prepareSubjectMaterial: async (id) => {
-                const material = views.subject_notebook.materialsData.find(item => item.id === id);
-                if (!material) return;
-                const buttons = Array.from(document.querySelectorAll(`[onclick="window.appHandlers.prepareSubjectMaterial('${id}')"]`));
-                buttons.forEach(button => { button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Preparing...'; });
-                try {
-                    let downloadURL = material.downloadURL;
-                    if (!downloadURL && material.storagePath) downloadURL = await getDownloadURL(storageRef(storage, material.storagePath));
-                    if (!downloadURL) throw new Error('The stored PDF link is unavailable. Attach the PDF again to prepare this material.');
-                    await AppDB.update('materials', id, { downloadURL, status: 'extracting', extractionStatus: 'extracting', extractionError: '', updated: serverTimestamp() });
-                    const response = await fetch(downloadURL, { cache: 'no-store' });
-                    if (!response.ok) throw new Error(`Unable to read the stored PDF (HTTP ${response.status}).`);
-                    const blob = await response.blob();
-                    if (!blob.size) throw new Error('The stored PDF is empty. Attach the PDF again and retry.');
-                    const file = new File([blob], material.filename || 'material.pdf', { type: 'application/pdf' });
-                    const extracted = await MaterialUtils.extractPdf(file);
-                    const chunks = MaterialUtils.makeChunks(extracted.pages);
-                    await MaterialUtils.deleteChunks(id);
-                    if (chunks.length) await MaterialUtils.saveChunks(id, material.subjectId, material.semesterId, chunks);
-                    const update = {
-                        downloadURL,
-                        status: 'ready',
-                        extractionStatus: extracted.scannedLikely ? 'scanned' : 'ready',
-                        pageCount: extracted.pageCount,
-                        processedPages: extracted.processedPages,
-                        extractedCharacters: extracted.totalCharacters,
-                        chunkCount: chunks.length,
-                        extractionTruncated: extracted.truncated,
-                        extractionError: extracted.scannedLikely ? 'Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features.' : '',
-                        updated: serverTimestamp()
-                    };
-                    await AppDB.update('materials', id, update);
-                    Object.assign(material, update);
-                    views.subject_notebook.showMaterialWorkspace(id);
-                } catch (error) {
-                    const message = error.message || 'Unable to prepare the material for AI study.';
-                    await AppDB.update('materials', id, { status: 'uploaded', extractionStatus: 'failed', extractionError: message, updated: serverTimestamp() });
-                    Object.assign(material, { status: 'uploaded', extractionStatus: 'failed', extractionError: message });
-                    views.subject_notebook.showMaterialWorkspace(id);
-                } finally {
-                    buttons.forEach(button => { button.disabled = false; button.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-1"></i>Prepare for AI Study'; });
-                }
-            },
+                },
             editSubjectMaterial: (id) => {
                 const material = views.subject_notebook.materialsData.find(item => item.id === id);
                 if (!material) return;
@@ -4006,8 +4233,13 @@ const cleanAiJsonResponse = (text) => {
                     onSubmit: async () => {
                         await MaterialUtils.deleteChunks(id);
                         if (material.storagePath) {
-                            try { await deleteObject(storageRef(storage, material.storagePath)); } catch (error) { console.warn('Storage deletion warning:', error); }
-                        }
+                            try { const { error } = await supabase.storage
+                                    .from("materials")
+                                    .remove([material.storagePath]);
+                                
+                                if (error) {
+                                    console.warn(error);
+                                }
                         await AppDB.delete('materials', id);
                         if (views.subject_notebook.currentMaterialId === id) views.subject_notebook.showMaterials();
                     }
