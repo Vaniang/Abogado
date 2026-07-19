@@ -250,6 +250,52 @@
             #lex-alarm-action-btn { grid-column: 1 / -1; }
         }
 
+        #material-assistant-output{
+    min-height:0;
+    overflow-y:auto;
+    scroll-behavior:smooth;
+}
+
+#material-assistant-output h1,
+#material-assistant-output h2,
+#material-assistant-output h3{
+    font-weight:700;
+    margin-top:18px;
+    margin-bottom:10px;
+}
+
+#material-assistant-output p{
+    margin-bottom:12px;
+    line-height:1.8;
+}
+
+#material-assistant-output ul{
+    list-style:disc;
+    margin-left:22px;
+}
+
+#material-assistant-output ol{
+    list-style:decimal;
+    margin-left:22px;
+}
+
+#material-assistant-output pre,
+#material-assistant-output code{
+    white-space:pre-wrap;
+    word-break:break-word;
+}
+
+#material-assistant-output table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+#material-assistant-output th,
+#material-assistant-output td{
+    border:1px solid #ddd;
+    padding:8px;
+}
+
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex overflow-hidden">
@@ -1821,17 +1867,272 @@
                 if (!area) return;
                 area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-7xl mx-auto">
                     <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-6"><div><button onclick="window.appHandlers.showSubjectMaterials()" class="text-sm font-bold text-slate-500 hover:text-emerald-700 mb-3"><i class="fas fa-arrow-left mr-2"></i>Back to Materials</button><p class="text-xs uppercase tracking-widest font-bold text-emerald-600">Discussion Assist</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(material.title || 'Subject Material')}</h3><p class="text-sm text-slate-500 mt-1">${Number(material.pageCount || 0)} pages • ${Security.escapeHTML(material.topic || material.materialType || 'Reference material')}</p></div><div class="flex flex-wrap gap-2">${material.downloadURL ? `<button onclick="window.open('${Security.escapeHTML(material.downloadURL)}', '_blank', 'noopener')" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-file-pdf mr-2"></i>Open PDF</button>` : ''}<button onclick="window.appHandlers.uploadSubjectMaterial()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Add Material</button></div></div>
-                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden min-h-[760px] flex flex-col"><div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-200 bg-slate-50"><div><p class="text-xs font-bold uppercase tracking-widest text-slate-500">Original source</p><h4 class="font-bold text-slate-800 mt-1"><i class="fas fa-file-pdf text-red-500 mr-2"></i>PDF Viewer</h4></div>${material.downloadURL ? `<button onclick="window.open('${Security.escapeHTML(material.downloadURL)}', '_blank', 'noopener')" class="text-xs font-bold text-blue-700 hover:text-blue-900"><i class="fas fa-up-right-from-square mr-1"></i>Open</button>` : ''}</div>${material.downloadURL ? `<iframe src="${Security.escapeHTML(material.downloadURL)}#toolbar=1&navpanes=0" title="${Security.escapeHTML(material.title || 'Subject material')} PDF" class="w-full flex-1 min-h-[700px] bg-slate-100" loading="lazy"></iframe>` : `<div class="flex-1 min-h-[700px] flex flex-col items-center justify-center text-center p-8 text-slate-500"><i class="fas fa-file-circle-exclamation text-5xl text-slate-300 mb-4"></i><p class="font-bold text-slate-700">PDF preview unavailable</p><p class="text-sm mt-2">This material has no saved PDF link yet.</p></div>`}</div>
-                        <div class="space-y-5">${(material.extractionStatus || material.status) !== 'ready' ? `<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900"><div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><p><b>One step remaining:</b> the PDF is available to read, but Lex needs searchable text before it can ground AI answers in it.</p><button onclick="window.appHandlers.prepareSubjectMaterial('${material.id}')" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap"><i class="fas fa-wand-magic-sparkles mr-1"></i>Prepare for AI Study</button></div></div>` : ''}
-                            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Gemini API Key (optional)</label><input type="password" id="material-api-key" value="${Security.escapeHTML(savedKey)}" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Needed for AI-written answers"><p class="text-[11px] text-slate-400 mt-2">Without a key, Lex still finds and shows the most relevant source passages.</p></div>
-                            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-magnifying-glass text-emerald-600 mr-2"></i>Ask This Material</h4><p class="text-xs text-slate-500 mt-2">Ask a precise question and receive an answer grounded only in this PDF.</p><textarea id="material-question" rows="5" class="w-full mt-3 p-3 border border-slate-300 rounded-lg text-sm resize-y outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Type a professor's question, e.g. What are the requisites of self-defense?"></textarea><button onclick="window.appHandlers.askSubjectMaterial('${material.id}')" id="btn-material-ask" class="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-message mr-2"></i>Answer from PDF</button></div>
-                            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-notes-medical text-blue-600 mr-2"></i>Generate Notes</h4><p class="text-xs text-slate-500 mt-2">Turn selected coverage into an editable reviewer with source-page references.</p><input id="material-notes-topic" class="w-full mt-3 p-2.5 border border-slate-300 rounded-lg text-sm" placeholder="Topic or coverage (optional)"><select id="material-notes-style" class="w-full mt-2 p-2.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="recitation-ready">Recitation-ready notes</option><option value="comprehensive">Comprehensive discussion notes</option><option value="concise">Concise class outline</option><option value="codal">Codal, elements, and exceptions</option><option value="exam">Exam reviewer</option></select><button onclick="window.appHandlers.generateMaterialNotes('${material.id}')" id="btn-material-notes" class="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-wand-magic-sparkles mr-2"></i>Generate Notes</button></div>
-                            <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm"><h4 class="font-bold text-slate-800"><i class="fas fa-person-chalkboard text-amber-600 mr-2"></i>Professor Questions</h4><p class="text-xs text-slate-500 mt-2">Practise definitions, rules, hypotheticals, and professor follow-up questions.</p><input id="material-questions-topic" class="w-full mt-3 p-2.5 border border-slate-300 rounded-lg text-sm" placeholder="Topic or coverage (optional)"><select id="material-question-style" class="w-full mt-2 p-2.5 border border-slate-300 rounded-lg text-sm bg-white"><option value="mixed">Mixed recitation set</option><option value="definitions">Definitions and enumerations</option><option value="rules">Rules, exceptions, and distinctions</option><option value="hypotheticals">Hypotheticals and ALAC</option><option value="strict">Strict professor follow-ups</option></select><button onclick="window.appHandlers.generateMaterialQuestions('${material.id}')" id="btn-material-questions" class="w-full mt-3 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-lg text-sm font-bold"><i class="fas fa-question mr-2"></i>Generate Questions</button></div>
-                            <div id="material-assistant-output" class="bg-white border border-slate-200 rounded-xl shadow-sm min-h-[460px] p-6 relative"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-center p-8"><i class="fas fa-book-open-reader text-6xl mb-4 opacity-20"></i><h4 class="font-bold text-slate-600">AI-grounded study tools</h4><p class="text-sm mt-2 max-w-md">Read the original PDF on the left, then ask a question, generate notes, or create recitation questions here. Results cite the PDF pages used.</p></div></div>
+                   <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 h-[calc(100vh-180px)]">
+
+    <!-- LEFT SIDE -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
+
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50">
+
+            <div>
+
+                <p class="text-xs font-bold uppercase tracking-widest text-slate-500">
+                    Original Source
+                </p>
+
+                <h4 class="font-bold text-slate-800 mt-1">
+                    <i class="fas fa-file-pdf text-red-500 mr-2"></i>
+                    PDF Viewer
+                </h4>
+
+            </div>
+
+            ${
+                material.downloadURL
+                    ? `
+                    <button
+                        onclick="window.open('${Security.escapeHTML(material.downloadURL)}','_blank','noopener')"
+                        class="text-xs font-bold text-blue-700 hover:text-blue-900">
+                        <i class="fas fa-up-right-from-square mr-1"></i>
+                        Open
+                    </button>`
+                    : ''
+            }
+
+        </div>
+
+        ${
+            material.downloadURL
+                ? `
+                <iframe
+                    src="${Security.escapeHTML(material.downloadURL)}#toolbar=1&navpanes=0"
+                    title="${Security.escapeHTML(material.title || 'Subject Material')} PDF"
+                    class="flex-1 w-full bg-slate-100"
+                    loading="lazy">
+                </iframe>
+                `
+                : `
+                <div class="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-500">
+                    <i class="fas fa-file-circle-exclamation text-5xl text-slate-300 mb-4"></i>
+                    <p class="font-bold text-slate-700">
+                        PDF Preview Unavailable
+                    </p>
+                    <p class="text-sm mt-2">
+                        This material has no saved PDF link yet.
+                    </p>
+                </div>
+                `
+        }
+
+    </div>
+
+    <!-- RIGHT SIDE -->
+    <div class="flex flex-col h-full">
+
+        <div class="space-y-3">
+
+            ${
+                (material.extractionStatus || material.status) !== 'ready'
+                    ? `
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+
+                            <p>
+                                <b>One step remaining:</b>
+                                Prepare this PDF so Lex can use it for AI answers.
+                            </p>
+
+                            <button
+                                onclick="window.appHandlers.prepareSubjectMaterial('${material.id}')"
+                                class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-bold">
+
+                                <i class="fas fa-wand-magic-sparkles mr-1"></i>
+
+                                Prepare for AI Study
+
+                            </button>
+
                         </div>
+
                     </div>
-                </div></div>`;
+                    `
+                    : ''
+            }
+
+            <!-- API KEY -->
+
+            <div class="bg-white border rounded-xl p-5 shadow-sm">
+
+                <label class="block text-xs font-bold uppercase text-slate-500 mb-2">
+                    Gemini API Key (Optional)
+                </label>
+
+                <input
+                    type="password"
+                    id="material-api-key"
+                    value="${Security.escapeHTML(savedKey)}"
+                    class="w-full p-3 border rounded-lg"
+                    placeholder="Paste your Gemini API Key">
+
+            </div>
+
+            <!-- ASK -->
+
+            <div class="bg-white border rounded-xl p-5 shadow-sm">
+
+                <h4 class="font-bold">
+
+                    <i class="fas fa-magnifying-glass text-emerald-600 mr-2"></i>
+
+                    Ask This Material
+
+                </h4>
+
+                <textarea
+                    id="material-question"
+                    rows="4"
+                    class="w-full mt-3 p-3 border rounded-lg"
+                    placeholder="Example: What are the requisites of Self-Defense?"></textarea>
+
+                <button
+                    id="btn-material-ask"
+                    onclick="window.appHandlers.askSubjectMaterial('${material.id}')"
+                    class="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold">
+
+                    <i class="fas fa-message mr-2"></i>
+
+                    Answer from PDF
+
+                </button>
+
+            </div>
+
+            <!-- NOTES -->
+
+            <div class="bg-white border rounded-xl p-5 shadow-sm">
+
+                <h4 class="font-bold">
+
+                    <i class="fas fa-notes-medical text-blue-600 mr-2"></i>
+
+                    Generate Notes
+
+                </h4>
+
+                <input
+                    id="material-notes-topic"
+                    class="w-full mt-3 p-3 border rounded-lg"
+                    placeholder="Topic">
+
+                <select
+                    id="material-notes-style"
+                    class="w-full mt-2 p-3 border rounded-lg">
+
+                    <option value="recitation-ready">Recitation-ready</option>
+
+                    <option value="comprehensive">Comprehensive</option>
+
+                    <option value="concise">Concise</option>
+
+                    <option value="codal">Codal</option>
+
+                    <option value="exam">Exam Reviewer</option>
+
+                </select>
+
+                <button
+                    id="btn-material-notes"
+                    onclick="window.appHandlers.generateMaterialNotes('${material.id}')"
+                    class="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold">
+
+                    Generate Notes
+
+                </button>
+
+            </div>
+
+            <!-- QUESTIONS -->
+
+            <div class="bg-white border rounded-xl p-5 shadow-sm">
+
+                <h4 class="font-bold">
+
+                    <i class="fas fa-person-chalkboard text-amber-600 mr-2"></i>
+
+                    Professor Questions
+
+                </h4>
+
+                <input
+                    id="material-questions-topic"
+                    class="w-full mt-3 p-3 border rounded-lg"
+                    placeholder="Topic">
+
+                <select
+                    id="material-question-style"
+                    class="w-full mt-2 p-3 border rounded-lg">
+
+                    <option value="mixed">Mixed</option>
+
+                    <option value="definitions">Definitions</option>
+
+                    <option value="rules">Rules</option>
+
+                    <option value="hypotheticals">Hypotheticals</option>
+
+                    <option value="strict">Strict Professor</option>
+
+                </select>
+
+                <button
+                    id="btn-material-questions"
+                    onclick="window.appHandlers.generateMaterialQuestions('${material.id}')"
+                    class="w-full mt-3 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg font-bold">
+
+                    Generate Questions
+
+                </button>
+
+            </div>
+
+        </div>
+
+        <!-- AI OUTPUT -->
+
+        <div
+            id="material-assistant-output"
+            class="flex-1 mt-4 bg-white border border-slate-200 rounded-xl shadow-sm overflow-y-auto p-6 relative">
+
+            <div
+                id="material-placeholder"
+                class="absolute inset-0 flex flex-col items-center justify-center text-center text-slate-400 p-8">
+
+                <i class="fas fa-book-open-reader text-6xl mb-4 opacity-20"></i>
+
+                <h4 class="font-bold text-slate-700">
+                    AI-Grounded Study Tools
+                </h4>
+
+                <p class="text-sm mt-2 max-w-md">
+
+                    Read the PDF on the left.
+
+                    Ask questions, generate reviewers,
+
+                    summaries, and professor recitations.
+
+                    The AI will cite the PDF pages used.
+
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
             }
             showDigests() {
                 this.activeNoteId = null;
