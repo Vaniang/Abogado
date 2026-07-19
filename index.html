@@ -388,10 +388,11 @@
         const db = getFirestore(app);
         const SUPABASE_URL = "https://suzfwoclznsumtxvzpai.supabase.co";
         const SUPABASE_KEY = "sb_publishable_CiBDva2nLm0nnlmnMWLpMw_WM9lMd4P";
+        
         const supabase = createClient(
-        "YOUR_SUPABASE_URL",
-        "YOUR_SUPABASE_ANON_KEY"
-);
+            SUPABASE_URL,
+            SUPABASE_KEY
+        );
         
         let currentUser = null;
         let currentView = 'dashboard';
