@@ -3990,14 +3990,21 @@ const cleanAiJsonResponse = (text) => {
 
                 // Upload to Supabase
 
-                const { error } = await supabase.storage
+                const { data, error } = await supabase.storage
                     .from("materials")
                     .upload(path, file, {
                         upsert: true,
                         contentType: "application/pdf"
                     });
-
-                if (error) throw error;
+                
+                console.log("UPLOAD DATA:", data);
+                console.log("UPLOAD ERROR:", error);
+                
+                if (error) {
+                    console.error(error);
+                    alert(JSON.stringify(error, null, 2));
+                    throw error;
+                }
 
                 const { data } = supabase.storage
                     .from("materials")
