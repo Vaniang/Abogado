@@ -369,13 +369,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-       import { 
-    getFirestore, collection, addDoc, onSnapshot, doc, 
-    deleteDoc, updateDoc, setDoc, getDoc, getDocs, 
-    writeBatch, serverTimestamp, query, where 
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-// The firebase-storage.js import has been completely removed!
+        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDoc, getDocs, writeBatch, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDxKEf2v5P2LN_a2BcR_ODYDGINZMmVPWk",
@@ -3856,58 +3851,39 @@ const cleanAiJsonResponse = (text) => {
                             created: serverTimestamp(),
                             updated: serverTimestamp()
                         });
-                      const materialId = materialRef.id;
-
-try {
-    // 1. Save the file to IndexedDB instead of Firebase Storage
-    await LocalFileStorage.uploadFile(materialId, file);
-    
-    // 2. Update Firestore. 
-    // Removed storagePath and downloadURL since it's local. Added an 'isLocal' flag.
-    await AppDB.update('materials', materialId, { 
-        isLocal: true, 
-        status: 'extracting', 
-        extractionStatus: 'extracting', 
-        updated: serverTimestamp() 
-    });
-    
-    try {
-        // 3. Extract text (This stays exactly the same!)
-        // MaterialUtils.extractPdf takes the 'file' object directly, which works perfectly.
-        const extracted = await MaterialUtils.extractPdf(file);
-        const chunks = MaterialUtils.makeChunks(extracted.pages);
-        
-        // 4. Save chunks to Firestore for AI features (Stays exactly the same)
-        if (chunks.length) await MaterialUtils.saveChunks(materialId, subject.id, subject.semesterId, chunks);
-        
-        // 5. Finalize the document status in Firestore (Stays exactly the same)
-        await AppDB.update('materials', materialId, {
-            status: 'ready',
-            extractionStatus: extracted.scannedLikely ? 'scanned' : 'ready',
-            pageCount: extracted.pageCount,
-            processedPages: extracted.processedPages,
-            extractedCharacters: extracted.totalCharacters,
-            chunkCount: chunks.length,
-            extractionTruncated: extracted.truncated,
-            extractionError: extracted.scannedLikely ? 'Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features.' : '',
-            updated: serverTimestamp()
-        });
-    } catch (extractionError) {
-        console.error('Material extraction failed:', extractionError);
-        await AppDB.update('materials', materialId, { 
-            status: 'uploaded', 
-            extractionStatus: 'failed', 
-            extractionError: extractionError.message || 'Unable to extract PDF text.', 
-            updated: serverTimestamp() 
-        });
-    }
-} catch (uploadError) {
-    // 6. Rollback if the local IndexedDB save fails
-    try { await AppDB.delete('materials', materialId); } catch (_) {}
-    
-    // Updated error message to reflect IndexedDB instead of Firebase Storage
-    throw new Error(`Local save failed. Could not save file to browser storage. ${uploadError.message || ''}`.trim());
-}
+                        const materialId = materialRef.id;
+                        const path = `artifacts/${appNamespace}/users/${currentUser.uid}/subjects/${subject.id}/materials/${materialId}/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
+                        const fileRef = storageRef(storage, path);
+                        try {
+                            await uploadBytes(fileRef, file, { contentType: 'application/pdf', customMetadata: { materialId, subjectId: subject.id } });
+                            const downloadURL = await getDownloadURL(fileRef);
+                            await AppDB.update('materials', materialId, { storagePath: path, downloadURL, status: 'extracting', extractionStatus: 'extracting', updated: serverTimestamp() });
+                            try {
+                                const extracted = await MaterialUtils.extractPdf(file);
+                                const chunks = MaterialUtils.makeChunks(extracted.pages);
+                                if (chunks.length) await MaterialUtils.saveChunks(materialId, subject.id, subject.semesterId, chunks);
+                                await AppDB.update('materials', materialId, {
+                                    status: 'ready',
+                                    extractionStatus: extracted.scannedLikely ? 'scanned' : 'ready',
+                                    pageCount: extracted.pageCount,
+                                    processedPages: extracted.processedPages,
+                                    extractedCharacters: extracted.totalCharacters,
+                                    chunkCount: chunks.length,
+                                    extractionTruncated: extracted.truncated,
+                                    extractionError: extracted.scannedLikely ? 'Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features.' : '',
+                                    updated: serverTimestamp()
+                                });
+                            } catch (extractionError) {
+                                console.error('Material extraction failed:', extractionError);
+                                await AppDB.update('materials', materialId, { status: 'uploaded', extractionStatus: 'failed', extractionError: extractionError.message || 'Unable to extract PDF text.', updated: serverTimestamp() });
+                            }
+                        } catch (uploadError) {
+                            try { await AppDB.delete('materials', materialId); } catch (_) {}
+                            throw new Error(`Upload failed. Check Firebase Storage rules and connection. ${uploadError.message || ''}`.trim());
+                        }
+                    }
+                });
+            },
             attachPdfToSubjectMaterial: (id) => {
                 const material = views.subject_notebook.materialsData.find(item => item.id === id);
                 if (!material) return;
@@ -4947,71 +4923,6 @@ generateReview: async () => {
                 loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
             }
         });
-
-    const LocalFileStorage = {
-    dbName: 'LexMaterialsDB',
-    storeName: 'pdf_materials',
-    version: 1,
-
-    // Initialize the IndexedDB database
-    initDB() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, this.version);
-            
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    db.createObjectStore(this.storeName);
-                }
-            };
-            
-            request.onsuccess = (event) => resolve(event.target.result);
-            request.onerror = (event) => reject(event.target.error);
-        });
-    },
-
-    // Save a file blob (e.g., PDF) to IndexedDB
-    async uploadFile(fileId, fileBlob) {
-        const db = await this.initDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.put(fileBlob, fileId);
-            
-            request.onsuccess = () => resolve(fileId);
-            request.onerror = (error) => reject(error);
-        });
-    },
-
-    // Retrieve a file blob from IndexedDB
-    async getFile(fileId) {
-        const db = await this.initDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.get(fileId);
-            
-            request.onsuccess = () => {
-                if (request.result) resolve(request.result);
-                else reject(new Error('File not found in local storage.'));
-            };
-            request.onerror = (error) => reject(error);
-        });
-    },
-
-    // Delete a file from IndexedDB
-    async deleteFile(fileId) {
-        const db = await this.initDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.delete(fileId);
-            
-            request.onsuccess = () => resolve();
-            request.onerror = (error) => reject(error);
-        });
-    }
-};            
     </script>
 </body>
 </html>
