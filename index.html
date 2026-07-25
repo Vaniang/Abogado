@@ -5702,7 +5702,7 @@ generateReview: async () => {
         let parsedData = JSON.parse(jsonString);
 
         // Enhance flashcard data with SRS (Space Repetition System) parameters
-        if (mode === 'recit') {
+       if (mode === 'recit') {
     parsedData = parsedData.map(c => ({
         ...c, 
         nextReview: Date.now(), 
