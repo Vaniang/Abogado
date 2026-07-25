@@ -436,28 +436,28 @@
         };
         
         const appNamespace = 'law-companion-v1';
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const provider = new GoogleAuthProvider();
-        const db = getFirestore(app);
-        
-        getRedirectResult(auth)
-          .then((result) => {
-            if (result) {
-              console.log("Redirect login successful!", result.user);
-              // onAuthStateChanged will automatically handle the UI update
-            }
-          })
-          .catch((error) => {
-            console.error("Error completing redirect sign-in:", error);
-          });
-        
-        const SUPABASE_URL = "https://suzfwoclznsumtxvzpai.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_CiBDva2nLm0nnlmnMWLpMw_WM9lMd4P";
-        const supabase = createClient(
-            SUPABASE_URL,
-            SUPABASE_KEY
-        );
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+const db = getFirestore(app);
+
+getRedirectResult(auth)
+  .then((result) => {
+    if (result) {
+      console.log("Redirect login successful!", result.user);
+      // onAuthStateChanged will automatically handle the UI update
+    }
+  })
+  .catch((error) => {
+    console.error("Error completing redirect sign-in:", error);
+  });
+
+const SUPABASE_URL = "https://suzfwoclznsumtxvzpai.supabase.co";
+const SUPABASE_KEY = "sb_publishable_CiBDva2nLm0nnlmnMWLpMw_WM9lMd4P";
+const supabase = createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
                 
         let currentUser = null;
         let currentView = 'dashboard';
