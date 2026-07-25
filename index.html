@@ -3794,35 +3794,28 @@ const cleanAiJsonResponse = (text) => {
                 }
             },
 
-          login: async () => {
-    try {
-
-        // Detect phones and tablets
-        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-        if (isMobile) {
-
-            // iPhone / iPad / Android
-            await signInWithRedirect(auth, provider);
-
-        } else {
-
-            // Windows / Mac
-            await signInWithPopup(auth, provider);
-
-        }
-
-    } catch (error) {
-
-        console.error("Google Login Error:", error);
-
-        alert(
-            error.message ||
-            "Unable to sign in. Please try again."
-        );
-
+         login: async () => {
+  try {
+    // Use signInWithPopup for ALL devices (works on iOS Safari now)
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error("Google Login Error:", error);
+    
+    // If popup is blocked, try redirect as fallback
+    if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request') {
+      try {
+        await signInWithRedirect(auth, provider);
+      } catch (redirectError) {
+        console.error("Redirect also failed:", redirectError);
+        alert("Unable to sign in. Please enable popups for this site and try again.");
+      }
+    } else if (error.code === 'auth/internal-error') {
+      // This is the storage partitioning error
+      alert("Please enable 'Allow Cross-Website Tracking' for this site in Safari Settings, then try again.");
+    } else {
+      alert(error.message || "Unable to sign in. Please try again.");
     }
+  }
 },
             logout: async () => { try { await signOut(auth); } catch (e) {} },
             toggleSidebar: () => {
