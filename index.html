@@ -852,56 +852,53 @@ async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
     },
     
     _getPdfWorker() {
-        if (!this._workerInstance) {
-            const workerCode = `
-                importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                
-                self.onmessage = async function(e) {
-                    const { file } = e.data;
-                    try {
-                        const arrayBuffer = await file.arrayBuffer();
-                        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                        const pages = [];
-                        let totalCharacters = 0;
-                        const pageLimit = Math.min(pdf.numPages, 400);
-                        const maxChars = 1800000;
-
-                        for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber++) {
-                            const page = await pdf.getPage(pageNumber);
-                            const textContent = await page.getTextContent();
-                            const text = textContent.items.map(item => item.str || "").join(" ").replace(/\\s+/g, " ").trim();
-                            const remaining = maxChars - totalCharacters;
-                            if (remaining <= 0) break;
-                            const kept = text.slice(0, remaining);
-                            pages.push({ pageNumber, text: kept });
-                            totalCharacters += kept.length;
-                            self.postMessage({ type: 'progress', page: pageNumber, total: pageLimit });
-                        }
-                        const usefulPages = pages.filter(page => page.text.length >= 20).length;
-                        const scannedLikely = totalCharacters < Math.max(120, pdf.numPages * 25) || usefulPages === 0;
-                        self.postMessage({ 
-                            type: 'success', 
-                            result: { 
-                                pageCount: pdf.numPages, 
-                                processedPages: pages.length, 
-                                totalCharacters, 
-                                scannedLikely, 
-                                truncated: pdf.numPages > pageLimit || totalCharacters >= maxChars, 
-                                pages 
-                            } 
-                        });
-                    } catch (error) {
-                        self.postMessage({ type: 'error', message: error.message });
+    if (!this._workerInstance) {
+        const workerCode = `
+            importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js');
+            self.onmessage = async function(e) {
+                const { file } = e.data;
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const pages = [];
+                    let totalCharacters = 0;
+                    const pageLimit = Math.min(pdf.numPages, 400);
+                    const maxChars = 1800000;
+                    for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber++) {
+                        const page = await pdf.getPage(pageNumber);
+                        const textContent = await page.getTextContent();
+                        const text = textContent.items.map(item => item.str || "").join(" ").replace(/\\s+/g, " ").trim();
+                        const remaining = maxChars - totalCharacters;
+                        if (remaining <= 0) break;
+                        const kept = text.slice(0, remaining);
+                        pages.push({ pageNumber, text: kept });
+                        totalCharacters += kept.length;
+                        self.postMessage({ type: 'progress', page: pageNumber, total: pageLimit });
                     }
-                };
-            `;
-            const blob = new Blob([workerCode], { type: 'application/javascript' });
-            this._workerUrl = URL.createObjectURL(blob);
-            this._workerInstance = new Worker(this._workerUrl);
-        }
-        return this._workerInstance;
-    },
+                    const usefulPages = pages.filter(page => page.text.length >= 20).length;
+                    const scannedLikely = totalCharacters < Math.max(120, pdf.numPages * 25) || usefulPages === 0;
+                    self.postMessage({
+                        type: 'success',
+                        result: {
+                            pageCount: pdf.numPages,
+                            processedPages: pages.length,
+                            totalCharacters,
+                            scannedLikely,
+                            truncated: pdf.numPages > pageLimit || totalCharacters >= maxChars,
+                            pages
+                        }
+                    });
+                } catch (error) {
+                    self.postMessage({ type: 'error', message: error.message });
+                }
+            };
+        `;
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        this._workerUrl = URL.createObjectURL(blob);
+        this._workerInstance = new Worker(this._workerUrl);
+    }
+    return this._workerInstance;
+},
     
     async extractPdf(file, onProgress = null) {
         return new Promise((resolve, reject) => {
