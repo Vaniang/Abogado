@@ -738,6 +738,108 @@ const supabase = createClient(
     chunkCharacters: 14000,
     _workerInstance: null,
     _workerUrl: null,
+
+async getEmbedding(apiKey, text) {
+    // Google's text-embedding-004 has a limit of ~8000 chars. We truncate to be safe.
+    const safeText = text.length > 6000 ? text.substring(0, 6000) : text;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+    
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            model: 'models/text-embedding-004',
+            content: { parts: [{ text: safeText }] }
+        })
+    });
+    
+    if (!res.ok) throw new Error('Failed to generate embedding');
+    const data = await res.json();
+    return data.embedding.values; // Returns an array of 768 floats
+},
+
+async saveChunks(materialId, subjectId, semesterId, chunks = [], apiKey = null) {
+    if (!currentUser || !chunks.length) return;
+    const root = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks');
+    const embeddingsToSave = [];
+
+    // 1. Save text chunks to Firestore (Existing logic)
+    for (let start = 0; start < chunks.length; start += 400) {
+        const batch = writeBatch(db);
+        chunks.slice(start, start + 400).forEach(chunk => {
+            const chunkRef = doc(root);
+            batch.set(chunkRef, {
+                materialId, subjectId, semesterId: semesterId || null,
+                order: Number(chunk.order || 0), pageStart: Number(chunk.pageStart || 1),
+                pageEnd: Number(chunk.pageEnd || chunk.pageStart || 1),
+                text: String(chunk.text || ''), created: serverTimestamp()
+            });
+            embeddingsToSave.push({ id: chunkRef.id, text: chunk.text }); // Capture ID for Supabase
+        });
+        await batch.commit();
+    }
+
+    // 2. Generate and save vectors to Supabase (New logic)
+    if (apiKey && supabase && embeddingsToSave.length) {
+        if (!this._vectorBatch) this._vectorBatch = [];
+        for (const chunk of embeddingsToSave) {
+            try {
+                const vector = await this.getEmbedding(apiKey, chunk.text);
+                // Add a small delay to prevent Google API rate limits
+                await new Promise(r => setTimeout(r, 250)); 
+                
+                this._vectorBatch.push({
+                    chunk_id: chunk.id, user_id: currentUser.uid, material_id: materialId,
+                    content: chunk.text.substring(0, 500), // Store a snippet
+                    embedding: vector
+                });
+
+                // Insert in batches of 100
+                if (this._vectorBatch.length >= 100) {
+                    await supabase.from('material_embeddings').insert(this._vectorBatch);
+                    this._vectorBatch = [];
+                }
+            } catch (e) { console.warn("Vector generation failed for chunk:", chunk.id, e); }
+        }
+        // Insert any remaining vectors
+        if (this._vectorBatch && this._vectorBatch.length) {
+            await supabase.from('material_embeddings').insert(this._vectorBatch);
+            this._vectorBatch = [];
+        }
+    }
+},
+
+async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
+    if (!apiKey || !supabase) return [];
+    try {
+        const queryVector = await this.getEmbedding(apiKey, queryText);
+        
+        const { data, error } = await supabase.rpc('match_chunks', {
+            query_embedding: queryVector,
+            match_material_id: materialId,
+            match_user_id: currentUser.uid,
+            match_limit: limit
+        });
+
+        if (error) throw error;
+        
+        // Fetch the full text from Firestore using the returned chunk_ids
+        if (data && data.length) {
+            const chunkIds = data.map(item => item.chunk_id);
+            const fullChunks = await this.getChunks(materialId);
+            const chunkMap = new Map(fullChunks.map(c => [c.id, c]));
+            
+            return data
+                .map(item => chunkMap.get(item.chunk_id))
+                .filter(Boolean) // Remove any undefined
+                .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+        }
+        return [];
+    } catch (error) {
+        console.error("Semantic search failed:", error);
+        return [];
+    }
+},
     
     formatBytes(bytes = 0) {
         const value = Number(bytes || 0);
@@ -4358,20 +4460,15 @@ const downloadURL = publicUrlData.publicUrl;
                     MaterialUtils.makeChunks(extracted.pages);
 
                 if (chunks.length) {
-
-                    await MaterialUtils.saveChunks(
-
-                        materialId,
-
-                        subject.id,
-
-                        subject.semesterId,
-
-                        chunks
-
-                    );
-
-                }
+    const apiKey = document.getElementById('material-api-key')?.value.trim() || localStorage.getItem('gemini_api_key');
+    await MaterialUtils.saveChunks(
+        materialId,
+        subject.id,
+        subject.semesterId,
+        chunks,
+        apiKey // 👈 Pass the API key so vectors get generated
+    );
+}
 
                 await AppDB.update("materials", materialId, {
 
@@ -4817,119 +4914,152 @@ const downloadURL = publicUrlData.publicUrl;
                 window.appHandlers.currentMaterialOutput = { materialId: material.id, materialTitle: material.title, title: suggestedTitle, html: safeHtml, outputType, sectionId, sourcePages: pages };
                 output.innerHTML = `<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 pb-4 mb-5"><div><p class="text-xs font-bold uppercase tracking-widest text-emerald-600">${Security.escapeHTML(outputType)}</p><h4 class="text-xl font-bold text-slate-800 serif-text mt-1">${Security.escapeHTML(title)}</h4><p class="text-xs text-slate-500 mt-2"><i class="fas fa-file-pdf mr-1"></i>${Security.escapeHTML(material.title)} • Sources: ${Security.escapeHTML(sourceLabel)}</p></div><button onclick="window.appHandlers.saveMaterialOutputToNotebook()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex-shrink-0"><i class="fas fa-floppy-disk mr-2"></i>Save to Notebook</button></div><div class="material-generated-content prose max-w-none text-sm leading-relaxed text-slate-700">${safeHtml}</div><div class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Source pages used</p><div class="flex flex-wrap gap-2 mt-2">${pages.length ? pages.map(page => `<span class="bg-white border border-slate-200 px-2 py-1 rounded text-xs text-slate-600">Page ${page}</span>`).join('') : '<span class="text-xs text-slate-400">No page references available.</span>'}</div></div>`;
             },
+
             askSubjectMaterial: async (id) => {
-                const material = views.subject_notebook.materialsData.find(item => item.id === id);
-                const question = document.getElementById('material-question')?.value.trim();
-                if (!material || !question) { alert('Type the question you want Lex to answer.'); return; }
-                const button = document.getElementById('btn-material-ask');
-                const output = document.getElementById('material-assistant-output');
-                button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Searching PDF...';
-                output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Finding the most relevant pages and preparing an answer...</p></div>';
-                try {
-                    const chunks = MaterialUtils.relevantChunks(await MaterialUtils.getChunks(id), question, 8, 48000);
-                    if (!chunks.length) throw new Error('No searchable PDF text is available. The file may be scanned or extraction may have failed.');
-                    const apiKey = document.getElementById('material-api-key')?.value.trim();
-                    let html;
-                    if (apiKey) {
-                        localStorage.setItem('gemini_api_key', apiKey);
-                        const prompt = `You are a Philippine law professor's discussion assistant. Answer the student's question using ONLY the supplied PDF excerpts. Do not use outside knowledge. If the answer is not found, clearly say that it cannot be located in the selected material. Give a direct recitation-ready answer, then the legal basis or explanation, and cite source pages in square brackets such as [p. 12]. Use clean basic HTML only.\n\nQUESTION:\n${question}\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
-                        const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
-                        html = GeminiService.text(data) || '';
-                    } else {
-                        html = `<div class="p-4 bg-amber-50 border border-amber-200 rounded-lg"><b>Relevant passages found:</b><p class="mt-2">Add a Gemini API key for a synthesized answer. For now, review the extracted passages below.</p></div>${chunks.map(chunk => `<blockquote><b>${MaterialUtils.pageLabel(chunk)}</b><br>${Security.escapeHTML(Utils.excerpt(chunk.text, 1800))}</blockquote>`).join('')}`;
-                    }
-                    window.appHandlers.renderMaterialAssistantResult(material, 'Answer from Selected Material', html, chunks, 'Material Q&A', `Material Q&A — ${question.slice(0, 70)}`, 'class_notes');
-                } catch (error) {
-                    output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
-                } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-message mr-2"></i>Answer from PDF'; }
-            },
-            generateMaterialNotes: async (id) => {
-                const material = views.subject_notebook.materialsData.find(item => item.id === id);
-                if (!material) return;
-                const topic = document.getElementById('material-notes-topic')?.value.trim() || material.topic || material.title;
-                const style = document.getElementById('material-notes-style')?.value || 'recitation-ready';
-                const button = document.getElementById('btn-material-notes');
-                const output = document.getElementById('material-assistant-output');
-                button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Building Notes...';
-                output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Compiling source-grounded notes...</p></div>';
-                try {
-                    const allChunks = await MaterialUtils.getChunks(id);
-                    const chunks = MaterialUtils.relevantChunks(allChunks, topic, 10, 52000);
-                    if (!chunks.length) throw new Error('No searchable text is available for this PDF.');
-                    const apiKey = document.getElementById('material-api-key')?.value.trim();
-                    let html;
-                    if (apiKey) {
-                        localStorage.setItem('gemini_api_key', apiKey);
-                        const prompt = `Create ${style} law-school notes on "${topic}" using ONLY the supplied PDF excerpts. Organize the notes with: topic overview; governing provisions; general rules; elements or requisites; exceptions and qualifications; important distinctions; cases or examples stated in the material; possible professor emphasis; and a concise personal-review summary. Preserve uncertainty and do not invent provisions or cases. Add page citations in square brackets after important statements. Return clean basic HTML only.\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
-                        const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
-                        html = GeminiService.text(data) || '';
-                    } else {
-                        html = `<h2>${Security.escapeHTML(topic)}</h2><p><b>Extracted outline (AI synthesis unavailable):</b></p>${chunks.map(chunk => `<h3>${MaterialUtils.pageLabel(chunk)}</h3><p>${Security.escapeHTML(Utils.excerpt(chunk.text, 2200))}</p>`).join('')}`;
-                    }
-                    window.appHandlers.renderMaterialAssistantResult(material, `${topic} — Generated Notes`, html, chunks, 'Generated Notes', `Material Notes — ${topic}`, 'class_notes');
-                } catch (error) {
-                    output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
-                } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i>Generate Notes'; }
-            },
-            generateMaterialQuestions: async (id) => {
-                const material = views.subject_notebook.materialsData.find(item => item.id === id);
-                if (!material) return;
-                const topic = document.getElementById('material-questions-topic')?.value.trim() || material.topic || material.title;
-                const style = document.getElementById('material-question-style')?.value || 'mixed';
-                const button = document.getElementById('btn-material-questions');
-                const output = document.getElementById('material-assistant-output');
-                button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Preparing Questions...';
-                output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Preparing professor-style questions from the PDF...</p></div>';
-                try {
-                    const chunks = MaterialUtils.relevantChunks(await MaterialUtils.getChunks(id), topic, 10, 52000);
-                    if (!chunks.length) throw new Error('No searchable text is available for this PDF.');
-                    const apiKey = document.getElementById('material-api-key')?.value.trim();
-                    let html;
-                    if (apiKey) {
-                        localStorage.setItem('gemini_api_key', apiKey);
-                        const prompt = `Using ONLY the supplied PDF excerpts, prepare 15 ${style} law-school recitation questions about "${topic}". Include a balanced mix of definitions, enumerations, legal bases, rules and exceptions, distinctions, short hypotheticals, ALAC application questions, and strict follow-up questions when supported by the material. For every question, provide a concise suggested answer and cite the supporting page. Do not invent authorities not in the excerpts. Return clean HTML using numbered headings or an ordered list.\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
-                        const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
-                        html = GeminiService.text(data) || '';
-                    } else {
-                        html = `<h2>Possible Recitation Questions — ${Security.escapeHTML(topic)}</h2><ol><li>State and explain the principal rule discussed in the selected pages.</li><li>What are the elements or requisites stated in the material?</li><li>What exceptions or qualifications are identified?</li><li>Distinguish the closely related concepts discussed in the reading.</li><li>Apply the rule to a short hypothetical using ALAC.</li></ol><h3>Source passages for preparation</h3>${chunks.map(chunk => `<p><b>${MaterialUtils.pageLabel(chunk)}:</b> ${Security.escapeHTML(Utils.excerpt(chunk.text, 1000))}</p>`).join('')}`;
-                    }
-                    window.appHandlers.renderMaterialAssistantResult(material, `${topic} — Possible Professor Questions`, html, chunks, 'Recitation Questions', `Recitation Questions — ${topic}`, 'recitation');
-                } catch (error) {
-                    output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
-                } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-question mr-2"></i>Generate Questions'; }
-            },
-            saveMaterialOutputToNotebook: async () => {
-                const result = window.appHandlers.currentMaterialOutput;
-                const subject = window.appHandlers.getCurrentSubjectContext();
-                if (!result || !subject.id) return;
-                const sourceText = result.sourcePages?.length ? result.sourcePages.map(page => `p. ${page}`).join(', ') : 'Page references unavailable';
-                const sourceBlock = `<div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg mb-5"><p><strong>Source Material:</strong> ${Security.escapeHTML(result.materialTitle)}</p><p><strong>Pages Used:</strong> ${Security.escapeHTML(sourceText)}</p></div>`;
-                const noteRef = await AppDB.add('notes', {
-                    semesterId: subject.semesterId,
-                    subjectId: subject.id,
-                    sectionId: result.sectionId || 'class_notes',
-                    title: result.title || 'Material-Grounded Note',
-                    content: sourceBlock + result.html,
-                    noteType: result.outputType || 'material_note',
-                    linkedMaterialIds: [result.materialId],
-                    sourcePages: result.sourcePages || [],
-                    created: serverTimestamp(),
-                    updated: serverTimestamp()
-                });
-                alert('Saved to the subject notebook.');
-                views.subject_notebook.activePanel = 'notes';
-                views.subject_notebook.activeNoteId = noteRef.id;
-                setTimeout(() => {
-                    const note = views.subject_notebook.notesData.find(item => item.id === noteRef.id);
-                    if (note) window.appHandlers.openNote(note.id, note.title, note.content, null);
-                    else views.subject_notebook.showOverview();
-                }, 500);
-            },
-            getCurrentSubjectContext: () => ({
-                id: views.subject_notebook.subjectId,
-                name: views.subject_notebook.subjectName,
-                semesterId: AppState.activeSemesterId || null
-            }),
+    const material = views.subject_notebook.materialsData.find(item => item.id === id);
+    const question = document.getElementById('material-question')?.value.trim();
+    if (!material || !question) { alert('Type the question you want Lex to answer.'); return; }
+    const button = document.getElementById('btn-material-ask');
+    const output = document.getElementById('material-assistant-output');
+    button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Searching PDF...';
+    output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Finding the most relevant pages and preparing an answer...</p></div>';
+    try {
+        // 👇 NEW: Fetch API key first to enable Semantic Search 
+        const apiKey = document.getElementById('material-api-key')?.value.trim();
+        let chunks = [];
+        if (apiKey) {
+            localStorage.setItem('gemini_api_key', apiKey);
+            chunks = await MaterialUtils.semanticRelevantChunks(id, question, apiKey, 8);
+        }
+        // Fallback to keyword search if semantic search returns nothing
+        if (!chunks.length) {
+            chunks = MaterialUtils.relevantChunks(await MaterialUtils.getChunks(id), question, 8, 48000);
+        }
+        if (!chunks.length) throw new Error('No searchable PDF text is available. The file may be scanned or extraction may have failed.');
+
+        let html;
+        if (apiKey) {
+            const prompt = `You are a Philippine law professor's discussion assistant. Answer the student's question using ONLY the supplied PDF excerpts. Do not use outside knowledge. If the answer is not found, clearly say that it cannot be located in the selected material. Give a direct recitation-ready answer, then the legal basis or explanation, and cite source pages in square brackets such as [p. 12]. Use clean basic HTML only.\n\nQUESTION:\n${question}\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+            html = GeminiService.text(data) || '';
+        } else {
+            html = `<div class="p-4 bg-amber-50 border border-amber-200 rounded-lg"><b>Relevant passages found:</b><p class="mt-2">Add a Gemini API key for a synthesized answer. For now, review the extracted passages below.</p></div>${chunks.map(chunk => `<blockquote><b>${MaterialUtils.pageLabel(chunk)}</b><br>${Security.escapeHTML(Utils.excerpt(chunk.text, 1800))}</blockquote>`).join('')}`;
+        }
+        window.appHandlers.renderMaterialAssistantResult(material, 'Answer from Selected Material', html, chunks, 'Material Q&A', `Material Q&A — ${question.slice(0, 70)}`, 'class_notes');
+    } catch (error) {
+        output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
+    } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-message mr-2"></i>Answer from PDF'; }
+},
+
+generateMaterialNotes: async (id) => {
+    const material = views.subject_notebook.materialsData.find(item => item.id === id);
+    if (!material) return;
+    const topic = document.getElementById('material-notes-topic')?.value.trim() || material.topic || material.title;
+    const style = document.getElementById('material-notes-style')?.value || 'recitation-ready';
+    const button = document.getElementById('btn-material-notes');
+    const output = document.getElementById('material-assistant-output');
+    button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Building Notes...';
+    output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Compiling source-grounded notes...</p></div>';
+    try {
+        // 👇 NEW: Fetch API key first to enable Semantic Search 👇
+        const apiKey = document.getElementById('material-api-key')?.value.trim();
+        let chunks = [];
+        if (apiKey) {
+            localStorage.setItem('gemini_api_key', apiKey);
+            chunks = await MaterialUtils.semanticRelevantChunks(id, topic, apiKey, 10);
+        }
+        // Fallback to keyword search if semantic search returns nothing
+        if (!chunks.length) {
+            const allChunks = await MaterialUtils.getChunks(id);
+            chunks = MaterialUtils.relevantChunks(allChunks, topic, 10, 52000);
+        }
+        if (!chunks.length) throw new Error('No searchable text is available for this PDF.');
+
+        let html;
+        if (apiKey) {
+            const prompt = `Create ${style} law-school notes on "${topic}" using ONLY the supplied PDF excerpts. Organize the notes with: topic overview; governing provisions; general rules; elements or requisites; exceptions and qualifications; important distinctions; cases or examples stated in the material; possible professor emphasis; and a concise personal-review summary. Preserve uncertainty and do not invent provisions or cases. Add page citations in square brackets after important statements. Return clean basic HTML only.\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+            html = GeminiService.text(data) || '';
+        } else {
+            html = `<h2>${Security.escapeHTML(topic)}</h2><p><b>Extracted outline (AI synthesis unavailable):</b></p>${chunks.map(chunk => `<h3>${MaterialUtils.pageLabel(chunk)}</h3><p>${Security.escapeHTML(Utils.excerpt(chunk.text, 2200))}</p>`).join('')}`;
+        }
+        window.appHandlers.renderMaterialAssistantResult(material, `${topic} — Generated Notes`, html, chunks, 'Generated Notes', `Material Notes — ${topic}`, 'class_notes');
+    } catch (error) {
+        output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
+    } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i>Generate Notes'; }
+},
+
+generateMaterialQuestions: async (id) => {
+    const material = views.subject_notebook.materialsData.find(item => item.id === id);
+    if (!material) return;
+    const topic = document.getElementById('material-questions-topic')?.value.trim() || material.topic || material.title;
+    const style = document.getElementById('material-question-style')?.value || 'mixed';
+    const button = document.getElementById('btn-material-questions');
+    const output = document.getElementById('material-assistant-output');
+    button.disabled = true; button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Preparing Questions...';
+    output.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><div class="loader mb-4"></div><p>Preparing professor-style questions from the PDF...</p></div>';
+    try {
+        // 👇 NEW: Fetch API key first to enable Semantic Search 👇
+        const apiKey = document.getElementById('material-api-key')?.value.trim();
+        let chunks = [];
+        if (apiKey) {
+            localStorage.setItem('gemini_api_key', apiKey);
+            chunks = await MaterialUtils.semanticRelevantChunks(id, topic, apiKey, 10);
+        }
+        // Fallback to keyword search if semantic search returns nothing
+        if (!chunks.length) {
+            chunks = MaterialUtils.relevantChunks(await MaterialUtils.getChunks(id), topic, 10, 52000);
+        }
+        if (!chunks.length) throw new Error('No searchable text is available for this PDF.');
+
+        let html;
+        if (apiKey) {
+            const prompt = `Using ONLY the supplied PDF excerpts, prepare 15 ${style} law-school recitation questions about "${topic}". Include a balanced mix of definitions, enumerations, legal bases, rules and exceptions, distinctions, short hypotheticals, ALAC application questions, and strict follow-up questions when supported by the material. For every question, provide a concise suggested answer and cite the supporting page. Do not invent authorities not in the excerpts. Return clean HTML using numbered headings or an ordered list.\n\nPDF EXCERPTS:\n${MaterialUtils.context(material, chunks)}`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+            html = GeminiService.text(data) || '';
+        } else {
+            html = `<h2>Possible Recitation Questions — ${Security.escapeHTML(topic)}</h2><ol><li>State and explain the principal rule discussed in the selected pages.</li><li>What are the elements or requisites stated in the material?</li><li>What exceptions or qualifications are identified?</li><li>Distinguish the closely related concepts discussed in the reading.</li><li>Apply the rule to a short hypothetical using ALAC.</li></ol><h3>Source passages for preparation</h3>${chunks.map(chunk => `<p><b>${MaterialUtils.pageLabel(chunk)}:</b> ${Security.escapeHTML(Utils.excerpt(chunk.text, 1000))}</p>`).join('')}`;
+        }
+        window.appHandlers.renderMaterialAssistantResult(material, `${topic} — Possible Professor Questions`, html, chunks, 'Recitation Questions', `Recitation Questions — ${topic}`, 'recitation');
+    } catch (error) {
+        output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
+    } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-question mr-2"></i>Generate Questions'; }
+},
+
+saveMaterialOutputToNotebook: async () => {
+    const result = window.appHandlers.currentMaterialOutput;
+    const subject = window.appHandlers.getCurrentSubjectContext();
+    if (!result || !subject.id) return;
+    const sourceText = result.sourcePages?.length ? result.sourcePages.map(page => `p. ${page}`).join(', ') : 'Page references unavailable';
+    const sourceBlock = `<div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg mb-5"><p><strong>Source Material:</strong> ${Security.escapeHTML(result.materialTitle)}</p><p><strong>Pages Used:</strong> ${Security.escapeHTML(sourceText)}</p></div>`;
+    const noteRef = await AppDB.add('notes', {
+        semesterId: subject.semesterId,
+        subjectId: subject.id,
+        sectionId: result.sectionId || 'class_notes',
+        title: result.title || 'Material-Grounded Note',
+        content: sourceBlock + result.html,
+        noteType: result.outputType || 'material_note',
+        linkedMaterialIds: [result.materialId],
+        sourcePages: result.sourcePages || [],
+        created: serverTimestamp(),
+        updated: serverTimestamp()
+    });
+    alert('Saved to the subject notebook.');
+    views.subject_notebook.activePanel = 'notes';
+    views.subject_notebook.activeNoteId = noteRef.id;
+    setTimeout(() => {
+        const note = views.subject_notebook.notesData.find(item => item.id === noteRef.id);
+        if (note) window.appHandlers.openNote(note.id, note.title, note.content, null);
+        else views.subject_notebook.showOverview();
+    }, 500);
+},
+
+getCurrentSubjectContext: () => ({
+    id: views.subject_notebook.subjectId,
+    name: views.subject_notebook.subjectName,
+    semesterId: AppState.activeSemesterId || null
+}),
+            
             updateMasterRecordSubjectLink: async (collectionName, recordId, shouldLink) => {
                 const subject = window.appHandlers.getCurrentSubjectContext();
                 if (!subject.id) throw new Error('No subject is currently open.');
