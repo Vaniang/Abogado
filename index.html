@@ -2471,56 +2471,81 @@ async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
         }
 
         /* ==========================================
-   HELPER FUNCTIONS (Place these outside your main handlers object)
-   These make the main generate function much cleaner and safer.
+   SM-2 SPACED REPETITION ALGORITHM
    ========================================== */
+const calculateSM2 = (card, quality) => {
+    // quality: 0=Again, 3=Hard, 4=Good, 5=Easy
+    let { interval = 0, repetitions = 0, easeFactor = 2.5 } = card;
 
-/**
- * Strips any potential Markdown code blocks (```json) from the AI's response.
- */
+    if (quality < 3) {
+        // Failed recall: Reset progress, show again tomorrow
+        repetitions = 0;
+        interval = 1; 
+    } else {
+        // Successful recall
+        if (repetitions === 0) interval = 1;
+        else if (repetitions === 1) interval = 6;
+        else interval = Math.round(interval * easeFactor);
+
+        repetitions += 1;
+    }
+
+    // Update Ease Factor
+    easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+    if (easeFactor < 1.3) easeFactor = 1.3; // Minimum ease factor
+
+    // Calculate next review date in milliseconds
+    const nextReview = Date.now() + (interval * 24 * 60 * 60 * 1000);
+    
+    return { interval, repetitions, easeFactor, nextReview };
+};
+   
 const cleanAiJsonResponse = (text) => {
     return text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
 };
         class SavedReviewsView {
-            constructor() { this.unsubscribe = null; }
-            render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6 flex-shrink-0"><h3 class="text-xl font-bold text-slate-700">My Saved Reviews & SRS</h3></div><div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col"><div id="saved-reviews-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div></div></div>`; }
-            init() {
-                this.unsubscribe = AppDB.subscribe('reviews', (snapshot) => {
-                    const list = document.getElementById('saved-reviews-list'); if (!list) return; list.innerHTML = '';
-                    if (snapshot.empty) { list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-archive text-5xl mb-4 opacity-30"></i><p>No saved reviews yet.</p></div>`; return; }
-                    window.appHandlers.savedExamData = {}; window.appHandlers.savedReviewData = {};
+    constructor() { this.unsubscribe = null; }
+    render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6 flex-shrink-0"><h3 class="text-xl font-bold text-slate-700">My Saved Reviews & SRS</h3></div><div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col"><div id="saved-reviews-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div></div></div>`; }
+    init() {
+        this.unsubscribe = AppDB.subscribe('reviews', (snapshot) => {
+            const list = document.getElementById('saved-reviews-list'); if (!list) return; list.innerHTML = '';
+            if (snapshot.empty) { list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-archive text-5xl mb-4 opacity-30"></i><p>No saved reviews yet.</p></div>`; return; }
+            window.appHandlers.savedExamData = {}; window.appHandlers.savedReviewData = {};
+            
+            const sortedReviews = []; snapshot.forEach(doc => sortedReviews.push({ id: doc.id, ...doc.data() })); 
+            sortedReviews.sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()));
+
+            sortedReviews.forEach(data => {
+                window.appHandlers.savedReviewData[data.id] = data.content; 
+                const row = document.createElement('div'); row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
+                let contentHtml = ''; let textForDownload = ''; const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : 'Review';
+
+                if (data.type === 'recit') {
+                    const now = Date.now(); let dueCards = []; let futureCards = [];
+                    data.content.forEach((c, i) => { textForDownload += `Q${i+1}: ${c.front}\nA: ${c.back}\n\n`; if (!c.nextReview || c.nextReview <= now) { dueCards.push({card: c, index: i}); } else { futureCards.push({card: c, index: i}); } });
+                    contentHtml = `<div class="mb-4 flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100"><span class="font-bold text-blue-800"><i class="fas fa-brain mr-2"></i> Spaced Repetition (SM-2)</span><span class="text-sm font-bold bg-white text-blue-600 px-3 py-1 rounded shadow-sm">${dueCards.length} Due Today</span></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">`;
                     
-                    const sortedReviews = []; snapshot.forEach(doc => sortedReviews.push({ id: doc.id, ...doc.data() })); 
-                    sortedReviews.sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()));
-
-                    sortedReviews.forEach(data => {
-                        window.appHandlers.savedReviewData[data.id] = data.content; 
-                        const row = document.createElement('div'); row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-slate-50 transition shadow-sm";
-                        let contentHtml = ''; let textForDownload = ''; const safeTitle = data.title ? data.title.replace(/'/g, "\\'") : 'Review';
-
-                        if (data.type === 'recit') {
-                            const now = Date.now(); let dueCards = []; let futureCards = [];
-                            data.content.forEach((c, i) => { textForDownload += `Q${i+1}: ${c.front}\nA: ${c.back}\n\n`; if (!c.nextReview || c.nextReview <= now) { dueCards.push({card: c, index: i}); } else { futureCards.push({card: c, index: i}); } });
-                            contentHtml = `<div class="mb-4 flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100"><span class="font-bold text-blue-800"><i class="fas fa-brain mr-2"></i> Spaced Repetition</span><span class="text-sm font-bold bg-white text-blue-600 px-3 py-1 rounded shadow-sm">${dueCards.length} Due Today</span></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">`;
-                            dueCards.forEach(({card, index}) => { contentHtml += `<div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between group"><div><p class="text-[10px] text-red-600 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-exclamation-circle"></i> Due For Review</p><p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${card.front}</p></div><details class="text-sm group-details cursor-pointer outline-none mt-auto border-t border-slate-100 pt-3"><summary class="text-xs text-amber-600 font-bold hover:text-amber-700 outline-none list-none select-none">(Reveal Answer)</summary><div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200 text-slate-700 leading-relaxed shadow-inner mb-3">${card.back}</div><div class="grid grid-cols-3 gap-2 mt-2"><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 'hard')" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold py-1.5 rounded transition">Hard (1d)</button><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 'good')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold py-1.5 rounded transition">Good (3d)</button><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 'easy')" class="bg-green-100 hover:bg-green-200 text-green-700 text-xs font-bold py-1.5 rounded transition">Easy (7d)</button></div></details></div>`; });
-                            if(futureCards.length > 0) {
-                                contentHtml += `</div><h5 class="font-bold text-sm text-slate-500 mb-3 border-b border-slate-200 pb-2">Scheduled for Later (${futureCards.length})</h5><div class="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">`;
-                                futureCards.forEach(({card, index}) => { const days = Math.ceil((card.nextReview - now) / (1000 * 60 * 60 * 24)); contentHtml += `<div class="border border-slate-200 rounded-xl p-5 bg-slate-50 flex flex-col justify-between"><div><p class="text-[10px] text-slate-500 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-clock mr-1"></i> Due in ${days} days</p><p class="text-sm font-semibold text-slate-600 mb-2">${card.front}</p></div></div>`; });
-                            }
-                            contentHtml += `</div>`;
-                        } else {
-                            window.appHandlers.savedExamData[data.id] = data.content;
-                            data.content.forEach((c, i) => {
-                                textForDownload += `Question ${i+1}:\n${c.question}\n\nSuggested Guide:\n${c.suggested_answer}\n\n-----------------\n\n`;
-                                contentHtml += `<div class="mb-8 p-5 bg-white border border-slate-200 rounded-xl shadow-sm"><h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4><p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${c.question}</p><textarea id="saved-exam-answer-${data.id}-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your answer here..."></textarea><div class="mt-4"><button onclick="window.appHandlers.evaluateAnswer(${i}, '${data.id}')" id="btn-eval-${data.id}-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check Answer</button></div><div id="eval-result-${data.id}-${i}" class="mt-4 hidden"></div><details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4"><summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary><div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${c.suggested_answer}</div></details></div>`;
-                            });
-                        }
-                        row.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1 pr-4"><h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4><span class="inline-block mt-2 ${data.type === 'recit' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.type === 'recit' ? 'Flashcards' : 'Mock Exam'}</span></div><button onclick="window.appHandlers.deleteReview('${data.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button></div><details class="mt-4 group cursor-pointer outline-none"><summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3"><div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Material</div><div class="flex gap-2"><button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '<h1>${safeTitle}</h1><br>${textForDownload.replace(/\n/g, '<br>').replace(/'/g, "\\'")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button><button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}.txt', \`${textForDownload.replace(/`/g, "'")}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button></div></summary><div class="mt-4 cursor-text border-t border-slate-200 pt-4">${contentHtml}</div></details>`;
-                        list.appendChild(row);
+                    // 👇 UPDATED: 4-Button SM-2 Layout 👇
+                    dueCards.forEach(({card, index}) => { contentHtml += `<div class="border border-slate-200 rounded-xl p-5 bg-white shadow-sm flex flex-col justify-between group"><div><p class="text-[10px] text-red-600 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-exclamation-circle"></i> Due For Review</p><p class="text-sm font-semibold text-slate-800 mb-4 leading-relaxed">${card.front}</p></div><details class="text-sm group-details cursor-pointer outline-none mt-auto border-t border-slate-100 pt-3"><summary class="text-xs text-amber-600 font-bold hover:text-amber-700 outline-none list-none select-none">(Reveal Answer)</summary><div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200 text-slate-700 leading-relaxed shadow-inner mb-3">${card.back}</div><div class="grid grid-cols-4 gap-2 mt-2"><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 0)" class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold py-1.5 rounded transition">Again</button><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 3)" class="bg-orange-100 hover:bg-orange-200 text-orange-700 text-xs font-bold py-1.5 rounded transition">Hard</button><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 4)" class="bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs font-bold py-1.5 rounded transition">Good</button><button onclick="window.appHandlers.rateFlashcard('${data.id}', ${index}, 5)" class="bg-green-100 hover:bg-green-200 text-green-700 text-xs font-bold py-1.5 rounded transition">Easy</button></div></details></div>`; });
+                    
+                    if(futureCards.length > 0) {
+                        contentHtml += `</div><h5 class="font-bold text-sm text-slate-500 mb-3 border-b border-slate-200 pb-2">Scheduled for Later (${futureCards.length})</h5><div class="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">`;
+                        futureCards.forEach(({card, index}) => { const days = Math.ceil((card.nextReview - now) / (1000 * 60 * 60 * 24)); contentHtml += `<div class="border border-slate-200 rounded-xl p-5 bg-slate-50 flex flex-col justify-between"><div><p class="text-[10px] text-slate-500 font-bold uppercase mb-2 tracking-widest"><i class="fas fa-clock mr-1"></i> Due in ${days} days</p><p class="text-sm font-semibold text-slate-600 mb-2">${card.front}</p></div></div>`; });
+                    }
+                    contentHtml += `</div>`;
+                } else {
+                    window.appHandlers.savedExamData[data.id] = data.content;
+                    data.content.forEach((c, i) => {
+                        textForDownload += `Question ${i+1}:\n${c.question}\n\nSuggested Guide:\n${c.suggested_answer}\n\n-----------------\n\n`;
+                        contentHtml += `<div class="mb-8 p-5 bg-white border border-slate-200 rounded-xl shadow-sm"><h4 class="font-bold mb-3 text-lg font-sans text-blue-800">Question ${i+1}</h4><p class="mb-5 leading-relaxed text-justify whitespace-pre-wrap">${c.question}</p><textarea id="saved-exam-answer-${data.id}-${i}" class="w-full p-4 border border-slate-200 rounded-lg font-sans text-sm focus:ring-0 outline-none resize-y min-h-[150px] shadow-inner bg-slate-50 placeholder-slate-400" placeholder="Type your answer here..."></textarea><div class="mt-4"><button onclick="window.appHandlers.evaluateAnswer(${i}, '${data.id}')" id="btn-eval-${data.id}-${i}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"><i class="fas fa-check-double mr-1"></i> Check Answer</button></div><div id="eval-result-${data.id}-${i}" class="mt-4 hidden"></div><details class="mt-5 font-sans text-sm group border-t border-slate-100 pt-4"><summary class="cursor-pointer text-amber-600 font-bold flex items-center gap-2 hover:text-amber-700 outline-none list-none"><i class="fas fa-lightbulb transition-transform group-open:text-green-500"></i> Show Suggested Answer</summary><div class="mt-3 p-5 bg-amber-50 border border-amber-200 rounded-xl text-slate-800 leading-relaxed shadow-inner whitespace-pre-wrap">${c.suggested_answer}</div></details></div>`;
                     });
-                });
-            }
-        }
+                }
+                row.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1 pr-4"><h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${data.title}</h4><span class="inline-block mt-2 ${data.type === 'recit' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'} px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">${data.type === 'recit' ? 'Flashcards' : 'Mock Exam'}</span></div><button onclick="window.appHandlers.deleteReview('${data.id}')" class="text-slate-300 hover:text-red-500 transition bg-white border border-slate-200 p-2 rounded shadow-sm"><i class="fas fa-trash"></i></button></div><details class="mt-4 group cursor-pointer outline-none"><summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-200 pt-3"><div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Material</div><div class="flex gap-2"><button onclick="event.stopPropagation(); window.appHandlers.printContent('${safeTitle}', '<h1>${safeTitle}</h1><br>${textForDownload.replace(/\n/g, '<br>').replace(/'/g, "\\'")}')" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-print"></i></button><button onclick="event.stopPropagation(); window.appHandlers.downloadText('${safeTitle}.txt', \`${textForDownload.replace(/`/g, "'")}\`)" class="text-xs text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-download"></i></button></div></summary><div class="mt-4 cursor-text border-t border-slate-200 pt-4">${contentHtml}</div></details>`;
+                list.appendChild(row);
+            });
+        });
+    }
+}
 
         class LexVocabView {
             constructor() { this.unsubscribe = null; this.vocabData = []; }
@@ -5678,8 +5703,14 @@ generateReview: async () => {
 
         // Enhance flashcard data with SRS (Space Repetition System) parameters
         if (mode === 'recit') {
-            parsedData = parsedData.map(c => ({...c, nextReview: Date.now(), interval: 0}));
-        }
+    parsedData = parsedData.map(c => ({
+        ...c, 
+        nextReview: Date.now(), 
+        interval: 0, 
+        repetitions: 0, 
+        easeFactor: 2.5 // Standard SM-2 starting ease
+    }));
+}
 
         // Store the result globally so it can be saved later
         window.appHandlers.currentReviewData = { mode: mode, content: parsedData };
@@ -5803,7 +5834,28 @@ generateReview: async () => {
     }
 },
             evaluateAnswer: async (index, docId) => { const apiKey = localStorage.getItem('gemini_api_key'); if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; } const isLive = docId === null; const answerId = isLive ? `live-exam-answer-${index}` : `saved-exam-answer-${docId}-${index}`; const btnId = isLive ? `btn-eval-live-${index}` : `btn-eval-${docId}-${index}`; const resultId = isLive ? `eval-result-live-${index}` : `eval-result-${docId}-${index}`; const answerEl = document.getElementById(answerId); const userAnswer = answerEl.value.trim(); if (!userAnswer) { alert("Please type an answer first."); return; } const btn = document.getElementById(btnId); const resultDiv = document.getElementById(resultId); let reviewData; if (isLive && window.appHandlers.currentReviewData) { reviewData = window.appHandlers.currentReviewData.content[index]; } else if (!isLive && window.appHandlers.savedExamData[docId]) { reviewData = window.appHandlers.savedExamData[docId][index]; } if(!reviewData) return; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...'; resultDiv.classList.remove('hidden'); resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`; try { const promptText = `You are a strict but fair law professor grading a student's answer to a Bar Exam question. Question: ${reviewData.question} Suggested Correct Answer / Rubric: ${reviewData.suggested_answer} Student's Answer: ${userAnswer} Task: Provide a brief, constructive evaluation. Mention what they got right (Issue spotting, Rule application). Mention what they missed. Give a final score out of 100%. Keep formatting clean using basic HTML tags like <b> and <br>, do NOT use code blocks or markdown backticks.`; const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] }); let feedback = Security.sanitizeAI(GeminiService.text(data)); resultDiv.innerHTML = `<div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans mt-2"><h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>${feedback}</div>`; } catch (error) { resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer'; } },
-            rateFlashcard: async (reviewId, cardIndex, rating) => { try { const reviewContent = window.appHandlers.savedReviewData[reviewId]; if (!reviewContent) return; let card = reviewContent[cardIndex]; const now = Date.now(); let newInterval = card.interval || 0; if (rating === 'hard') { newInterval = 1; } else if (rating === 'good') { newInterval = newInterval === 0 ? 3 : newInterval * 2; } else if (rating === 'easy') { newInterval = newInterval === 0 ? 7 : newInterval * 3; } card.interval = newInterval; card.nextReview = now + (newInterval * 24 * 60 * 60 * 1000); reviewContent[cardIndex] = card; await AppDB.update('reviews', reviewId, { content: reviewContent }); } catch(e) { console.error("Error updating flashcard:", e); alert("Failed to save flashcard rating."); } },
+          rateFlashcard: async (reviewId, cardIndex, quality) => { 
+    try { 
+        const reviewContent = window.appHandlers.savedReviewData[reviewId]; 
+        if (!reviewContent) return; 
+        let card = reviewContent[cardIndex]; 
+        
+        // Use the SM-2 algorithm to calculate the next interval and ease factor
+        const sm2Result = calculateSM2(card, quality);
+        
+        // Update the card with the new SM-2 properties
+        card.interval = sm2Result.interval;
+        card.repetitions = sm2Result.repetitions;
+        card.easeFactor = sm2Result.easeFactor;
+        card.nextReview = sm2Result.nextReview;
+        
+        reviewContent[cardIndex] = card; 
+        await AppDB.update('reviews', reviewId, { content: reviewContent }); 
+    } catch(e) { 
+        console.error("Error updating flashcard:", e); 
+        alert("Failed to save flashcard rating."); 
+    } 
+},
             saveCurrentReview: async () => { const title = document.getElementById('save-review-title').value.trim(); if (!title) { alert('Please enter a title to save this review.'); return; } if (!window.appHandlers.currentReviewData) return; const { mode, content } = window.appHandlers.currentReviewData; try { await AppDB.add('reviews', { title, type: mode, content: content, created: serverTimestamp() }); alert('Review saved successfully to your Saved Reviews tab!'); window.appHandlers.navigate('saved_reviews'); } catch (e) { console.error(e); alert('Failed to save review.'); } },
             deleteReview: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete Review', content: '<p>Are you sure you want to delete this saved review?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition shadow-sm', onSubmit: async () => await AppDB.delete('reviews', id) }); }
         };
