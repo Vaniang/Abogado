@@ -743,7 +743,6 @@ async getEmbedding(apiKey, text) {
     // Google's text-embedding-004 has a limit of ~8000 chars. We truncate to be safe.
     const safeText = text.length > 6000 ? text.substring(0, 6000) : text;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
-    
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -752,12 +751,29 @@ async getEmbedding(apiKey, text) {
             content: { parts: [{ text: safeText }] }
         })
     });
-    
     if (!res.ok) throw new Error('Failed to generate embedding');
     const data = await res.json();
     return data.embedding.values; // Returns an array of 768 floats
 },
-        
+async saveChunks(materialId, subjectId, semesterId, chunks = [], apiKey = null) {
+    if (!currentUser || !chunks.length) return;
+    const root = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks');
+    const embeddingsToSave = [];
+    // 1. Save text chunks to Firestore (Existing logic)
+    for (let start = 0; start < chunks.length; start += 400) {
+        const batch = writeBatch(db);
+        chunks.slice(start, start + 400).forEach(chunk => {
+            const chunkRef = doc(root);
+            batch.set(chunkRef, {
+                materialId, subjectId, semesterId: semesterId || null,
+                order: Number(chunk.order || 0), pageStart: Number(chunk.pageStart || 1),
+                pageEnd: Number(chunk.pageEnd || chunk.pageStart || 1),
+                text: String(chunk.text || ''), created: serverTimestamp()
+            });
+            embeddingsToSave.push({ id: chunkRef.id, text: chunk.text }); // Capture ID for Supabase
+        });
+        await batch.commit();
+    }
     // 2. Generate and save vectors to Supabase (New logic)
     if (apiKey && supabase && embeddingsToSave.length) {
         if (!this._vectorBatch) this._vectorBatch = [];
@@ -765,14 +781,12 @@ async getEmbedding(apiKey, text) {
             try {
                 const vector = await this.getEmbedding(apiKey, chunk.text);
                 // Add a small delay to prevent Google API rate limits
-                await new Promise(r => setTimeout(r, 250)); 
-                
+                await new Promise(r => setTimeout(r, 250));
                 this._vectorBatch.push({
                     chunk_id: chunk.id, user_id: currentUser.uid, material_id: materialId,
                     content: chunk.text.substring(0, 500), // Store a snippet
                     embedding: vector
                 });
-
                 // Insert in batches of 100
                 if (this._vectorBatch.length >= 100) {
                     await supabase.from('material_embeddings').insert(this._vectorBatch);
@@ -787,7 +801,6 @@ async getEmbedding(apiKey, text) {
         }
     }
 },
-
 async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
     if (!apiKey || !supabase) return [];
     try {
@@ -5683,7 +5696,7 @@ generateReview: async () => {
     repetitions: 0, 
     easeFactor: 2.5 // Standard SM-2 starting ease
 }));
-
+       }
         // Store the result globally so it can be saved later
         window.appHandlers.currentReviewData = { mode: mode, content: parsedData };
 
