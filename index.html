@@ -736,193 +736,133 @@ const supabase = createClient(
     maxPages: 400,
     maxExtractedCharacters: 1800000,
     chunkCharacters: 14000,
-    _workerInstance: null,
-    _workerUrl: null,
 
-async getEmbedding(apiKey, text) {
-    // Google's text-embedding-004 has a limit of ~8000 chars. We truncate to be safe.
-    const safeText = text.length > 6000 ? text.substring(0, 6000) : text;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            model: 'models/text-embedding-004',
-            content: { parts: [{ text: safeText }] }
-        })
-    });
-    if (!res.ok) throw new Error('Failed to generate embedding');
-    const data = await res.json();
-    return data.embedding.values; // Returns an array of 768 floats
-},
-async saveChunks(materialId, subjectId, semesterId, chunks = [], apiKey = null) {
-    if (!currentUser || !chunks.length) return;
-    const root = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks');
-    const embeddingsToSave = [];
-    // 1. Save text chunks to Firestore (Existing logic)
-    for (let start = 0; start < chunks.length; start += 400) {
-        const batch = writeBatch(db);
-        chunks.slice(start, start + 400).forEach(chunk => {
-            const chunkRef = doc(root);
-            batch.set(chunkRef, {
-                materialId, subjectId, semesterId: semesterId || null,
-                order: Number(chunk.order || 0), pageStart: Number(chunk.pageStart || 1),
-                pageEnd: Number(chunk.pageEnd || chunk.pageStart || 1),
-                text: String(chunk.text || ''), created: serverTimestamp()
-            });
-            embeddingsToSave.push({ id: chunkRef.id, text: chunk.text }); // Capture ID for Supabase
+    async getEmbedding(apiKey, text) {
+        const safeText = text.length > 6000 ? text.substring(0, 6000) : text;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'models/text-embedding-004', content: { parts: [{ text: safeText }] } })
         });
-        await batch.commit();
-    }
-    // 2. Generate and save vectors to Supabase (New logic)
-    if (apiKey && supabase && embeddingsToSave.length) {
-        if (!this._vectorBatch) this._vectorBatch = [];
-        for (const chunk of embeddingsToSave) {
-            try {
-                const vector = await this.getEmbedding(apiKey, chunk.text);
-                // Add a small delay to prevent Google API rate limits
-                await new Promise(r => setTimeout(r, 250));
-                this._vectorBatch.push({
-                    chunk_id: chunk.id, user_id: currentUser.uid, material_id: materialId,
-                    content: chunk.text.substring(0, 500), // Store a snippet
-                    embedding: vector
+        if (!res.ok) throw new Error('Failed to generate embedding');
+        const data = await res.json();
+        return data.embedding.values;
+    },
+
+    async saveChunks(materialId, subjectId, semesterId, chunks = [], apiKey = null) {
+        if (!currentUser || !chunks.length) return;
+        const root = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks');
+        const embeddingsToSave = [];
+        
+        // Save to Firestore
+        for (let start = 0; start < chunks.length; start += 400) {
+            const batch = writeBatch(db);
+            chunks.slice(start, start + 400).forEach(chunk => {
+                const chunkRef = doc(root);
+                batch.set(chunkRef, {
+                    materialId, subjectId, semesterId: semesterId || null,
+                    order: Number(chunk.order || 0), pageStart: Number(chunk.pageStart || 1),
+                    pageEnd: Number(chunk.pageEnd || chunk.pageStart || 1),
+                    text: String(chunk.text || ''), created: serverTimestamp()
                 });
-                // Insert in batches of 100
-                if (this._vectorBatch.length >= 100) {
-                    await supabase.from('material_embeddings').insert(this._vectorBatch);
-                    this._vectorBatch = [];
-                }
-            } catch (e) { console.warn("Vector generation failed for chunk:", chunk.id, e); }
+                embeddingsToSave.push({ id: chunkRef.id, text: chunk.text });
+            });
+            await batch.commit();
         }
-        // Insert any remaining vectors
-        if (this._vectorBatch && this._vectorBatch.length) {
-            await supabase.from('material_embeddings').insert(this._vectorBatch);
-            this._vectorBatch = [];
-        }
-    }
-},
-async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
-    if (!apiKey || !supabase) return [];
-    try {
-        const queryVector = await this.getEmbedding(apiKey, queryText);
-        
-        const { data, error } = await supabase.rpc('match_chunks', {
-            query_embedding: queryVector,
-            match_material_id: materialId,
-            match_user_id: currentUser.uid,
-            match_limit: limit
-        });
 
-        if (error) throw error;
-        
-        // Fetch the full text from Firestore using the returned chunk_ids
-        if (data && data.length) {
-            const chunkIds = data.map(item => item.chunk_id);
-            const fullChunks = await this.getChunks(materialId);
-            const chunkMap = new Map(fullChunks.map(c => [c.id, c]));
-            
-            return data
-                .map(item => chunkMap.get(item.chunk_id))
-                .filter(Boolean) // Remove any undefined
-                .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+        // Save vectors to Supabase
+        if (apiKey && supabase && embeddingsToSave.length) {
+            if (!this._vectorBatch) this._vectorBatch = [];
+            for (const chunk of embeddingsToSave) {
+                try {
+                    const vector = await this.getEmbedding(apiKey, chunk.text);
+                    await new Promise(r => setTimeout(r, 250)); // Rate limit delay
+                    this._vectorBatch.push({
+                        chunk_id: chunk.id, user_id: currentUser.uid, material_id: materialId,
+                        content: chunk.text.substring(0, 500), embedding: vector
+                    });
+                    if (this._vectorBatch.length >= 100) {
+                        await supabase.from('material_embeddings').insert(this._vectorBatch);
+                        this._vectorBatch = [];
+                    }
+                } catch (e) { console.warn("Vector generation failed:", e); }
+            }
+            if (this._vectorBatch?.length) {
+                await supabase.from('material_embeddings').insert(this._vectorBatch);
+                this._vectorBatch = [];
+            }
         }
-        return [];
-    } catch (error) {
-        console.error("Semantic search failed:", error);
-        return [];
-    }
-},
-    
+    },
+
+    async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
+        if (!apiKey || !supabase) return [];
+        try {
+            const queryVector = await this.getEmbedding(apiKey, queryText);
+            const { data, error } = await supabase.rpc('match_chunks', {
+                query_embedding: queryVector, match_material_id: materialId,
+                match_user_id: currentUser.uid, match_limit: limit
+            });
+            if (error) throw error;
+            if (data?.length) {
+                const fullChunks = await this.getChunks(materialId);
+                const chunkMap = new Map(fullChunks.map(c => [c.id, c]));
+                return data.map(item => chunkMap.get(item.chunk_id)).filter(Boolean)
+                           .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+            }
+            return [];
+        } catch (error) {
+            console.error("Semantic search failed:", error);
+            return [];
+        }
+    },
+
     formatBytes(bytes = 0) {
         const value = Number(bytes || 0);
         if (value < 1024) return `${value} B`;
         if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
         return `${(value / (1024 * 1024)).toFixed(1)} MB`;
     },
+
     safeFilename(filename = 'material.pdf') {
-        return String(filename || 'material.pdf')
-            .replace(/[^a-zA-Z0-9._-]+/g, '_')
-            .replace(/_+/g, '_')
-            .slice(-140);
+        return String(filename || 'material.pdf').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/_+/g, '_').slice(-140);
     },
+
     pageLabel(chunk) {
         const start = Number(chunk?.pageStart || 1);
         const end = Number(chunk?.pageEnd || start);
         return start === end ? `p. ${start}` : `pp. ${start}–${end}`;
     },
-    
-    _getPdfWorker() {
-    if (!this._workerInstance) {
-        const workerCode = `
-            importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js');
-            self.onmessage = async function(e) {
-                const { file } = e.data;
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    const pages = [];
-                    let totalCharacters = 0;
-                    const pageLimit = Math.min(pdf.numPages, 400);
-                    const maxChars = 1800000;
-                    for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber++) {
-                        const page = await pdf.getPage(pageNumber);
-                        const textContent = await page.getTextContent();
-                        const text = textContent.items.map(item => item.str || "").join(" ").replace(/\\s+/g, " ").trim();
-                        const remaining = maxChars - totalCharacters;
-                        if (remaining <= 0) break;
-                        const kept = text.slice(0, remaining);
-                        pages.push({ pageNumber, text: kept });
-                        totalCharacters += kept.length;
-                        self.postMessage({ type: 'progress', page: pageNumber, total: pageLimit });
-                    }
-                    const usefulPages = pages.filter(page => page.text.length >= 20).length;
-                    const scannedLikely = totalCharacters < Math.max(120, pdf.numPages * 25) || usefulPages === 0;
-                    self.postMessage({
-                        type: 'success',
-                        result: {
-                            pageCount: pdf.numPages,
-                            processedPages: pages.length,
-                            totalCharacters,
-                            scannedLikely,
-                            truncated: pdf.numPages > pageLimit || totalCharacters >= maxChars,
-                            pages
-                        }
-                    });
-                } catch (error) {
-                    self.postMessage({ type: 'error', message: error.message });
-                }
-            };
-        `;
-        const blob = new Blob([workerCode], { type: 'application/javascript' });
-        this._workerUrl = URL.createObjectURL(blob);
-        this._workerInstance = new Worker(this._workerUrl);
-    }
-    return this._workerInstance;
-},
-    
-    async extractPdf(file, onProgress = null) {
-        return new Promise((resolve, reject) => {
-            const worker = this._getPdfWorker();
-            const handler = (e) => {
-                if (e.data.type === 'success') {
-                    worker.removeEventListener('message', handler);
-                    resolve(e.data.result);
-                } else if (e.data.type === 'error') {
-                    worker.removeEventListener('message', handler);
-                    reject(new Error(e.data.message));
-                } else if (e.data.type === 'progress' && onProgress) {
-                    onProgress(e.data.page, e.data.total);
-                }
-            };
-            worker.addEventListener('message', handler);
-            worker.onerror = (err) => {
-                worker.removeEventListener('message', handler);
-                reject(err);
-            };
-            worker.postMessage({ file });
-        });
+
+    // Simplified extractPdf that uses the main thread but relies on PDF.js's built-in worker
+    async extractPdf(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        // pdfjsLib.GlobalWorkerOptions.workerSrc must be set in your HTML (which it is)
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pages = [];
+        let totalCharacters = 0;
+        const pageLimit = Math.min(pdf.numPages, this.maxPages);
+        
+        for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber++) {
+            const page = await pdf.getPage(pageNumber);
+            const textContent = await page.getTextContent(); // Uses built-in worker, non-blocking
+            const text = textContent.items.map(item => item.str || "").join(" ").replace(/\s+/g, " ").trim();
+            const remaining = this.maxExtractedCharacters - totalCharacters;
+            if (remaining <= 0) break;
+            const kept = text.slice(0, remaining);
+            pages.push({ pageNumber, text: kept });
+            totalCharacters += kept.length;
+        }
+        
+        const usefulPages = pages.filter(page => page.text.length >= 20).length;
+        const scannedLikely = totalCharacters < Math.max(120, pdf.numPages * 25) || usefulPages === 0;
+        return {
+            pageCount: pdf.numPages, processedPages: pages.length, totalCharacters,
+            scannedLikely, truncated: pdf.numPages > pageLimit || totalCharacters >= this.maxExtractedCharacters,
+            pages
+        };
     },
-    
+
     makeChunks(pages = []) {
         const chunks = [];
         let buffer = '';
@@ -931,15 +871,8 @@ async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
         const flush = () => {
             const clean = buffer.trim();
             if (!clean) return;
-            chunks.push({
-                order: chunks.length,
-                pageStart: pageStart || 1,
-                pageEnd: pageEnd || pageStart || 1,
-                text: clean
-            });
-            buffer = '';
-            pageStart = null;
-            pageEnd = null;
+            chunks.push({ order: chunks.length, pageStart: pageStart || 1, pageEnd: pageEnd || pageStart || 1, text: clean });
+            buffer = ''; pageStart = null; pageEnd = null;
         };
         pages.forEach(page => {
             const pageText = String(page.text || '').trim();
@@ -953,14 +886,14 @@ async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
                 if (buffer && buffer.length + addition.length > this.chunkCharacters) flush();
                 if (pageStart === null) pageStart = page.pageNumber;
                 pageEnd = page.pageNumber;
-                buffer += `${buffer ? '\n' : ''}[Page ${page.pageNumber}] ${segment}`;
+                buffer += addition;
                 if (buffer.length >= this.chunkCharacters) flush();
             });
         });
         flush();
         return chunks;
     },
-    
+
     async getChunks(materialId) {
         if (!currentUser) return [];
         const snapshot = await getDocs(query(
@@ -971,7 +904,7 @@ async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
         snapshot.forEach(record => chunks.push({ id: record.id, ...record.data() }));
         return chunks.sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
     },
-    
+
     async deleteChunks(materialId) {
         if (!currentUser) return;
         const snapshot = await getDocs(query(
@@ -985,17 +918,12 @@ async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
             await batch.commit();
         }
     },
-    
+
     tokenize(value = '') {
         const stop = new Set(['the', 'and', 'for', 'with', 'that', 'this', 'from', 'what', 'when', 'where', 'which', 'into', 'under', 'about', 'does', 'have', 'been', 'were', 'will', 'shall', 'your', 'their', 'there', 'upon', 'also', 'only']);
-        return [...new Set(String(value || '')
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, ' ')
-            .split(/\s+/)
-            .filter(word => word.length >= 3 && !stop.has(word))
-        )];
+        return [...new Set(String(value || '').toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter(word => word.length >= 3 && !stop.has(word)))];
     },
-    
+
     relevantChunks(chunks = [], queryText = '', limit = 8, maxCharacters = 48000) {
         if (!chunks.length) return [];
         const keywords = this.tokenize(queryText);
@@ -1003,22 +931,14 @@ async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
         if (!keywords.length) {
             const desired = Math.min(limit, chunks.length);
             const indexes = new Set([0, chunks.length - 1]);
-            if (desired > 2) {
-                for (let index = 1; index < desired - 1; index++) {
-                    indexes.add(Math.round(index * (chunks.length - 1) / (desired - 1)));
-                }
-            }
+            if (desired > 2) for (let index = 1; index < desired - 1; index++) indexes.add(Math.round(index * (chunks.length - 1) / (desired - 1)));
             ranked = [...indexes].sort((a, b) => a - b).map(index => ({ chunk: chunks[index], score: 1 }));
         } else {
             ranked = chunks.map(chunk => {
                 const lower = String(chunk.text || '').toLowerCase();
                 let score = 0;
-                keywords.forEach(keyword => {
-                    const matches = lower.split(keyword).length - 1;
-                    score += Math.min(matches, 8) * (keyword.length > 6 ? 3 : 2);
-                });
-                const phrase = String(queryText || '').trim().toLowerCase();
-                if (phrase.length > 8 && lower.includes(phrase)) score += 20;
+                keywords.forEach(keyword => { score += Math.min(lower.split(keyword).length - 1, 8) * (keyword.length > 6 ? 3 : 2); });
+                if (String(queryText || '').trim().toLowerCase().length > 8 && lower.includes(String(queryText || '').trim().toLowerCase())) score += 20;
                 return { chunk, score };
             }).sort((a, b) => b.score - a.score || Number(a.chunk.order || 0) - Number(b.chunk.order || 0));
             if (!ranked[0] || ranked[0].score === 0) ranked = chunks.slice(0, limit).map(chunk => ({ chunk, score: 1 }));
@@ -1034,11 +954,11 @@ async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
         }
         return selected.sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
     },
-    
+
     context(material, chunks = []) {
         return chunks.map(chunk => `SOURCE: ${material.title} (${this.pageLabel(chunk)})\n${chunk.text}`).join('\n\n---\n\n');
     },
-    
+
     sourcePages(chunks = []) {
         const values = [];
         chunks.forEach(chunk => {
