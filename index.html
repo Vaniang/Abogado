@@ -2112,8 +2112,8 @@ const supabase = createClient(
                     return `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                         <div class="p-5 flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                             <div class="min-w-0"><div class="flex flex-wrap gap-2 mb-2"><span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${Security.escapeHTML(topic)}</span>${Array.isArray(digest.subjectIds) && digest.subjectIds.length > 1 ? `<span class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">Linked to ${digest.subjectIds.length} subjects</span>` : ''}</div><h4 class="text-lg font-bold text-slate-800 serif-text">${Security.escapeHTML(digest.title || 'Untitled Case')}</h4>${digest.citation ? `<p class="text-xs text-slate-500 mt-1">${Security.escapeHTML(digest.citation)}</p>` : ''}</div>
-                            <div class="flex flex-wrap gap-2 flex-shrink-0"><button onclick="window.appHandlers.editLinkedDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-pen mr-1"></i>Edit</button><button onclick="window.appHandlers.unlinkDigestFromCurrentSubject('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"><i class="fas fa-unlink mr-1"></i>Unlink</button><button onclick="window.appHandlers.deleteDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-red-50 text-red-600 hover:bg-red-100" title="Delete from all subjects"><i class="fas fa-trash"></i></button></div>
-                        </div>
+                          <div class="flex flex-wrap gap-2 flex-shrink-0"><button onclick="window.appHandlers.printLinkedDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100" title="Print Digest"><i class="fas fa-print mr-1"></i>Print</button><button onclick="window.appHandlers.editLinkedDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-pen mr-1"></i>Edit</button><button onclick="window.appHandlers.unlinkDigestFromCurrentSubject('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"><i class="fas fa-unlink mr-1"></i>Unlink</button><button onclick="window.appHandlers.deleteDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-red-50 text-red-600 hover:bg-red-100" title="Delete from all subjects"><i class="fas fa-trash"></i></button></div>
+                          </div>
                         <details class="border-t border-slate-100 group"><summary class="cursor-pointer list-none px-5 py-3 text-sm font-bold text-blue-600 hover:bg-slate-50 flex items-center gap-2"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>Open Digest</summary><div class="p-5 pt-2 grid grid-cols-1 gap-4"><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Facts</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.facts || 'No facts recorded.')}</p></div><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Issue</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.issue || 'No issue recorded.')}</p></div><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Ruling</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.ruling || 'No ruling recorded.')}</p></div>${digest.notes ? `<div class="bg-amber-50 border border-amber-100 rounded-lg p-4"><h5 class="text-xs font-bold uppercase tracking-wider text-amber-700">Personal Notes</h5><p class="text-sm text-amber-900 mt-1 whitespace-pre-wrap">${Security.escapeHTML(digest.notes)}</p></div>` : ''}</div></details>
                     </div>`;
                 }).join('');
@@ -5036,6 +5036,24 @@ getCurrentSubjectContext: () => ({
                     }
                 });
             },
+            printLinkedDigest: (id) => {
+    // Find the digest in the currently loaded notebook data
+    const digest = views.subject_notebook.digestsData.find(d => d.id === id);
+    if (!digest) {
+        console.warn('Digest not found for printing:', id);
+        return;
+    }
+    // Call your existing print function with the digest's data
+    window.appHandlers.printDigest(
+        digest.title || 'Untitled Case',
+        digest.subject || digest.subjectName || '',
+        digest.topic || '',
+        digest.facts || '',
+        digest.issue || '',
+        digest.ruling || '',
+        digest.notes || ''
+    );
+},
             linkExistingDigestToCurrentSubject: () => {
                 const candidates = views.subject_notebook.digestsData.filter(item => !views.subject_notebook.recordLinkedToSubject(item)).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
                 const content = candidates.length ? `<p class="text-sm text-slate-500 mb-3">Select master digests to display in this subject. No copies will be created.</p><div class="max-h-80 overflow-y-auto border border-slate-200 rounded-lg divide-y">${candidates.map(item => `<label class="flex items-start gap-3 p-3 hover:bg-slate-50 cursor-pointer"><input type="checkbox" name="existing-digest-link" value="${item.id}" class="mt-1"><span><b class="text-sm text-slate-800">${Security.escapeHTML(item.title || 'Untitled Case')}</b><span class="block text-xs text-slate-500 mt-1">${Security.escapeHTML(item.subject || item.topic || 'Uncategorized')}</span></span></label>`).join('')}</div>` : '<div class="text-center py-8 text-slate-400">All available digests are already linked to this subject.</div>';
