@@ -360,13 +360,15 @@
         <button onclick="window.appHandlers.toggleSidebar()" aria-label="More features"><i class="fas fa-bars text-base"></i><span class="mobile-nav-label">More</span></button>
     </nav>
 
-    <div id="pomodoro-widget" class="fixed bottom-6 right-8 bg-white rounded-2xl shadow-2xl border border-slate-200 w-64 flex flex-col z-50 overflow-hidden transition-all duration-300 transform translate-y-[calc(100%-48px)]">
-        <div class="flex justify-between items-center px-4 py-3 bg-slate-800 text-white cursor-pointer select-none" onclick="window.appHandlers.togglePomoMinimize()">
-            <span id="pomo-mode-label" class="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><i class="fas fa-brain text-amber-400"></i> Focus Mode</span>
-            <i id="pomo-min-icon" class="fas fa-chevron-down text-xs opacity-70 rotate-180 transition-transform"></i>
-        </div>
-        <button onclick="event.stopPropagation(); window.appHandlers.togglePomoDrag()" id="pomo-move-btn" class="text-slate-400 hover:text-amber-400 transition" title="Move Widget"><i class="fas fa-arrows-alt"></i></button>
-            <i id="pomo-min-icon" class="fas fa-chevron-down text-xs opacity-70 rotate-180 transition
+           <!-- FIXED CODE START -->
+        <div id="pomodoro-widget" class="fixed bottom-6 right-8 bg-white rounded-2xl shadow-2xl border border-slate-200 w-64 flex flex-col z-50 overflow-hidden transition-all duration-300 transform translate-y-[calc(100%-48px)]">
+            <div class="flex justify-between items-center px-4 py-3 bg-slate-800 text-white cursor-pointer select-none" onclick="window.appHandlers.togglePomoMinimize()">
+                <span id="pomo-mode-label" class="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><i class="fas fa-brain text-amber-400"></i> Focus Mode</span>
+                <div class="flex items-center gap-3">
+                    <button onclick="event.stopPropagation(); window.appHandlers.togglePomoDrag()" id="pomo-move-btn" class="text-slate-400 hover:text-amber-400 transition" title="Move Widget"><i class="fas fa-arrows-alt"></i></button>
+                    <i id="pomo-min-icon" class="fas fa-chevron-down text-xs opacity-70 rotate-180 transition-transform"></i>
+                </div>
+            </div>
         <div id="pomo-main-content" class="p-5 flex flex-col items-center bg-slate-50 transition-all duration-300">
             <div class="text-5xl font-mono font-bold text-slate-800 text-center mb-4 tracking-tight" id="pomo-time">50:00</div>
             <div class="flex justify-center gap-3 w-full">
