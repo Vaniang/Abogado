@@ -2141,71 +2141,8 @@ const supabase = createClient(
 </div>`;
 
 }
-discussProvision: () => {
-    Modal.show({
-        title: '<i class="fas fa-book-open text-emerald-600"></i> Discuss Legal Provision',
-        content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label><textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: 'Whoever by act or omission causes damage to another...'"></textarea></div>`,
-        submitText: 'Analyze Provision',
-        submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
-        onSubmit: async () => {
-            const provisionText = document.getElementById('discuss-provision-text').value.trim();
-            if (!provisionText) throw new Error('Please enter a provision to analyze.');
-            const apiKey = localStorage.getItem('gemini_api_key');
-            if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
-            
-            const promptText = `FOR Discussion of Provisions
-Act as a distinguished Law Professor and Bar Exam Reviewer. Analyze the legal provision provided below using the exact 6-part framework listed. Ensure the response is rigorous, concise, and optimized for law school recitations, exams, and long-term retention.
 
----
-PROVISION TO ANALYZE:
-${provisionText}
----
-
-Please structure your response using the following pattern:
-
-1. 📜 Codal Provision & Context
-   - State the text of the provision (or key statutory extract).
-   - Identify its legal classification/category.
-
-2. ⚖️ General Rule
-   - State the core legal principle in 1–2 direct, clear sentences.
-
-3. 📋 Requisites / Elements
-   - List all essential elements or conditions that must concur for the provision to apply.
-   - Highlight the single most heavily tested element in recitations/exams.
-
-4. 🚫 Exceptions & Counter-Exceptions
-   - Detail all statutory or judicial exceptions.
-   - Mention exceptions to the exceptions, if any exist.
-
-5. 💡 Discussion & Exam Notes & COMMENTARIES
-   - Ratio Legis: Briefly explain *why* this law exists.
-   - Plain-English Explanation: Summarize how this operates in practice.
-   - Common Exam Traps: Note frequent trick questions or common student misconceptions.
-
-6. ️ Landmark Cases, Doctrines & Definitions
-   - List key jurisprudence interpreting this provision.
-   - Highlight the specific Legal Doctrine or Judicial Definition established by the rulings.
-
-Return the result as plain text with clear headings. Do NOT use markdown code blocks.`;
-            
-            const resultModal = document.createElement('div');
-            resultModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
-            resultModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"><div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0"><h3 class="font-bold text-slate-800 text-lg">Provision Analysis</h3><button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button></div><div class="p-6 overflow-y-auto flex-1"><div class="loader mx-auto"></div></div></div>`;
-            document.body.appendChild(resultModal);
-            
-            try {
-                const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] });
-                const resultText = GeminiService.text(data);
-                resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="prose max-w-none text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${resultText}</div>`;
-            } catch (error) {
-                resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg">${error.message}</div>`;
-            }
-        }
-    });
-},
-
-        startBarExam: () => {
+startBarExam: () => {
     const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) { alert("Please enter your Gemini API Key in the AI Search tab first."); return; }
     
@@ -2259,7 +2196,7 @@ sendBarExamMessage: async () => {
                 }).join('');
                 area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are master records from Consolidated Case Digests, displayed only when linked to this subject.</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
             }
-            showDoctrines() {
+        showDoctrines() {
                 this.activeNoteId = null;
                 this.activePanel = 'doctrines';
                 this.renderSidebar();
@@ -2384,6 +2321,70 @@ sendBarExamMessage: async () => {
             constructor() { this.unsubscribe = null; }
             render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-project-diagram text-blue-600"></i> AI Issue Trees</h3><p class="text-xs text-slate-500 mt-1">Generate visual mental maps of rules, elements, and exceptions.</p></div></div><div class="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="tree-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Topic to Map</label><textarea id="tree-topic" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Article 1170 (Breach of Obligations)"></textarea></div><button onclick="window.appHandlers.generateTree()" id="btn-generate-tree" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-sitemap mr-1"></i> Draw Visual Tree</button></div><div class="md:col-span-3 bg-white border border-slate-200 rounded-xl p-6 overflow-auto relative shadow-inner" id="tree-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-project-diagram text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide a topic on the left to map it out.</p></div></div></div></div>`; }
         }
+
+discussProvision: () => {
+    Modal.show({
+        title: '<i class="fas fa-book-open text-emerald-600"></i> Discuss Legal Provision',
+        content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label><textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: 'Whoever by act or omission causes damage to another...'"></textarea></div>`,
+        submitText: 'Analyze Provision',
+        submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
+        onSubmit: async () => {
+            const provisionText = document.getElementById('discuss-provision-text').value.trim();
+            if (!provisionText) throw new Error('Please enter a provision to analyze.');
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
+            
+            const promptText = `FOR Discussion of Provisions
+                Act as a distinguished Law Professor and Bar Exam Reviewer. Analyze the legal provision provided below using the exact 6-part framework listed. Ensure the response is rigorous, concise, and optimized for law school recitations, exams, and long-term retention.
+                
+                ---
+                PROVISION TO ANALYZE:
+                ${provisionText}
+                ---
+                
+                Please structure your response using the following pattern:
+                
+                1. 📜 Codal Provision & Context
+                   - State the text of the provision (or key statutory extract).
+                   - Identify its legal classification/category.
+                
+                2. ⚖️ General Rule
+                   - State the core legal principle in 1–2 direct, clear sentences.
+                
+                3. 📋 Requisites / Elements
+                   - List all essential elements or conditions that must concur for the provision to apply.
+                   - Highlight the single most heavily tested element in recitations/exams.
+                
+                4. 🚫 Exceptions & Counter-Exceptions
+                   - Detail all statutory or judicial exceptions.
+                   - Mention exceptions to the exceptions, if any exist.
+                
+                5. 💡 Discussion & Exam Notes & COMMENTARIES
+                   - Ratio Legis: Briefly explain *why* this law exists.
+                   - Plain-English Explanation: Summarize how this operates in practice.
+                   - Common Exam Traps: Note frequent trick questions or common student misconceptions.
+                
+                6. ️ Landmark Cases, Doctrines & Definitions
+                   - List key jurisprudence interpreting this provision.
+                   - Highlight the specific Legal Doctrine or Judicial Definition established by the rulings.
+                
+                Return the result as plain text with clear headings. Do NOT use markdown code blocks.`;
+                            
+                            const resultModal = document.createElement('div');
+                            resultModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
+                            resultModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"><div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0"><h3 class="font-bold text-slate-800 text-lg">Provision Analysis</h3><button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button></div><div class="p-6 overflow-y-auto flex-1"><div class="loader mx-auto"></div></div></div>`;
+                            document.body.appendChild(resultModal);
+                            
+                            try {
+                                const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] });
+                                const resultText = GeminiService.text(data);
+                                resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="prose max-w-none text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${resultText}</div>`;
+                            } catch (error) {
+                                resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg">${error.message}</div>`;
+                            }
+                        }
+                    });
+                },
 
         class AiSearchView {
             constructor() { this.unsubscribe = null; this.searchHistory = []; this.chatHistory = []; this.subjects = []; }
