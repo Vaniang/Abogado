@@ -2139,41 +2139,6 @@ const supabase = createClient(
     </div>
 
 </div>`;
-
-startBarExam: () => {
-    const apiKey = localStorage.getItem('gemini_api_key');
-    if (!apiKey) { alert("Please enter your Gemini API Key in the AI Search tab first."); return; }
-    
-    const chatModal = document.createElement('div');
-    chatModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
-    chatModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"><div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0"><h3 class="font-bold text-slate-800 text-lg"><i class="fas fa-gavel text-purple-600 mr-2"></i>Bar Exam Practice (ALAC)</h3><button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button></div><div id="bar-exam-chat-body" class="p-6 overflow-y-auto flex-1 space-y-4"><div class="bg-purple-50 border border-purple-200 rounded-lg p-4 text-sm text-purple-900"><i class="fas fa-info-circle mr-1"></i> The Bar Examiner will ask you for a subject and number of questions. Reply to start.</div></div><div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-2"><textarea id="bar-exam-input" rows="2" class="flex-1 p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-purple-500" placeholder="Type your answer or reply here..."></textarea><button onclick="window.appHandlers.sendBarExamMessage()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-paper-plane"></i></button></div></div>`;
-    document.body.appendChild(chatModal);
-    window.appHandlers.barExamHistory = [{ role: "user", parts: [{ text: "FOR THE Bar Exam Questions about Scenarios\nAct as a seasoned Bar Examiner and Law Professor. Your goal is to test my knowledge, critique my legal writing, and train me to answer Bar Exam essay questions using the strict ALAC (Answer, Legal Basis, Application, Conclusion) method.\n\n---\nINSTRUCTIONS & WORKFLOW:\n\n1. INITIAL SETUP:\nAsk me: \"Which subject or specific topic (e.g., Criminal Law, Obligations & Contracts, Constitutional Law) would you like to test today, and how many questions would you like to do?\"\n\n2. QUESTION GENERATION:\nOnce I give you the topic, present ONE realistic, bar-style factual problem (hypothetical scenario) ending with a clear question.\n- Keep the fact pattern concise but realistic (2–3 paragraphs max).\n- Wait for my answer before giving feedback or moving to the next question.\n\n3. EVALUATION & CRITIQUE (After I submit my answer):\nEvaluate my response strictly against the ALAC framework:\n\n- 🔴 A - Answer (Direct & Categorical): Did I state a clear \"Yes/No\" or direct legal conclusion in the very first sentence?\n- 🔵 L - Legal Basis: Did I accurately cite the legal provision, doctrine, or landmark precedent without misstating the law?\n- 🟢 A - Application: Did I explicitly tie the facts of the case to the elements of the law (instead of just repeating the story)?\n-  C - Conclusion: Did I provide a clean, 1-sentence wrap-up that answers the prompt directly?\n\n4. FEEDBACK OUTPUT FORMAT:\n- 📊 Score: Give a rating out of 10 points based on Bar standards.\n- 🔍 Breakdown per ALAC Element: Highlight what I did right, what I missed, and how to fix it.\n- 🏆 Model Answer: Provide the \"Gold Standard\" answer to the problem formatted in textbook ALAC style.\n- 🚀 Next Step: Ask if I am ready for the next question or if I want to revise my answer for another attempt." }] }];
-},
-sendBarExamMessage: async () => {
-    const input = document.getElementById('bar-exam-input');
-    const message = input.value.trim();
-    if (!message) return;
-    input.value = '';
-    const chatBody = document.getElementById('bar-exam-chat-body');
-    chatBody.innerHTML += `<div class="flex justify-end"><div class="bg-purple-600 text-white p-3 rounded-lg rounded-tr-none max-w-[80%] text-sm whitespace-pre-wrap">${message}</div></div>`;
-    chatBody.innerHTML += `<div class="flex justify-start"><div class="bg-slate-100 text-slate-700 p-3 rounded-lg rounded-tl-none max-w-[80%] text-sm"><div class="loader" style="width:16px;height:16px;border-width:2px;"></div></div></div>`;
-    chatBody.scrollTop = chatBody.scrollHeight;
-    
-    window.appHandlers.barExamHistory.push({ role: "user", parts: [{ text: message }] });
-    const apiKey = localStorage.getItem('gemini_api_key');
-    try {
-        const data = await GeminiService.generate(apiKey, { contents: window.appHandlers.barExamHistory });
-        const responseText = GeminiService.text(data);
-        window.appHandlers.barExamHistory.push({ role: "model", parts: [{ text: responseText }] });
-        chatBody.lastElementChild.remove();
-        chatBody.innerHTML += `<div class="flex justify-start"><div class="bg-slate-100 text-slate-700 p-3 rounded-lg rounded-tl-none max-w-[80%] text-sm whitespace-pre-wrap">${responseText}</div></div>`;
-        chatBody.scrollTop = chatBody.scrollHeight;
-    } catch (error) {
-        chatBody.lastElementChild.remove();
-        chatBody.innerHTML += `<div class="flex justify-start"><div class="bg-red-50 text-red-700 p-3 rounded-lg max-w-[80%] text-sm">${error.message}</div></div>`;
-    }
-},
         
             showDigests() {
                 this.activeNoteId = null;
@@ -2984,62 +2949,6 @@ const cleanAiJsonResponse = (text) => {
            MAIN APP HANDLERS OBJECT
            ========================================== */
         window.appHandlers = {
-    // PASTE IT HERE
-    discussProvision: () => {
-        Modal.show({
-            title: '<i class="fas fa-book-open text-emerald-600"></i> Discuss Legal Provision',
-            content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label><textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: 'Whoever by act or omission causes damage to another...'"></textarea></div>`,
-            submitText: 'Analyze Provision',
-            submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
-            onSubmit: async () => {
-                const provisionText = document.getElementById('discuss-provision-text').value.trim();
-                if (!provisionText) throw new Error('Please enter a provision to analyze.');
-                const apiKey = localStorage.getItem('gemini_api_key');
-                if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
-                
-                const promptText = `FOR Discussion of Provisions
-                        Act as a distinguished Law Professor and Bar Exam Reviewer. Analyze the legal provision provided below using the exact 6-part framework listed. Ensure the response is rigorous, concise, and optimized for law school recitations, exams, and long-term retention.
-                        ---
-                        PROVISION TO ANALYZE:
-                        ${provisionText}
-                        ---
-                        Please structure your response using the following pattern:
-                        1. 📜 Codal Provision & Context
-                        - State the text of the provision (or key statutory extract).
-                        - Identify its legal classification/category.
-                        2. ⚖️ General Rule
-                        - State the core legal principle in 1–2 direct, clear sentences.
-                        3. 📋 Requisites / Elements
-                        - List all essential elements or conditions that must concur for the provision to apply.
-                        - Highlight the single most heavily tested element in recitations/exams.
-                        4. 🚫 Exceptions & Counter-Exceptions
-                        - Detail all statutory or judicial exceptions.
-                        - Mention exceptions to the exceptions, if any exist.
-                        5. 💡 Discussion & Exam Notes & COMMENTARIES
-                        - Ratio Legis: Briefly explain *why* this law exists.
-                        - Plain-English Explanation: Summarize how this operates in practice.
-                        - Common Exam Traps: Note frequent trick questions or common student misconceptions.
-                        6. 🏛️ Landmark Cases, Doctrines & Definitions
-                        - List key jurisprudence interpreting this provision.
-                        - Highlight the specific Legal Doctrine or Judicial Definition established by the rulings.
-                        Return the result as plain text with clear headings. Do NOT use markdown code blocks.`;
-                                        
-                const resultModal = document.createElement('div');
-                resultModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
-                resultModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"><div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0"><h3 class="font-bold text-slate-800 text-lg">Provision Analysis</h3><button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button></div><div class="p-6 overflow-y-auto flex-1"><div class="loader mx-auto"></div></div></div>`;
-                document.body.appendChild(resultModal);
-                
-                try {
-                    const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] });
-                    const resultText = GeminiService.text(data);
-                    resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="prose max-w-none text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${resultText}</div>`;
-                } catch (error) {
-                    resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg">${error.message}</div>`;
-                }
-            }
-        });
-    },
-
             clearAiSearch: () => {
                 views.ai_search.searchHistory = []; 
                 views.ai_search.chatHistory = []; 
@@ -5374,6 +5283,94 @@ getCurrentSubjectContext: () => ({
         digest.ruling || '',
         digest.notes || ''
     );
+},
+     discussProvision: () => {
+        Modal.show({
+            title: '<i class="fas fa-book-open text-emerald-600"></i> Discuss Legal Provision',
+            content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label><textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: 'Whoever by act or omission causes damage to another...'"></textarea></div>`,
+            submitText: 'Analyze Provision',
+            submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
+            onSubmit: async () => {
+                const provisionText = document.getElementById('discuss-provision-text').value.trim();
+                if (!provisionText) throw new Error('Please enter a provision to analyze.');
+                const apiKey = localStorage.getItem('gemini_api_key');
+                if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
+                
+                const promptText = `FOR Discussion of Provisions
+                        Act as a distinguished Law Professor and Bar Exam Reviewer. Analyze the legal provision provided below using the exact 6-part framework listed. Ensure the response is rigorous, concise, and optimized for law school recitations, exams, and long-term retention.
+                        ---
+                        PROVISION TO ANALYZE:
+                        ${provisionText}
+                        ---
+                        Please structure your response using the following pattern:
+                        1. 📜 Codal Provision & Context
+                        - State the text of the provision (or key statutory extract).
+                        - Identify its legal classification/category.
+                        2. ⚖️ General Rule
+                        - State the core legal principle in 1–2 direct, clear sentences.
+                        3. 📋 Requisites / Elements
+                        - List all essential elements or conditions that must concur for the provision to apply.
+                        - Highlight the single most heavily tested element in recitations/exams.
+                        4. 🚫 Exceptions & Counter-Exceptions
+                        - Detail all statutory or judicial exceptions.
+                        - Mention exceptions to the exceptions, if any exist.
+                        5. 💡 Discussion & Exam Notes & COMMENTARIES
+                        - Ratio Legis: Briefly explain *why* this law exists.
+                        - Plain-English Explanation: Summarize how this operates in practice.
+                        - Common Exam Traps: Note frequent trick questions or common student misconceptions.
+                        6. 🏛️ Landmark Cases, Doctrines & Definitions
+                        - List key jurisprudence interpreting this provision.
+                        - Highlight the specific Legal Doctrine or Judicial Definition established by the rulings.
+                        Return the result as plain text with clear headings. Do NOT use markdown code blocks.`;
+                                        
+                const resultModal = document.createElement('div');
+                resultModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
+                resultModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"><div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0"><h3 class="font-bold text-slate-800 text-lg">Provision Analysis</h3><button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button></div><div class="p-6 overflow-y-auto flex-1"><div class="loader mx-auto"></div></div></div>`;
+                document.body.appendChild(resultModal);
+                
+                try {
+                    const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] });
+                    const resultText = GeminiService.text(data);
+                    resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="prose max-w-none text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${resultText}</div>`;
+                } catch (error) {
+                    resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg">${error.message}</div>`;
+                }
+            }
+        });
+    },
+        startBarExam: () => {
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) { alert("Please enter your Gemini API Key in the AI Search tab first."); return; }
+    
+    const chatModal = document.createElement('div');
+    chatModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
+    chatModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"><div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0"><h3 class="font-bold text-slate-800 text-lg"><i class="fas fa-gavel text-purple-600 mr-2"></i>Bar Exam Practice (ALAC)</h3><button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button></div><div id="bar-exam-chat-body" class="p-6 overflow-y-auto flex-1 space-y-4"><div class="bg-purple-50 border border-purple-200 rounded-lg p-4 text-sm text-purple-900"><i class="fas fa-info-circle mr-1"></i> The Bar Examiner will ask you for a subject and number of questions. Reply to start.</div></div><div class="p-4 border-t border-slate-100 bg-slate-50 flex gap-2"><textarea id="bar-exam-input" rows="2" class="flex-1 p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-purple-500" placeholder="Type your answer or reply here..."></textarea><button onclick="window.appHandlers.sendBarExamMessage()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-paper-plane"></i></button></div></div>`;
+    document.body.appendChild(chatModal);
+    window.appHandlers.barExamHistory = [{ role: "user", parts: [{ text: "FOR THE Bar Exam Questions about Scenarios\nAct as a seasoned Bar Examiner and Law Professor. Your goal is to test my knowledge, critique my legal writing, and train me to answer Bar Exam essay questions using the strict ALAC (Answer, Legal Basis, Application, Conclusion) method.\n\n---\nINSTRUCTIONS & WORKFLOW:\n\n1. INITIAL SETUP:\nAsk me: \"Which subject or specific topic (e.g., Criminal Law, Obligations & Contracts, Constitutional Law) would you like to test today, and how many questions would you like to do?\"\n\n2. QUESTION GENERATION:\nOnce I give you the topic, present ONE realistic, bar-style factual problem (hypothetical scenario) ending with a clear question.\n- Keep the fact pattern concise but realistic (2–3 paragraphs max).\n- Wait for my answer before giving feedback or moving to the next question.\n\n3. EVALUATION & CRITIQUE (After I submit my answer):\nEvaluate my response strictly against the ALAC framework:\n\n- 🔴 A - Answer (Direct & Categorical): Did I state a clear \"Yes/No\" or direct legal conclusion in the very first sentence?\n- 🔵 L - Legal Basis: Did I accurately cite the legal provision, doctrine, or landmark precedent without misstating the law?\n- 🟢 A - Application: Did I explicitly tie the facts of the case to the elements of the law (instead of just repeating the story)?\n-  C - Conclusion: Did I provide a clean, 1-sentence wrap-up that answers the prompt directly?\n\n4. FEEDBACK OUTPUT FORMAT:\n- 📊 Score: Give a rating out of 10 points based on Bar standards.\n- 🔍 Breakdown per ALAC Element: Highlight what I did right, what I missed, and how to fix it.\n- 🏆 Model Answer: Provide the \"Gold Standard\" answer to the problem formatted in textbook ALAC style.\n- 🚀 Next Step: Ask if I am ready for the next question or if I want to revise my answer for another attempt." }] }];
+},
+sendBarExamMessage: async () => {
+    const input = document.getElementById('bar-exam-input');
+    const message = input.value.trim();
+    if (!message) return;
+    input.value = '';
+    const chatBody = document.getElementById('bar-exam-chat-body');
+    chatBody.innerHTML += `<div class="flex justify-end"><div class="bg-purple-600 text-white p-3 rounded-lg rounded-tr-none max-w-[80%] text-sm whitespace-pre-wrap">${message}</div></div>`;
+    chatBody.innerHTML += `<div class="flex justify-start"><div class="bg-slate-100 text-slate-700 p-3 rounded-lg rounded-tl-none max-w-[80%] text-sm"><div class="loader" style="width:16px;height:16px;border-width:2px;"></div></div></div>`;
+    chatBody.scrollTop = chatBody.scrollHeight;
+    
+    window.appHandlers.barExamHistory.push({ role: "user", parts: [{ text: message }] });
+    const apiKey = localStorage.getItem('gemini_api_key');
+    try {
+        const data = await GeminiService.generate(apiKey, { contents: window.appHandlers.barExamHistory });
+        const responseText = GeminiService.text(data);
+        window.appHandlers.barExamHistory.push({ role: "model", parts: [{ text: responseText }] });
+        chatBody.lastElementChild.remove();
+        chatBody.innerHTML += `<div class="flex justify-start"><div class="bg-slate-100 text-slate-700 p-3 rounded-lg rounded-tl-none max-w-[80%] text-sm whitespace-pre-wrap">${responseText}</div></div>`;
+        chatBody.scrollTop = chatBody.scrollHeight;
+    } catch (error) {
+        chatBody.lastElementChild.remove();
+        chatBody.innerHTML += `<div class="flex justify-start"><div class="bg-red-50 text-red-700 p-3 rounded-lg max-w-[80%] text-sm">${error.message}</div></div>`;
+    }
 },
             linkExistingDigestToCurrentSubject: () => {
                 const candidates = views.subject_notebook.digestsData.filter(item => !views.subject_notebook.recordLinkedToSubject(item)).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
