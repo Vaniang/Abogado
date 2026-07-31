@@ -5373,9 +5373,8 @@ getCurrentSubjectContext: () => ({
 
                 editor.addEventListener('input', triggerAutoSave);
                 titleEditor.addEventListener('input', triggerAutoSave);
-            },
-            setTimeout(() => window.appHandlers.restoreSidebarState(), 100);
-
+               setTimeout(() => window.appHandlers.restoreSidebarState(), 100);
+                 },
             saveNote: async (noteId, isAutoSave = false, capturedSnapshot = null) => { 
                 const titleEl = document.getElementById('note-title-editor');
                 const contentEl = document.getElementById('note-content-editor');
