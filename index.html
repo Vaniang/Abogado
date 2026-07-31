@@ -1688,29 +1688,38 @@ const supabase = createClient(
             }
             render() {
                 return `<div class="h-[calc(100vh-4rem)] flex flex-col -m-8 pb-10 subject-notebook-shell">
-                    <div class="bg-white border-b border-slate-200 px-8 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3 flex-shrink-0 shadow-sm z-10">
-                        <div class="flex items-center gap-4 min-w-0">
-                            <button onclick="window.appHandlers.navigate('subjects')" class="text-slate-400 hover:text-blue-600 transition flex items-center gap-2 font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 flex-shrink-0"><i class="fas fa-arrow-left"></i> Subjects</button>
-                            <div class="min-w-0"><h3 class="text-xl font-bold text-slate-800 serif-text truncate">${Security.escapeHTML(this.subjectName)}</h3><p class="text-xs text-slate-400 truncate">${Security.escapeHTML(AppState.activeLabel())}</p></div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button onclick="window.appHandlers.toggleNotebookPages()" class="lg:hidden bg-white border border-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-list mr-2"></i>Pages</button>
-                            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 subject-tabs">
-                                <button id="subject-tab-notebook" onclick="window.appHandlers.showSubjectOverview()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-book-open mr-1"></i>Notebook</button>
-                                <button id="subject-tab-materials" onclick="window.appHandlers.showSubjectMaterials()" class="px-3 py-1.5 rounded-md text-xs font-bold transition" title="Upload and study this subject's readings"><i class="fas fa-folder-open mr-1"></i>Study Materials</button>
-                                <button id="subject-tab-digests" onclick="window.appHandlers.showSubjectDigests()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-gavel mr-1"></i>Case Digests</button>
-                                <button id="subject-tab-doctrines" onclick="window.appHandlers.showSubjectDoctrines()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-table mr-1"></i>Doctrine Matrix</button>
-                            </div>
-                            <button onclick="window.appHandlers.addNote('${this.subjectId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm flex-shrink-0"><i class="fas fa-plus mr-2"></i>New Page</button>
-                        </div>
-                    </div>
-                    <div class="flex flex-1 overflow-hidden bg-slate-50 subject-notebook-workspace">
-                        <div id="notebook-mobile-backdrop" onclick="window.appHandlers.closeNotebookPages()" aria-hidden="true"></div>
-                        <div class="w-80 bg-white border-r border-slate-200 overflow-y-auto flex flex-col shadow-sm z-0" id="notebook-pages-list"><div class="lg:hidden sticky top-0 z-20 bg-slate-900 text-white px-4 py-3 flex items-center justify-between"><span class="font-bold"><i class="fas fa-book-open mr-2"></i>Notebook Pages</span><button onclick="window.appHandlers.closeNotebookPages()" class="w-9 h-9 rounded-lg bg-slate-800" aria-label="Close pages"><i class="fas fa-times"></i></button></div><div class="p-8 text-center text-slate-400"><div class="loader mx-auto"></div></div></div>
-                        <div class="flex-1 flex flex-col relative bg-slate-50/50 min-w-0" id="notebook-editor-area"></div>
-                    </div>
+                <div class="bg-white border-b border-slate-200 px-8 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3 flex-shrink-0 shadow-sm z-10">
+                <div class="flex items-center gap-4 min-w-0">
+                <button onclick="window.appHandlers.navigate('subjects')" class="text-slate-400 hover:text-blue-600 transition flex items-center gap-2 font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 flex-shrink-0"><i class="fas fa-arrow-left"></i> Subjects</button>
+                <div class="min-w-0"><h3 class="text-xl font-bold text-slate-800 serif-text truncate">${Security.escapeHTML(this.subjectName)}</h3><p class="text-xs text-slate-400 truncate">${Security.escapeHTML(AppState.activeLabel())}</p></div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                <button onclick="window.appHandlers.toggleNotebookPages()" class="lg:hidden bg-white border border-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-list mr-2"></i>Pages</button>
+                <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 subject-tabs">
+                <button id="subject-tab-notebook" onclick="window.appHandlers.showSubjectOverview()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-book-open mr-1"></i>Notebook</button>
+                <button id="subject-tab-materials" onclick="window.appHandlers.showSubjectMaterials()" class="px-3 py-1.5 rounded-md text-xs font-bold transition" title="Upload and study this subject's readings"><i class="fas fa-folder-open mr-1"></i>Study Materials</button>
+                <button id="subject-tab-digests" onclick="window.appHandlers.showSubjectDigests()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-gavel mr-1"></i>Case Digests</button>
+                <button id="subject-tab-doctrines" onclick="window.appHandlers.showSubjectDoctrines()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-table mr-1"></i>Doctrine Matrix</button>
+                </div>
+                <button onclick="window.appHandlers.addNote('${this.subjectId}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm flex-shrink-0"><i class="fas fa-plus mr-2"></i>New Page</button>
+                </div>
+                </div>
+                <div class="flex flex-1 overflow-hidden bg-slate-50 subject-notebook-workspace">
+                <div id="notebook-mobile-backdrop" onclick="window.appHandlers.closeNotebookPages()" aria-hidden="true"></div>
+                <div class="w-80 bg-white border-r border-slate-200 overflow-y-auto flex flex-col shadow-sm z-0 transition-all duration-300" id="notebook-pages-list">
+                <div class="lg:hidden sticky top-0 z-20 bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
+                <span class="font-bold"><i class="fas fa-book-open mr-2"></i>Notebook Pages</span>
+                <button onclick="window.appHandlers.closeNotebookPages()" class="w-9 h-9 rounded-lg bg-slate-800" aria-label="Close pages"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="p-8 text-center text-slate-400"><div class="loader mx-auto"></div></div>
+                </div>
+                <button onclick="window.appHandlers.toggleSidebarCollapse()" class="absolute left-0 top-1/2 -translate-y-1/2 z-30 bg-white border border-slate-200 rounded-r-lg shadow-md px-2 py-3 text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition hidden lg:flex items-center justify-center" title="Toggle Sidebar">
+                <i class="fas fa-chevron-left" id="sidebar-collapse-icon"></i>
+                </button>
+                <div class="flex-1 flex flex-col relative bg-slate-50/50 min-w-0" id="notebook-editor-area"></div>
+                </div>
                 </div>`;
-            }
+                }
             init(subjectId, subjectName) {
                 this.subjectId = subjectId;
                 this.subjectName = subjectName;
@@ -3863,6 +3872,39 @@ list.appendChild(row);
                 pages?.classList.toggle('mobile-open', willOpen);
                 backdrop?.classList.toggle('mobile-open', willOpen);
             },
+            toggleSidebarCollapse: () => {
+                const sidebar = document.getElementById('notebook-pages-list');
+                const icon = document.getElementById('sidebar-collapse-icon');
+                const isCollapsed = sidebar.classList.contains('w-0');
+                
+                if (isCollapsed) {
+                sidebar.classList.remove('w-0', 'overflow-hidden');
+                sidebar.classList.add('w-80');
+                icon.classList.remove('fa-chevron-right');
+                icon.classList.add('fa-chevron-left');
+                localStorage.setItem('lex_sidebar_collapsed', 'false');
+                } else {
+                sidebar.classList.remove('w-80');
+                sidebar.classList.add('w-0', 'overflow-hidden');
+                icon.classList.remove('fa-chevron-left');
+                icon.classList.add('fa-chevron-right');
+                localStorage.setItem('lex_sidebar_collapsed', 'true');
+                }
+                },
+                
+                restoreSidebarState: () => {
+                const sidebar = document.getElementById('notebook-pages-list');
+                const icon = document.getElementById('sidebar-collapse-icon');
+                if (!sidebar || !icon) return;
+                
+                const isCollapsed = localStorage.getItem('lex_sidebar_collapsed') === 'true';
+                if (isCollapsed) {
+                sidebar.classList.remove('w-80');
+                sidebar.classList.add('w-0', 'overflow-hidden');
+                icon.classList.remove('fa-chevron-left');
+                icon.classList.add('fa-chevron-right');
+                }
+                },
             closeNotebookPages: () => {
                 document.getElementById('notebook-pages-list')?.classList.remove('mobile-open');
                 document.getElementById('notebook-mobile-backdrop')?.classList.remove('mobile-open');
@@ -5214,7 +5256,7 @@ getCurrentSubjectContext: () => ({
                             </div>
                         </div>
                         
-                        <div class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-100 items-center">
+                                                <div class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-100 items-center">
                             <select onchange="window.appHandlers.formatText('fontName', this.value); this.selectedIndex=0;" class="h-8 rounded border border-slate-200 text-slate-600 text-sm focus:outline-none px-1 bg-slate-50 cursor-pointer" title="Font Style">
                                 <option value="" disabled selected>Font</option>
                                 <option value="Inter, sans-serif">Modern</option>
@@ -5231,13 +5273,48 @@ getCurrentSubjectContext: () => ({
                             
                             <div class="w-px h-5 bg-slate-300 mx-1"></div>
                             
-                            <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded px-1 h-8" title="Text Color">
-                                <i class="fas fa-font text-slate-500 text-xs pl-1"></i>
-                                <input type="color" oninput="window.appHandlers.formatText('foreColor', this.value)" class="w-5 h-5 p-0 border-0 rounded cursor-pointer bg-transparent">
+                            <!-- Enhanced Text Color Picker -->
+                            <div class="relative group">
+                                <button class="h-8 px-2 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 text-sm flex items-center gap-1" title="Text Color">
+                                    <i class="fas fa-font"></i>
+                                    <span class="w-4 h-4 rounded border border-slate-300" id="text-color-preview" style="background-color: #000000;"></span>
+                                </button>
+                                <div class="absolute top-full left-0 mt-1 p-2 bg-white border border-slate-200 rounded-lg shadow-lg hidden group-hover:grid grid-cols-6 gap-1 z-50">
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#000000'); document.getElementById('text-color-preview').style.backgroundColor='#000000';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #000000;" title="Black"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#1e3a8a'); document.getElementById('text-color-preview').style.backgroundColor='#1e3a8a';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #1e3a8a;" title="Dark Blue"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#dc2626'); document.getElementById('text-color-preview').style.backgroundColor='#dc2626';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #dc2626;" title="Red"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#059669'); document.getElementById('text-color-preview').style.backgroundColor='#059669';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #059669;" title="Green"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#d97706'); document.getElementById('text-color-preview').style.backgroundColor='#d97706';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #d97706;" title="Orange"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#7c3aed'); document.getElementById('text-color-preview').style.backgroundColor='#7c3aed';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #7c3aed;" title="Purple"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#0891b2'); document.getElementById('text-color-preview').style.backgroundColor='#0891b2';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #0891b2;" title="Cyan"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#be185d'); document.getElementById('text-color-preview').style.backgroundColor='#be185d';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #be185d;" title="Pink"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#475569'); document.getElementById('text-color-preview').style.backgroundColor='#475569';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #475569;" title="Gray"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#92400e'); document.getElementById('text-color-preview').style.backgroundColor='#92400e';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #92400e;" title="Brown"></button>
+                                    <button onclick="window.appHandlers.formatText('foreColor', '#ffffff'); document.getElementById('text-color-preview').style.backgroundColor='#ffffff';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #ffffff;" title="White"></button>
+                                    <input type="color" oninput="window.appHandlers.formatText('foreColor', this.value); document.getElementById('text-color-preview').style.backgroundColor=this.value;" class="w-6 h-6 rounded border border-slate-200 cursor-pointer" title="Custom Color">
+                                </div>
                             </div>
-                            <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded px-1 h-8" title="Highlight Color">
-                                <i class="fas fa-highlighter text-slate-500 text-xs pl-1"></i>
-                                <input type="color" value="#fde68a" oninput="window.appHandlers.formatText('hiliteColor', this.value)" class="w-5 h-5 p-0 border-0 rounded cursor-pointer bg-transparent">
+
+                            <!-- Enhanced Highlight Color Picker -->
+                            <div class="relative group">
+                                <button class="h-8 px-2 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 text-sm flex items-center gap-1" title="Highlight Color">
+                                    <i class="fas fa-highlighter"></i>
+                                    <span class="w-4 h-4 rounded border border-slate-300" id="highlight-color-preview" style="background-color: #fde68a;"></span>
+                                </button>
+                                <div class="absolute top-full left-0 mt-1 p-2 bg-white border border-slate-200 rounded-lg shadow-lg hidden group-hover:grid grid-cols-6 gap-1 z-50">
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#fde68a'); document.getElementById('highlight-color-preview').style.backgroundColor='#fde68a';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #fde68a;" title="Yellow"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#bbf7d0'); document.getElementById('highlight-color-preview').style.backgroundColor='#bbf7d0';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #bbf7d0;" title="Green"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#bfdbfe'); document.getElementById('highlight-color-preview').style.backgroundColor='#bfdbfe';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #bfdbfe;" title="Blue"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#fecaca'); document.getElementById('highlight-color-preview').style.backgroundColor='#fecaca';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #fecaca;" title="Red"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#fbcfe8'); document.getElementById('highlight-color-preview').style.backgroundColor='#fbcfe8';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #fbcfe8;" title="Pink"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#e9d5ff'); document.getElementById('highlight-color-preview').style.backgroundColor='#e9d5ff';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #e9d5ff;" title="Purple"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#fed7aa'); document.getElementById('highlight-color-preview').style.backgroundColor='#fed7aa';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #fed7aa;" title="Orange"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#a5f3fc'); document.getElementById('highlight-color-preview').style.backgroundColor='#a5f3fc';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #a5f3fc;" title="Cyan"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#fef08a'); document.getElementById('highlight-color-preview').style.backgroundColor='#fef08a';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #fef08a;" title="Light Yellow"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#d1fae5'); document.getElementById('highlight-color-preview').style.backgroundColor='#d1fae5';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #d1fae5;" title="Light Green"></button>
+                                    <button onclick="window.appHandlers.formatText('hiliteColor', '#dbeafe'); document.getElementById('highlight-color-preview').style.backgroundColor='#dbeafe';" class="w-6 h-6 rounded border border-slate-200 hover:scale-110 transition" style="background-color: #dbeafe;" title="Light Blue"></button>
+                                    <input type="color" value="#fde68a" oninput="window.appHandlers.formatText('hiliteColor', this.value); document.getElementById('highlight-color-preview').style.backgroundColor=this.value;" class="w-6 h-6 rounded border border-slate-200 cursor-pointer" title="Custom Color">
+                                </div>
                             </div>
 
                             <div class="w-px h-5 bg-slate-300 mx-1"></div>
@@ -5245,11 +5322,20 @@ getCurrentSubjectContext: () => ({
                             <button onclick="window.appHandlers.formatText('bold')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 font-bold transition" title="Bold (Ctrl+B)"><i class="fas fa-bold"></i></button>
                             <button onclick="window.appHandlers.formatText('italic')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 italic transition" title="Italic (Ctrl+I)"><i class="fas fa-italic"></i></button>
                             <button onclick="window.appHandlers.formatText('underline')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 underline transition" title="Underline (Ctrl+U)"><i class="fas fa-underline"></i></button>
+                            <button onclick="window.appHandlers.formatText('strikeThrough')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 line-through transition" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
                             
                             <div class="w-px h-5 bg-slate-300 mx-1"></div>
                             
                             <button onclick="window.appHandlers.formatText('insertUnorderedList')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Bullet List"><i class="fas fa-list-ul"></i></button>
                             <button onclick="window.appHandlers.formatText('insertOrderedList')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Numbered List"><i class="fas fa-list-ol"></i></button>
+                            <button onclick="window.appHandlers.formatText('indent')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Indent"><i class="fas fa-indent"></i></button>
+                            <button onclick="window.appHandlers.formatText('outdent')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Outdent"><i class="fas fa-outdent"></i></button>
+                            
+                            <div class="w-px h-5 bg-slate-300 mx-1"></div>
+                            
+                            <button onclick="window.appHandlers.formatText('justifyLeft')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Align Left"><i class="fas fa-align-left"></i></button>
+                            <button onclick="window.appHandlers.formatText('justifyCenter')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Align Center"><i class="fas fa-align-center"></i></button>
+                            <button onclick="window.appHandlers.formatText('justifyRight')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Align Right"><i class="fas fa-align-right"></i></button>
                         </div>
 
                         <div id="note-content-editor" contenteditable="true" class="flex-1 w-full border-none outline-none overflow-y-auto text-slate-700 leading-relaxed text-base font-sans focus:ring-0 bg-transparent" style="min-height: 200px;"></div>
@@ -5257,8 +5343,7 @@ getCurrentSubjectContext: () => ({
                         <div class="mt-4 flex justify-between items-center pt-4 border-t border-slate-100">
                             <p class="text-xs text-slate-400 italic">Changes are saved automatically.</p>
                             <button onclick="window.appHandlers.saveNote('${noteId}', false)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-2 rounded-lg text-sm font-bold transition shadow-sm"><i class="fas fa-save mr-2"></i> Force Save</button>
-                        </div>
-                    </div>`;
+                        </div>`;
                 
                 const editor = document.getElementById('note-content-editor');
                 const titleEditor = document.getElementById('note-title-editor');
@@ -5289,6 +5374,7 @@ getCurrentSubjectContext: () => ({
                 editor.addEventListener('input', triggerAutoSave);
                 titleEditor.addEventListener('input', triggerAutoSave);
             },
+            setTimeout(() => window.appHandlers.restoreSidebarState(), 100);
 
             saveNote: async (noteId, isAutoSave = false, capturedSnapshot = null) => { 
                 const titleEl = document.getElementById('note-title-editor');
