@@ -4078,14 +4078,30 @@ startPomoDrag: (e) => {
 },
 doPomoDrag: (e) => {
     if (!window.appHandlers.isPomoDragging) return;
-    if (e.type === 'touchmove') e.preventDefault(); // Stop scroll
-    
+    if (e.type === 'touchmove') e.preventDefault();
     const widget = document.getElementById('pomodoro-widget');
     const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
     const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
     
-    widget.style.left = (clientX - window.appHandlers.pomoDragOffsetX) + 'px';
-    widget.style.top = (clientY - window.appHandlers.pomoDragOffsetY) + 'px';
+    // Calculate new position
+    let newLeft = clientX - window.appHandlers.pomoDragOffsetX;
+    let newTop = clientY - window.appHandlers.pomoDragOffsetY;
+    
+    // Get widget dimensions
+    const rect = widget.getBoundingClientRect();
+    const widgetWidth = rect.width || 256; // fallback to default width
+    const widgetHeight = rect.height || 200; // fallback to default height
+    
+    // Get viewport dimensions
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Clamp position to keep widget within viewport
+    newLeft = Math.max(0, Math.min(newLeft, viewportWidth - widgetWidth));
+    newTop = Math.max(0, Math.min(newTop, viewportHeight - widgetHeight));
+    
+    widget.style.left = newLeft + 'px';
+    widget.style.top = newTop + 'px';
 },
 stopPomoDrag: () => {
     if (!window.appHandlers.isPomoDragging) return;
