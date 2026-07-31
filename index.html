@@ -461,8 +461,14 @@ const supabase = createClient(
     SUPABASE_KEY
 );
                 
-        let currentUser = null;
+       let currentUser = null;
         let currentView = 'dashboard';
+        let vibrationEnabled = false; // <--- ADDED THIS
+        
+        // Enable vibration after first user interaction (fixes browser vibration block)
+        document.addEventListener('click', () => { vibrationEnabled = true; }, { once: true });
+        document.addEventListener('keydown', () => { vibrationEnabled = true; }, { once: true });
+        
         const noteAutosaveTimers = new Map();
 
         const DEFAULT_NOTE_SECTIONS = [
