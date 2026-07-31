@@ -1942,26 +1942,27 @@ const supabase = createClient(
         </div>
         ${
             material.downloadURL
-                ? `
-                <iframe
-                    src="${Security.escapeHTML(material.downloadURL)}#toolbar=1&navpanes=0"
-                    title="${Security.escapeHTML(material.title || 'Subject Material')} PDF"
-                    class="flex-1 w-full min-h-0 bg-slate-100"
-                    loading="lazy">
-                </iframe>
-                `
-                : `
-                <div class="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-500">
-                    <i class="fas fa-file-circle-exclamation text-5xl text-slate-300 mb-4"></i>
-                    <p class="font-bold text-slate-700">
-                        PDF Preview Unavailable
-                    </p>
-                    <p class="text-sm mt-2">
-                        This material has no saved PDF link yet.
-                    </p>
-                </div>
-                `
-        }
+            ? `
+            <iframe
+            src="${Security.escapeHTML(material.downloadURL)}#toolbar=1&navpanes=0"
+            title="${Security.escapeHTML(material.title || 'Subject Material')} PDF"
+            class="w-full bg-slate-100"
+            style="min-height: 700px; height: calc(100vh - 350px);"
+            loading="lazy">
+            </iframe>
+            `
+            : `
+            <div class="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-500" style="min-height: 500px;">
+            <i class="fas fa-file-circle-exclamation text-5xl text-slate-300 mb-4"></i>
+            <p class="font-bold text-slate-700">
+            PDF Preview Unavailable
+            </p>
+            <p class="text-sm mt-2">
+            This material has no saved PDF link yet.
+            </p>
+            </div>
+            `
+            }
 
     </div>
 
