@@ -365,6 +365,8 @@
             <span id="pomo-mode-label" class="text-xs font-bold uppercase tracking-widest flex items-center gap-2"><i class="fas fa-brain text-amber-400"></i> Focus Mode</span>
             <i id="pomo-min-icon" class="fas fa-chevron-down text-xs opacity-70 rotate-180 transition-transform"></i>
         </div>
+        <button onclick="event.stopPropagation(); window.appHandlers.togglePomoDrag()" id="pomo-move-btn" class="text-slate-400 hover:text-amber-400 transition" title="Move Widget"><i class="fas fa-arrows-alt"></i></button>
+            <i id="pomo-min-icon" class="fas fa-chevron-down text-xs opacity-70 rotate-180 transition
         <div id="pomo-main-content" class="p-5 flex flex-col items-center bg-slate-50 transition-all duration-300">
             <div class="text-5xl font-mono font-bold text-slate-800 text-center mb-4 tracking-tight" id="pomo-time">50:00</div>
             <div class="flex justify-center gap-3 w-full">
@@ -3933,6 +3935,103 @@ list.appendChild(row);
             setPomoMode: (mode) => { window.appHandlers.pausePomo(); currentPomoMode = mode; currentPomoSeconds = mode === 'focus' ? POMO_FOCUS_MINS * 60 : POMO_BREAK_MINS * 60; const label = document.getElementById('pomo-mode-label'); if(mode === 'focus') { label.innerHTML = `<i class="fas fa-brain text-amber-400"></i> Focus Mode`; document.getElementById('pomo-main-content').classList.remove('bg-green-50'); document.getElementById('pomo-main-content').classList.add('bg-slate-50'); } else { label.innerHTML = `<i class="fas fa-mug-hot text-green-400"></i> Break Time`; document.getElementById('pomo-main-content').classList.remove('bg-slate-50'); document.getElementById('pomo-main-content').classList.add('bg-green-50'); } window.appHandlers.updatePomoUI(); },
             switchPomoMode: () => { window.appHandlers.setPomoMode(currentPomoMode === 'focus' ? 'break' : 'focus'); },
             togglePomoMinimize: () => { const widget = document.getElementById('pomodoro-widget'); const icon = document.getElementById('pomo-min-icon'); if (widget.classList.contains('translate-y-[calc(100%-48px)]')) { widget.classList.remove('translate-y-[calc(100%-48px)]'); icon.classList.remove('rotate-180'); } else { widget.classList.add('translate-y-[calc(100%-48px)]'); icon.classList.add('rotate-180'); } },
+            togglePomoDrag: () => {
+    const widget = document.getElementById('pomodoro-widget');
+    const btn = document.getElementById('pomo-move-btn');
+    // Toggle the drag mode class
+    const isDragMode = widget.classList.toggle('pomo-drag-mode');
+    
+    if (isDragMode) {
+        btn.classList.add('text-amber-400');
+        btn.classList.remove('text-slate-400');
+        widget.style.cursor = 'move';
+        // Add event listeners for dragging
+        widget.addEventListener('mousedown', window.appHandlers.startPomoDrag);
+        widget.addEventListener('touchstart', window.appHandlers.startPomoDrag, {passive: false});
+    } else {
+        btn.classList.remove('text-amber-400');
+        btn.classList.add('text-slate-400');
+        widget.style.cursor = 'default';
+        widget.removeEventListener('mousedown', window.appHandlers.startPomoDrag);
+        widget.removeEventListener('touchstart', window.appHandlers.startPomoDrag);
+    }
+},
+startPomoDrag: (e) => {
+    const widget = document.getElementById('pomodoro-widget');
+    if (!widget.classList.contains('pomo-drag-mode')) return;
+    
+    // Prevent scrolling on mobile while dragging
+    if (e.type === 'touchstart') e.preventDefault(); 
+    
+    window.appHandlers.isPomoDragging = true;
+    const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+    const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    
+    const rect = widget.getBoundingClientRect();
+    window.appHandlers.pomoDragOffsetX = clientX - rect.left;
+    window.appHandlers.pomoDragOffsetY = clientY - rect.top;
+    
+    // Switch to absolute positioning for dragging
+    widget.style.bottom = 'auto';
+    widget.style.right = 'auto';
+    widget.style.top = rect.top + 'px';
+    widget.style.left = rect.left + 'px';
+    widget.classList.add('opacity-90', 'shadow-2xl');
+    
+    // Listen for move and stop events on the document
+    document.addEventListener('mousemove', window.appHandlers.doPomoDrag);
+    document.addEventListener('touchmove', window.appHandlers.doPomoDrag, {passive: false});
+    document.addEventListener('mouseup', window.appHandlers.stopPomoDrag);
+    document.addEventListener('touchend', window.appHandlers.stopPomoDrag);
+},
+doPomoDrag: (e) => {
+    if (!window.appHandlers.isPomoDragging) return;
+    if (e.type === 'touchmove') e.preventDefault(); // Stop scroll
+    
+    const widget = document.getElementById('pomodoro-widget');
+    const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+    const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    
+    widget.style.left = (clientX - window.appHandlers.pomoDragOffsetX) + 'px';
+    widget.style.top = (clientY - window.appHandlers.pomoDragOffsetY) + 'px';
+},
+stopPomoDrag: () => {
+    if (!window.appHandlers.isPomoDragging) return;
+    window.appHandlers.isPomoDragging = false;
+    const widget = document.getElementById('pomodoro-widget');
+    widget.classList.remove('opacity-90', 'shadow-2xl');
+    
+    // Save the new position to local storage
+    localStorage.setItem('lex_pomo_pos', JSON.stringify({
+        top: widget.style.top,
+        left: widget.style.left
+    }));
+    
+    // Clean up listeners
+    document.removeEventListener('mousemove', window.appHandlers.doPomoDrag);
+    document.removeEventListener('touchmove', window.appHandlers.doPomoDrag);
+    document.removeEventListener('mouseup', window.appHandlers.stopPomoDrag);
+    document.removeEventListener('touchend', window.appHandlers.stopPomoDrag);
+    
+    // Automatically exit drag mode after dropping
+    window.appHandlers.togglePomoDrag(); 
+},
+initPomoPosition: () => {
+    const saved = localStorage.getItem('lex_pomo_pos');
+    if (saved) {
+        try {
+            const pos = JSON.parse(saved);
+            const widget = document.getElementById('pomodoro-widget');
+            if (pos.top && pos.left && widget) {
+                widget.style.bottom = 'auto';
+                widget.style.right = 'auto';
+                widget.style.top = pos.top;
+                widget.style.left = pos.left;
+                widget.classList.remove('bottom-6', 'right-8');
+            }
+        } catch(e) {}
+    }
+},
             classScheduleForm: (existing = null) => {
                 const dayOptions = AdvocacyUtils.dayNames.map(day => `<option ${existing?.day === day ? 'selected' : ''}>${day}</option>`).join('');
                 const existingTime = existing?.time ? AdvocacyUtils.minutesToTime(AdvocacyUtils.timeToMinutes(existing.time)) : '17:30';
@@ -5956,6 +6055,8 @@ generateReview: async () => {
                 loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
             }
         });
+        // Load saved widget position
+window.appHandlers.initPomoPosition();
     </script>
 </body>
 </html>
