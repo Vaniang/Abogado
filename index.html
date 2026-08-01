@@ -5494,60 +5494,134 @@ getCurrentSubjectContext: () => ({
         digest.notes || ''
     );
 },
-     discussProvision: () => {
-        Modal.show({
-            title: '<i class="fas fa-book-open text-emerald-600"></i> Discuss Legal Provision',
-            content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label><textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: 'Whoever by act or omission causes damage to another...'"></textarea></div>`,
-            submitText: 'Analyze Provision',
-            submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
-            onSubmit: async () => {
-                const provisionText = document.getElementById('discuss-provision-text').value.trim();
-                if (!provisionText) throw new Error('Please enter a provision to analyze.');
-                const apiKey = localStorage.getItem('gemini_api_key');
-                if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
+    discussProvision: () => {
+    Modal.show({
+        title: '<i class="fas fa-book-open text-emerald-600"></i> Discuss Legal Provision',
+        content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label><textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: 'Whoever by act or omission causes damage to another...'"></textarea></div>`,
+        submitText: 'Analyze Provision',
+        submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
+        onSubmit: async () => {
+            const provisionText = document.getElementById('discuss-provision-text').value.trim();
+            if (!provisionText) throw new Error('Please enter a provision to analyze.');
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
+            const promptText = `FOR Discussion of Provisions
+Act as a distinguished Law Professor and Bar Exam Reviewer. Analyze the legal provision provided below using the exact 6-part framework listed. Ensure the response is rigorous, concise, and optimized for law school recitations, exams, and long-term retention.
+---
+PROVISION TO ANALYZE:
+${provisionText}
+---
+Please structure your response using the following pattern:
+1. 📜 Codal Provision & Context
+- State the text of the provision (or key statutory extract).
+- Identify its legal classification/category.
+2. ️ General Rule
+- State the core legal principle in 1–2 direct, clear sentences.
+3. 📋 Requisites / Elements
+- List all essential elements or conditions that must concur for the provision to apply.
+- Highlight the single most heavily tested element in recitations/exams.
+4. 🚫 Exceptions & Counter-Exceptions
+- Detail all statutory or judicial exceptions.
+- Mention exceptions to the exceptions, if any exist.
+5. 💡 Discussion & Exam Notes & COMMENTARIES
+- Ratio Legis: Briefly explain *why* this law exists.
+- Plain-English Explanation: Summarize how this operates in practice.
+- Common Exam Traps: Note frequent trick questions or common student misconceptions.
+6. 🏛️ Landmark Cases, Doctrines & Definitions
+- List key jurisprudence interpreting this provision.
+- Highlight the specific Legal Doctrine or Judicial Definition established by the rulings.
+Return the result as plain text with clear headings. Do NOT use markdown code blocks.`;
+            
+            const resultModal = document.createElement('div');
+            resultModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
+            
+            // Extract a title from the provision (e.g., "Article 2176" or "Quasi-Delicts")
+            const provisionTitle = provisionText.split(':')[0].split('-')[0].trim();
+            const safeTitleForSave = `Codal Analysis: ${provisionTitle}`;
+            
+            resultModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0">
+                    <h3 class="font-bold text-slate-800 text-lg">Provision Analysis</h3>
+                    <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1" id="provision-analysis-content">
+                    <div class="loader mx-auto"></div>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
+                    <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium transition">Close</button>
+                    <button id="save-provision-analysis" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition shadow-sm">
+                        <i class="fas fa-save mr-2"></i>Save to Codal Provisions
+                    </button>
+                </div>
+            </div>`;
+            
+            document.body.appendChild(resultModal);
+            
+            try {
+                const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] });
+                const resultText = GeminiService.text(data);
                 
-                const promptText = `FOR Discussion of Provisions
-                        Act as a distinguished Law Professor and Bar Exam Reviewer. Analyze the legal provision provided below using the exact 6-part framework listed. Ensure the response is rigorous, concise, and optimized for law school recitations, exams, and long-term retention.
-                        ---
-                        PROVISION TO ANALYZE:
-                        ${provisionText}
-                        ---
-                        Please structure your response using the following pattern:
-                        1. 📜 Codal Provision & Context
-                        - State the text of the provision (or key statutory extract).
-                        - Identify its legal classification/category.
-                        2. ⚖️ General Rule
-                        - State the core legal principle in 1–2 direct, clear sentences.
-                        3. 📋 Requisites / Elements
-                        - List all essential elements or conditions that must concur for the provision to apply.
-                        - Highlight the single most heavily tested element in recitations/exams.
-                        4. 🚫 Exceptions & Counter-Exceptions
-                        - Detail all statutory or judicial exceptions.
-                        - Mention exceptions to the exceptions, if any exist.
-                        5. 💡 Discussion & Exam Notes & COMMENTARIES
-                        - Ratio Legis: Briefly explain *why* this law exists.
-                        - Plain-English Explanation: Summarize how this operates in practice.
-                        - Common Exam Traps: Note frequent trick questions or common student misconceptions.
-                        6. 🏛️ Landmark Cases, Doctrines & Definitions
-                        - List key jurisprudence interpreting this provision.
-                        - Highlight the specific Legal Doctrine or Judicial Definition established by the rulings.
-                        Return the result as plain text with clear headings. Do NOT use markdown code blocks.`;
-                                        
-                const resultModal = document.createElement('div');
-                resultModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
-                resultModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"><div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0"><h3 class="font-bold text-slate-800 text-lg">Provision Analysis</h3><button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button></div><div class="p-6 overflow-y-auto flex-1"><div class="loader mx-auto"></div></div></div>`;
-                document.body.appendChild(resultModal);
+                // Store the result for saving
+                window.appHandlers.currentProvisionAnalysis = {
+                    title: safeTitleForSave,
+                    content: `<div class="note-template-block">
+                        <h2>Provision Analyzed</h2>
+                        <p class="serif-text text-lg font-semibold text-blue-800 mb-3">${Security.escapeHTML(provisionText)}</p>
+                        <h2>AI Analysis</h2>
+                        <div class="whitespace-pre-wrap text-slate-700 leading-relaxed">${Security.escapeHTML(resultText)}</div>
+                        <div class="mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                            <p class="text-xs text-emerald-800"><i class="fas fa-info-circle mr-1"></i>Generated by Lex AI on ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        </div>
+                    </div>`,
+                    provision: provisionText
+                };
                 
-                try {
-                    const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] });
-                    const resultText = GeminiService.text(data);
-                    resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="prose max-w-none text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${resultText}</div>`;
-                } catch (error) {
-                    resultModal.querySelector('.overflow-y-auto').innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg">${error.message}</div>`;
-                }
+                // Display the result
+                const contentDiv = document.getElementById('provision-analysis-content');
+                contentDiv.innerHTML = `<div class="prose max-w-none text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">${resultText}</div>`;
+                
+                // Add save button event listener
+                const saveBtn = document.getElementById('save-provision-analysis');
+                saveBtn.onclick = async () => {
+                    const subject = window.appHandlers.getCurrentSubjectContext();
+                    if (!subject.id) {
+                        alert('Please open a subject notebook first before saving.');
+                        return;
+                    }
+                    
+                    try {
+                        await AppDB.add('notes', {
+                            semesterId: subject.semesterId,
+                            subjectId: subject.id,
+                            sectionId: 'codal_provisions', // Save to Codal Provisions section
+                            noteType: 'codal_analysis',
+                            title: window.appHandlers.currentProvisionAnalysis.title,
+                            content: window.appHandlers.currentProvisionAnalysis.content,
+                            linkedProvision: provisionText,
+                            created: serverTimestamp(),
+                            updated: serverTimestamp()
+                        });
+                        
+                        alert('Successfully saved to Codal Provisions section!');
+                        resultModal.remove();
+                        
+                        // If user is in the subject notebook, refresh to show the new note
+                        if (currentView === 'subject_notebook' && views.subject_notebook.subjectId === subject.id) {
+                            views.subject_notebook.showOverview();
+                        }
+                    } catch (error) {
+                        console.error('Save error:', error);
+                        alert('Failed to save. Please try again.');
+                    }
+                };
+                
+            } catch (error) {
+                const contentDiv = document.getElementById('provision-analysis-content');
+                contentDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg">${error.message}</div>`;
             }
-        });
-    },
+        }
+    });
+},
         startBarExam: () => {
     const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) { alert("Please enter your Gemini API Key in the AI Search tab first."); return; }
@@ -5854,6 +5928,45 @@ sendBarExamMessage: async () => {
                 const titleEditor = document.getElementById('note-title-editor');
                 editor.innerHTML = displayContent;
 
+                // --- PASTE FORMATTING FIX ---
+editor.addEventListener('paste', (e) => {
+    const clipboardData = e.clipboardData || window.clipboardData;
+    const pastedHtml = clipboardData.getData('text/html');
+    
+    // Only intercept if there is actual HTML being pasted
+    if (pastedHtml) {
+        e.preventDefault(); // Stop the default paste behavior
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = pastedHtml;
+
+        // Clean up the pasted HTML to preserve bullets, numbers, and basic formatting
+        tempDiv.querySelectorAll('*').forEach(el => {
+            let style = el.getAttribute('style') || '';
+            
+            // 1. Remove MS Office / PDF junk styles
+            style = style.replace(/mso-[^;:]+:[^;]+;?/gi, '');
+            // 2. Remove list-style overrides that hide bullets/numbers
+            style = style.replace(/list-style-type\s*:\s*none;?/gi, '');
+            style = style.replace(/list-style\s*:[^;]+;?/gi, '');
+            // 3. Remove text-indent which messes up list alignment
+            style = style.replace(/text-indent\s*:[^;]+;?/gi, '');
+            
+            if (style.trim()) {
+                el.setAttribute('style', style.trim());
+            } else {
+                el.removeAttribute('style');
+            }
+            
+            // 4. Remove external classes and IDs to prevent CSS conflicts
+            el.removeAttribute('class');
+            el.removeAttribute('id');
+        });
+
+        // Insert the cleaned HTML using execCommand to preserve cursor position and undo history
+        document.execCommand('insertHTML', false, tempDiv.innerHTML);
+    }
+});
+                
                 // --- SAFE AUTO-SAVE LOGIC ---
                 const doneTypingInterval = 1000;
                 const triggerAutoSave = () => {
