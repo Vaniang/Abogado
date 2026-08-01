@@ -32,7 +32,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js"></script>
     <script>mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict', suppressErrorEvents: true });</script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
 
@@ -3166,6 +3166,27 @@ deleteAdvocacyDraft: (id) => {
         onSubmit: async () => await AppDB.delete('advocacy_sessions', id) 
     });
 },
+            downloadNoteAsPDF: (title) => {
+    const element = document.getElementById('note-content-editor');
+    const opt = {
+        margin: 1,
+        filename: `${title}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    
+    // Temporarily style the content for better PDF output
+    const originalStyle = element.style.cssText;
+    element.style.padding = '20px';
+    element.style.background = 'white';
+    element.style.color = 'black';
+    
+    html2pdf().set(opt).from(element).save().then(() => {
+        // Restore original style
+        element.style.cssText = originalStyle;
+    });
+},
 
             // --- LEX-VOCAB HANDLERS ---
             addVocab: () => {
@@ -5512,22 +5533,22 @@ PROVISION TO ANALYZE:
 ${provisionText}
 ---
 Please structure your response using the following pattern:
-1. 📜 Codal Provision & Context
+1.  Codal Provision & Context
 - State the text of the provision (or key statutory extract).
 - Identify its legal classification/category.
-2. ️ General Rule
+2. ⚖️ General Rule
 - State the core legal principle in 1–2 direct, clear sentences.
 3. 📋 Requisites / Elements
 - List all essential elements or conditions that must concur for the provision to apply.
 - Highlight the single most heavily tested element in recitations/exams.
-4. 🚫 Exceptions & Counter-Exceptions
+4.  Exceptions & Counter-Exceptions
 - Detail all statutory or judicial exceptions.
 - Mention exceptions to the exceptions, if any exist.
 5. 💡 Discussion & Exam Notes & COMMENTARIES
 - Ratio Legis: Briefly explain *why* this law exists.
 - Plain-English Explanation: Summarize how this operates in practice.
 - Common Exam Traps: Note frequent trick questions or common student misconceptions.
-6. 🏛️ Landmark Cases, Doctrines & Definitions
+6. ️ Landmark Cases, Doctrines & Definitions
 - List key jurisprudence interpreting this provision.
 - Highlight the specific Legal Doctrine or Judicial Definition established by the rulings.
 Return the result as plain text with clear headings. Do NOT use markdown code blocks.`;
@@ -5830,8 +5851,9 @@ sendBarExamMessage: async () => {
                         <div class="flex justify-between items-center mb-4 mt-2 pr-28">
                             <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300 serif-text bg-transparent flex-1" value="${displayTitle.replace(/"/g, '&quot;')}" placeholder="Page Title...">
                             <div class="flex gap-2">
-                                <button onclick="window.appHandlers.printNote('${safeTitleForPrint}')" class="text-slate-400 hover:text-blue-600 p-2" title="Print / Save PDF"><i class="fas fa-print"></i></button>
-                                <button onclick="window.appHandlers.downloadText('${safeTitleForPrint}.txt', document.getElementById('note-content-editor').innerText)" class="text-slate-400 hover:text-blue-600 p-2" title="Download Text"><i class="fas fa-download"></i></button>
+                                <button onclick="window.appHandlers.printNote('${safeTitleForPrint}')" class="text-slate-400 hover:text-blue-600 p-2" title="Print"><i class="fas fa-print"></i></button>
+                                <button onclick="window.appHandlers.downloadNoteAsPDF('${safeTitleForPrint}')" class="text-slate-400 hover:text-emerald-600 p-2" title="Save as PDF"><i class="fas fa-file-pdf"></i></button>
+                                <button onclick="window.appHandlers.downloadText('${safeTitleForPrint}.txt', document.getElementById('note-content-editor').innerText)" class="text-slate-400 hover:text-slate-600 p-2" title="Download Text"><i class="fas fa-file-alt"></i></button>
                             </div>
                         </div>
                         
