@@ -2265,6 +2265,7 @@ const supabase = createClient(
                         <div class="p-5 flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                             <div class="min-w-0"><div class="flex flex-wrap gap-2 mb-2"><span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${Security.escapeHTML(topic)}</span>${Array.isArray(digest.subjectIds) && digest.subjectIds.length > 1 ? `<span class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">Linked to ${digest.subjectIds.length} subjects</span>` : ''}</div><h4 class="text-lg font-bold text-slate-800 serif-text">${Security.escapeHTML(digest.title || 'Untitled Case')}</h4>${digest.citation ? `<p class="text-xs text-slate-500 mt-1">${Security.escapeHTML(digest.citation)}</p>` : ''}</div>
                           <div class="flex flex-wrap gap-2 flex-shrink-0"><button onclick="window.appHandlers.printLinkedDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100" title="Print Digest"><i class="fas fa-print mr-1"></i>Print</button><button onclick="window.appHandlers.editLinkedDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-pen mr-1"></i>Edit</button><button onclick="window.appHandlers.unlinkDigestFromCurrentSubject('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"><i class="fas fa-unlink mr-1"></i>Unlink</button><button onclick="window.appHandlers.deleteDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-red-50 text-red-600 hover:bg-red-100" title="Delete from all subjects"><i class="fas fa-trash"></i></button></div>
+                          ${digest.gist ? `<div class="px-5 pb-4 border-b border-slate-100"><div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r text-sm text-amber-900 flex gap-2 items-start"><i class="fas fa-bolt mt-1 text-amber-600"></i><div><span class="font-bold text-[10px] uppercase tracking-wider block mb-0.5 text-amber-700">Recitation Gist</span>${Security.escapeHTML(digest.gist)}</div></div></div>` : ''}
                           </div>
                         <details class="border-t border-slate-100 group"><summary class="cursor-pointer list-none px-5 py-3 text-sm font-bold text-blue-600 hover:bg-slate-50 flex items-center gap-2"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>Open Digest</summary><div class="p-5 pt-2 grid grid-cols-1 gap-4"><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Facts</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.facts || 'No facts recorded.')}</p></div><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Issue</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.issue || 'No issue recorded.')}</p></div><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Ruling</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.ruling || 'No ruling recorded.')}</p></div>${digest.notes ? `<div class="bg-amber-50 border border-amber-100 rounded-lg p-4"><h5 class="text-xs font-bold uppercase tracking-wider text-amber-700">Personal Notes</h5><p class="text-sm text-amber-900 mt-1 whitespace-pre-wrap">${Security.escapeHTML(digest.notes)}</p></div>` : ''}</div></details>
                     </div>`;
@@ -5704,7 +5705,7 @@ getCurrentSubjectContext: () => ({
                 const subject = window.appHandlers.getCurrentSubjectContext();
                 Modal.show({
                     title: '<i class="fas fa-gavel text-amber-600"></i> New Linked Case Digest',
-                    content: `<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 mb-4">This creates one master digest linked to <b>${Security.escapeHTML(subject.name)}</b>. It will also appear in Consolidated Case Digests.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="subject-digest-title" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" placeholder="e.g., Picart v. Smith"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="subject-digest-citation" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="G.R. No., date"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="subject-digest-topic" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Negligence"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="subject-digest-facts" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="subject-digest-issue" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="subject-digest-ruling" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>`,
+                    content: `<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 mb-4">This creates one master digest linked to <b>${Security.escapeHTML(subject.name)}</b>. It will also appear in Consolidated Case Digests.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="subject-digest-title" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" placeholder="e.g., Picart v. Smith"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="subject-digest-citation" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="G.R. No., date"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="subject-digest-topic" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Negligence"></div></div><div class="mt-3"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist</label><textarea id="dig-gist-edit" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-amber-500">${decodeHtml(gist || '')}</textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="subject-digest-facts" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="subject-digest-issue" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="subject-digest-ruling" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>`,
                     submitText: 'Create Linked Digest',
                     submitClass: 'px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-bold',
                     onSubmit: async () => {
@@ -6346,6 +6347,7 @@ title,
 subject: selectedSubjectName,
 subjectName: selectedSubjectName,
 topic: document.getElementById('dig-topic').value.trim(),
+gist: document.getElementById('dig-gist').value.trim(),
 facts: document.getElementById('dig-facts').value,
 issue: document.getElementById('dig-issue').value,
 ruling: document.getElementById('dig-ruling').value,
@@ -6365,7 +6367,7 @@ await AppDB.add('digests', digestData);
 });
 },
 
-            editDigest: async (id, title, subject, topic, facts, issue, ruling) => {
+            editDigest: async (id, title, subject, topic, facts, issue, ruling, gist) => {
 const decodeHtml = (html) => { const txt = document.createElement("textarea"); txt.innerHTML = html; return txt.value; };
 let userSubjects = views.subjects.subjects || [];
 if (!userSubjects.length) {
@@ -6383,9 +6385,10 @@ title: '<i class="fas fa-edit text-blue-600"></i> Edit Digest',
 content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input type="text" id="dig-title-edit" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500" value="${title.replace(/"/g, '&quot;')}"></div>
 <div class="mt-3 grid grid-cols-2 gap-2">
 <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook</label><select id="dig-subj-edit" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">${subjectOptions}</select></div>
-<div><label class="block text-sm font-medium text-slate-700 mb-1">Topic/Article</label><input type="text" id="dig-topic-edit" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500" value="${(topic && topic !== 'undefined') ? topic.replace(/"/g, '&quot;') : ''}"></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-1">Topic/Article</label><input type="text" id="dig-topic" placeholder="e.g. Art 1156" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500"></div>
 </div>
-<div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="dig-facts-edit" rows="4" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(facts)}</textarea></div>
+<div class="mt-2"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist (1-2 sentences for quick glance)</label><textarea id="dig-gist" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-amber-500" placeholder="e.g. Minors sued to cancel TLAs; SC ruled they have standing to sue for future generations."></textarea></div>
+<div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label>
 <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="dig-issue-edit" rows="3" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(issue)}</textarea></div>
 <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="dig-ruling-edit" rows="4" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(ruling)}</textarea></div>`,
 submitText: 'Save Changes',
@@ -6401,6 +6404,7 @@ title: updatedTitle,
 subject: selectedSubjectName,
 subjectName: selectedSubjectName,
 topic: document.getElementById('dig-topic-edit').value.trim(),
+gist: document.getElementById('dig-gist-edit').value.trim(),
 facts: document.getElementById('dig-facts-edit').value,
 issue: document.getElementById('dig-issue-edit').value,
 ruling: document.getElementById('dig-ruling-edit').value,
@@ -6539,10 +6543,11 @@ await AppDB.update('digests', id, updateData);
                             <div class="flex-1">
                                 <h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${title}</h4>
                                 ${topic ? `<span class="inline-block mt-1.5 bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"><i class="fas fa-tag mr-1"></i>${topic}</span>` : ''}
+                                ${d.gist ? `<div class="mt-3 p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 flex gap-2 items-start"><i class="fas fa-bolt mt-1 text-amber-600"></i><div><span class="font-bold text-[10px] uppercase tracking-wider block mb-0.5 text-amber-700">Recitation Gist</span>${d.gist}</div></div>` : ''}
                             </div>
                             <div class="flex items-center gap-1.5 flex-wrap justify-end">
                                 <button onclick="window.appHandlers.openDigestNotes('${d.id}', '${safeTitle}', '${safeNotes}')" class="text-slate-400 hover:text-amber-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Personal Notes"><i class="fas fa-sticky-note"></i></button>
-                                <button onclick="window.appHandlers.editDigest('${d.id}', '${safeTitle}', '${safeSubject}', '${safeTopic}', '${safeFacts}', '${safeIssue}', '${safeRuling}')" class="text-slate-400 hover:text-blue-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
+                                <button onclick="window.appHandlers.editDigest('${d.id}', '${safeTitle}', '${safeSubject}', '${safeTopic}', '${safeFacts}', '${safeIssue}', '${safeRuling}', '${safeGist}')" class="text-slate-400 hover:text-blue-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
                                 <button onclick="window.appHandlers.printDigest('${safeTitle}', '${safeSubject}', '${safeTopic}', '${safeFacts}', '${safeIssue}', '${safeRuling}', '${safeNotes}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
                                 <button onclick="window.appHandlers.downloadText('${safeTitle}_Digest.txt', '${safeDlText}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Download Text"><i class="fas fa-download"></i></button>
                                 <button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-400 hover:text-red-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Delete"><i class="fas fa-trash"></i></button>
@@ -6635,7 +6640,7 @@ RESPONSE GUIDELINES:
 2. Focus strictly on Constitutional Law 1 principles.
 3. Keep the factual background lean, punchy, and strictly relevant to the constitutional issue.
 
-Return the result STRICTLY as a raw JSON object with exactly four keys: "codal_provision", "legal_framework", "case_digest", and "recitation_summary". Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.`; 
+Return the result STRICTLY as a raw JSON object with exactly five keys: "codal_provision", "legal_framework", "case_digest", "recitation_summary", and "recitation_gist". "recitation_gist" must be a 1-2 sentence ultra-short summary for quick glancing during recitation (e.g., "Minors sued to cancel TLAs; SC ruled standing for future generations."). Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.
 
         const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } }); 
         let jsonString = GeminiService.text(data); 
@@ -6646,6 +6651,7 @@ Return the result STRICTLY as a raw JSON object with exactly four keys: "codal_p
         const framework = parsedDigest.legal_framework || "Not found.";
         const digestText = parsedDigest.case_digest || "Not found.";
         const recitation = parsedDigest.recitation_summary || "Not found.";
+       const gist = parsedDigest.recitation_gist || "";
 
         const fullText = `I. CODAL PROVISION\n${codal}\n\nII. TEXTBOOK / LEGAL FRAMEWORK\n${framework}\n\nIII. CASE DIGEST\n${digestText}\n\nIV. RECITATION & EXAM TAKEAWAY\n${recitation}`;
 
@@ -6654,6 +6660,7 @@ Return the result STRICTLY as a raw JSON object with exactly four keys: "codal_p
             subject: selectedSubjectName,
             subjectName: selectedSubjectName,
             topic: topicInput,
+            gist: gist,
             facts: digestText.substring(0, 500), 
             issue: digestText.substring(0, 500),
             ruling: fullText, 
