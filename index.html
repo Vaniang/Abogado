@@ -5517,7 +5517,7 @@ getCurrentSubjectContext: () => ({
 },
   discussProvision: () => {
     Modal.show({
-        title: 'Discuss Legal Provision', // Removed icon
+        title: 'Discuss Legal Provision',
         content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label><textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: 'Whoever by act or omission causes damage to another...'"></textarea></div>`,
         submitText: 'Analyze Provision',
         submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
@@ -5527,56 +5527,57 @@ getCurrentSubjectContext: () => ({
             const apiKey = localStorage.getItem('gemini_api_key');
             if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
             
-            // STRICTLY FORMATTED PROMPT (No emojis, exact PDF structure)
+            // STRICTLY FORMATTED PROMPT (No emojis, exact PDF structure, BOLD headings)
             const promptText = `Act as a distinguished Law Professor and Bar Exam Reviewer. Analyze the legal provision provided below. 
 STRICT FORMATTING RULES: 
 1. DO NOT use any emojis, icons, or special characters. 
 2. Return the output as CLEAN HTML using <h1>, <h2>, <h3>, <p>, <ul>, <ol>, and <li> tags. 
-3. Strictly follow the exact numbering and headings below.
+3. ALL section titles and sub-titles MUST be wrapped in <b> tags (e.g., <h2><b>1. Codal Provision & Context</b></h2>).
+4. Strictly follow the exact numbering and headings below.
 
 PROVISION TO ANALYZE:
 ${provisionText}
 
 REQUIRED HTML STRUCTURE:
-<h1>[Insert Provision Title, e.g., Article 1 of the New Civil Code]</h1>
+<h1><b>[Insert Provision Title, e.g., Article 1 of the New Civil Code]</b></h1>
 
-<h2>1. Codal Provision & Context</h2>
+<h2><b>1. Codal Provision & Context</b></h2>
 <p>State the exact text of the provision.</p>
-<h3>Legal Classification:</h3>
+<h3><b>Legal Classification:</b></h3>
 <p>Identify its legal classification/category.</p>
 
-<h2>2. General Rule</h2>
+<h2><b>2. General Rule</b></h2>
 <p>State the core legal principle in 1–2 direct, clear sentences.</p>
 
-<h2>3. Requisites / Elements</h2>
+<h2><b>3. Requisites / Elements</b></h2>
 <ol>
 <li>List essential element 1</li>
 <li>List essential element 2</li>
 </ol>
-<h3>Most Heavily Tested Element in Recitations/Exams:</h3>
+<h3><b>Most Heavily Tested Element in Recitations/Exams:</b></h3>
 <p>Highlight the single most heavily tested element.</p>
 
-<h2>4. Exceptions & Counter-Exceptions</h2>
-<h3>Exceptions (Where the provision does not control):</h3>
+<h2><b>4. Exceptions & Counter-Exceptions</b></h2>
+<h3><b>Exceptions (Where the provision does not control):</b></h3>
 <ol>
 <li>Exception 1</li>
 </ol>
-<h3>Exceptions to the Exceptions (Counter-Exceptions):</h3>
+<h3><b>Exceptions to the Exceptions (Counter-Exceptions):</b></h3>
 <p>Detail counter-exceptions if any exist.</p>
 
-<h2>5. Discussion & Exam Notes & COMMENTARIES</h2>
-<p>Ratio Legis: Briefly explain why this law exists.</p>
-<p>Plain-English Explanation: Summarize how this operates in practice.</p>
-<h3>Common Exam Traps:</h3>
+<h2><b>5. Discussion & Exam Notes & COMMENTARIES</b></h2>
+<p><b>Ratio Legis:</b> Briefly explain why this law exists.</p>
+<p><b>Plain-English Explanation:</b> Summarize how this operates in practice.</p>
+<h3><b>Common Exam Traps:</b></h3>
 <ol>
 <li>Trap 1</li>
 </ol>
 
-<h2>6. Landmark Cases, Doctrines & Definitions</h2>
+<h2><b>6. Landmark Cases, Doctrines & Definitions</b></h2>
 <ol>
 <li><strong>Case Name, G.R. No., Date:</strong> Brief ruling summary.</li>
 </ol>
-<h3>Key Legal Doctrines & Definitions:</h3>
+<h3><b>Key Legal Doctrines & Definitions:</b></h3>
 <ul>
 <li><strong>Doctrine Name:</strong> Definition.</li>
 </ul>
