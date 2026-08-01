@@ -6585,11 +6585,17 @@ await AppDB.update('digests', id, updateData);
             },
 
             handleDigestUpload: async (input) => { const file = input.files[0]; if (!file) return; const display = document.getElementById('digest-filename'); const btn = document.getElementById('btn-process-digest'); display.innerText = file.name; display.classList.remove('hidden'); btn.innerText = "Reading PDF..."; btn.disabled = true; try { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; let fullText = ""; const maxPages = Math.min(pdf.numPages, 10); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' ') + "\n"; } window.appHandlers.digestText = fullText; document.getElementById('digest-textarea').value = ''; btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; } catch (e) { alert("Failed to read PDF."); btn.innerHTML = "Error"; } },
-           processDigest: async () => { 
+        processDigest: async () => { 
     const titleInput = document.getElementById('digest-title').value.trim(); 
     const selectEl = document.getElementById('digest-subject');
     const selectedSubjectId = selectEl.value;
-    const selectedSubjectName = selectEl.options[selectEl.selectedIndex]?.dataset.name || selectEl.options[selectEl.selectedIndex]?.text || '';
+    
+    // FIX #1: Guard against selectedIndex === -1 (no selection)
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    const selectedSubjectName = selectedOption 
+        ? (selectedOption.dataset.name || selectedOption.text || '')
+        : '';
+    
     const topicInput = document.getElementById('digest-topic').value.trim(); 
     const textAreaInput = document.getElementById('digest-textarea').value.trim(); 
     const apiKey = document.getElementById('gemini-api-key').value.trim(); 
@@ -6597,10 +6603,16 @@ await AppDB.update('digests', id, updateData);
     if (!apiKey) { alert("Please enter your Gemini API Key."); return; } 
     localStorage.setItem('gemini_api_key', apiKey); 
     
-    if (!titleInput || !selectedSubjectName) { alert("Please enter both the Case Title and select a Notebook."); return; } 
+    if (!titleInput || !selectedSubjectName) { 
+        alert("Please enter both the Case Title and select a Notebook."); 
+        return; 
+    } 
     
     let textToDigest = textAreaInput || window.appHandlers.digestText; 
-    if (!textToDigest) { alert("Please paste the full text of the case or upload a PDF."); return; } 
+    if (!textToDigest) { 
+        alert("Please paste the full text of the case or upload a PDF."); 
+        return; 
+    } 
     
     const area = document.getElementById('digest-results-area'); 
     const btn = document.getElementById('btn-process-digest'); 
@@ -6609,51 +6621,65 @@ await AppDB.update('digests', id, updateData);
     area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; 
     
     try { 
-        const promptText = `For CASE DIGEST: Act as a top-tier, diligent law student with expertise in ${selectedSubjectName}. Analyze and digest the case provided below following a strict, structured legal study methodology: Codal Provision → Legal Framework / Textbook Analysis → Case Digest → Recitation Summary.
+        // FIX #2: Closed the template literal properly + restructured prompt 
+        // to return SEPARATE fields (facts/issue/ruling) instead of one blob
+        const promptText = `For CASE DIGEST: Act as a top-tier, diligent law student with expertise in ${selectedSubjectName}. Analyze and digest the case following strict legal methodology.
 
 SYLLABUS: ${selectedSubjectName}
 TARGET CASE: ${textToDigest.substring(0, 40000)}
 
-REQUIRED OUTPUT FORMAT
-I. CODAL PROVISION
-Applicable Constitutional Provision(s): State the full text or relevant excerpt of the specific Constitutional provision(s) involved.
+REQUIRED OUTPUT:
+I. CODAL PROVISION — Full text/excerpt of applicable Constitutional provision(s).
+II. TEXTBOOK / LEGAL FRAMEWORK — General Rule, Requisites/Elements/Tests, Exceptions, Conceptual Explanation.
+III. CASE DIGEST — Doctrine (1-2 sentences), Brief Facts (bulleted, essential only), Issue (constitutional question), Ruling (Yes/No + disposition), Ratio Decidendi (step-by-step reasoning).
+IV. RECITATION TAKEAWAY — Memory Trigger keyword + 30-Second Recitation Pitch.
 
-II. TEXTBOOK / LEGAL FRAMEWORK
-General Rule: What is the overarching legal rule governing this constitutional provision?
-Requisites / Elements / Tests: What are the mandatory elements, conditions, or judicial tests required to satisfy or trigger this provision? If any.
-Exceptions: What are the recognized exceptions to the general rule, if any?
-Conceptual Explanation: Briefly explain how legal commentators and textbook authors analyze this concept in practice.
-
-III. CASE DIGEST
-Doctrine: A 1–2 sentence statement of the core constitutional law doctrine established or reiterated in this case.
-Brief Facts: A concise, bulleted summary of essential facts. Include only facts necessary to understand the constitutional dispute.
-Issue/s: Framed strictly as a constitutional question.
-Ruling: A direct "Yes" or "No" answer, followed by the Court's formal disposition.
-Ratio Decidendi: Step-by-step breakdown of the Supreme Court's reasoning. Explain explicitly how the Court applied the constitutional provision, requisites, and doctrines to the facts.
-
-IV. RECITATION & EXAM TAKEAWAY
-Memory Trigger / Key Phrase: A short phrase or keyword to associate with this case.
-30-Second Recitation Pitch: A quick summary tailored for law school classroom recitation.
-
-RESPONSE GUIDELINES:
-1. Maintain academic precision, strict legal accuracy, and formal law-school terminology.
+GUIDELINES:
+1. Academic precision, strict legal accuracy, formal law-school terminology.
 2. Focus strictly on Constitutional Law 1 principles.
-3. Keep the factual background lean, punchy, and strictly relevant to the constitutional issue.
+3. Lean, relevant factual background.
 
-Return the result STRICTLY as a raw JSON object with exactly five keys: "codal_provision", "legal_framework", "case_digest", "recitation_summary", and "recitation_gist". "recitation_gist" must be a 1-2 sentence ultra-short summary for quick glancing during recitation (e.g., "Minors sued to cancel TLAs; SC ruled standing for future generations."). Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.
+Return STRICTLY as a raw JSON object with these exact keys:
+{
+  "codal_provision": "string",
+  "legal_framework": "string",
+  "facts": "string (concise bulleted essential facts)",
+  "issue": "string (constitutional question)",
+  "ruling": "string (Yes/No answer + ratio decidendi + disposition)",
+  "doctrine": "string (1-2 sentence core doctrine)",
+  "recitation_summary": "string (memory trigger + 30-sec pitch)",
+  "recitation_gist": "string (1-2 sentence ultra-short summary for quick glance)"
+}
 
-        const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { responseMimeType: "application/json" } }); 
+Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.`;
+
+        const data = await GeminiService.generate(apiKey, { 
+            contents: [{ role: "user", parts: [{ text: promptText }] }], 
+            generationConfig: { responseMimeType: "application/json" } 
+        }); 
+        
         let jsonString = GeminiService.text(data); 
         jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); 
-        const parsedDigest = JSON.parse(jsonString); 
         
+        // FIX #3: Wrap JSON.parse in its own try/catch for clearer error messages
+        let parsedDigest;
+        try {
+            parsedDigest = JSON.parse(jsonString);
+        } catch (parseError) {
+            throw new Error("AI returned invalid JSON. Please try again or check your API key quota.");
+        }
+        
+        // FIX #4: Use the properly separated fields from the AI response
         const codal = parsedDigest.codal_provision || "Not found.";
         const framework = parsedDigest.legal_framework || "Not found.";
-        const digestText = parsedDigest.case_digest || "Not found.";
+        const facts = parsedDigest.facts || "Not found.";
+        const issue = parsedDigest.issue || "Not found.";
+        const ruling = parsedDigest.ruling || "Not found.";
+        const doctrine = parsedDigest.doctrine || "";
         const recitation = parsedDigest.recitation_summary || "Not found.";
-       const gist = parsedDigest.recitation_gist || "";
+        const gist = parsedDigest.recitation_gist || "";
 
-        const fullText = `I. CODAL PROVISION\n${codal}\n\nII. TEXTBOOK / LEGAL FRAMEWORK\n${framework}\n\nIII. CASE DIGEST\n${digestText}\n\nIV. RECITATION & EXAM TAKEAWAY\n${recitation}`;
+        const fullText = `DOCTRINE:\n${doctrine}\n\nI. CODAL PROVISION\n${codal}\n\nII. TEXTBOOK / LEGAL FRAMEWORK\n${framework}\n\nIII. RULING & RATIO\n${ruling}\n\nIV. RECITATION TAKEAWAY\n${recitation}`;
 
         const digestData = {
             title: titleInput,
@@ -6661,8 +6687,8 @@ Return the result STRICTLY as a raw JSON object with exactly five keys: "codal_p
             subjectName: selectedSubjectName,
             topic: topicInput,
             gist: gist,
-            facts: digestText.substring(0, 500), 
-            issue: digestText.substring(0, 500),
+            facts: facts,      // FIX #5: Now stores actual facts, not a substring
+            issue: issue,      // FIX #5: Now stores actual issue, not a duplicate
             ruling: fullText, 
             created: serverTimestamp()
         };
@@ -6680,6 +6706,7 @@ Return the result STRICTLY as a raw JSON object with exactly five keys: "codal_p
 
         await AppDB.add('digests', digestData);
 
+        // FIX #6: Use Security.escapeHTML to prevent XSS from AI output
         area.innerHTML = `<div class="space-y-4">
             <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm animate-fade-in">
                 <i class="fas fa-check-circle text-3xl"></i>
@@ -6689,19 +6716,23 @@ Return the result STRICTLY as a raw JSON object with exactly five keys: "codal_p
                 </div>
                 <button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View</button>
             </div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">I. Codal Provision</h4><p class="text-sm whitespace-pre-wrap">${codal}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">II. Legal Framework</h4><p class="text-sm whitespace-pre-wrap">${framework}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">III. Case Digest</h4><p class="text-sm whitespace-pre-wrap">${digestText}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">IV. Recitation Takeaway</h4><p class="text-sm whitespace-pre-wrap">${recitation}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Doctrine</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(doctrine)}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">I. Codal Provision</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(codal)}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">II. Legal Framework</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(framework)}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">III. Facts</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(facts)}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">IV. Issue</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(issue)}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">V. Ruling & Ratio</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(ruling)}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">VI. Recitation Takeaway</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(recitation)}</p></div>
         </div>`; 
     } catch (error) { 
-        area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${error.message}</div>`; 
+        // FIX #7: Escape error message to prevent XSS
+        area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${Security.escapeHTML(error.message || 'Unknown error')}</div>`; 
     } finally { 
         btn.disabled = false; 
         btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; 
         window.appHandlers.digestText = ''; 
     } 
-}, // <--- THIS COMMA IS CRUCIAL TO PREVENT SYNTAX ERRORS
+},
 setMode: (mode) => {
     window.appHandlers.reviewMode = mode;
     const btnRecit = document.getElementById('btn-recit');
