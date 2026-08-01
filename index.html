@@ -1706,6 +1706,7 @@ const supabase = createClient(
                 this.unsubscribeDigests = null;
                 this.unsubscribeDoctrines = null;
                 this.unsubscribeMaterials = null;
+                this.unsubscribeSyllabus = null;
                 this.subjectId = null;
                 this.subjectName = '';
                 this.activeNoteId = null;
@@ -1714,6 +1715,7 @@ const supabase = createClient(
                 this.digestsData = [];
                 this.doctrinesData = [];
                 this.materialsData = [];
+                 this.syllabusData = [];
                 this.currentMaterialId = null;
             }
             render() {
@@ -1789,6 +1791,11 @@ const supabase = createClient(
                     if (this.activePanel === 'materials' && !this.currentMaterialId) this.showMaterials();
                     else if (this.activePanel === 'overview') this.showOverview();
                 });
+                this.unsubscribeSyllabus = AppDB.subscribeQuery('syllabus_items', 'subjectId', '==', subjectId, snapshot => {
+                    this.syllabusData = [];
+                    snapshot.forEach(record => this.syllabusData.push({ id: record.id, ...record.data() }));
+                    if (this.activePanel === 'syllabus') this.showSyllabusTracker();
+                });
             }
             refreshTabStyles() {
                 const notebookTab = document.getElementById('subject-tab-notebook');
@@ -1843,7 +1850,11 @@ const supabase = createClient(
                     const heading = document.createElement('div');
                     heading.className = 'notebook-section-heading px-4 py-2.5 bg-slate-100 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex justify-between items-center';
                     const reviewerGenerateButton = section.id === 'master_outline' ? `<button onclick="window.appHandlers.generateMasterReviewer('${this.subjectId}')" class="text-amber-600 hover:text-amber-800" title="Generate from subject materials"><i class="fas fa-wand-magic-sparkles"></i></button>` : '';
-                    heading.innerHTML = `<span><i class="fas ${section.icon} mr-2"></i>${Security.escapeHTML(section.label)}</span><span class="flex items-center gap-3">${reviewerGenerateButton}<button onclick="window.appHandlers.addNote('${this.subjectId}', '${section.id}')" class="text-blue-600 hover:text-blue-800" title="Add page to this section"><i class="fas fa-plus"></i></button></span>`;
+                    const isSyllabus = section.id === 'syllabus';
+                    const actionBtn = isSyllabus
+                        ? `<button onclick="window.appHandlers.openSyllabusTracker()" class="text-emerald-600 hover:text-emerald-800" title="Open Syllabus Tracker"><i class="fas fa-list-check"></i></button>`
+                        : `<button onclick="window.appHandlers.addNote('${this.subjectId}', '${section.id}')" class="text-blue-600 hover:text-blue-800" title="Add page"><i class="fas fa-plus"></i></button>`;
+                    heading.innerHTML = `<span><i class="fas ${section.icon} mr-2"></i>${Security.escapeHTML(section.label)}</span><span class="flex items-center gap-3">${reviewerGenerateButton}${actionBtn}</span>`;
                     list.appendChild(heading);
                     if (!sectionNotes.length) {
                         const empty = document.createElement('div'); empty.className = 'px-5 py-3 text-xs text-slate-300 italic border-b border-slate-100'; empty.textContent = 'No pages yet'; list.appendChild(empty);
@@ -1884,6 +1895,107 @@ const supabase = createClient(
                     <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-5"><h4 class="font-bold text-amber-800"><i class="fas fa-link mr-2"></i>One record, multiple views</h4><p class="text-sm text-amber-900/80 mt-2">Use the linked Case Digests and Doctrine Matrix tabs for master records. Use notebook sections 05 and 06 only for personal analysis, professor comments, and class synthesis.</p></div>
                 </div></div>`;
             }
+            showSyllabusTracker() {
+    this.activeNoteId = null;
+    this.activePanel = 'syllabus';
+    this.refreshTabStyles();
+    const area = document.getElementById('notebook-editor-area');
+    if (!area) return;
+
+    // Calculate Stats
+    const total = this.syllabusData.length;
+    const completed = this.syllabusData.filter(i => i.status === 'completed' || i.status === 'mastered').length;
+    const inProgress = this.syllabusData.filter(i => i.status === 'in_progress').length;
+    const mastered = this.syllabusData.filter(i => i.status === 'mastered').length;
+    const progressPercent = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+    // Group by Exam Tag
+    const groups = { midterm: [], finals: [], quiz: [], general: [] };
+    this.syllabusData.forEach(item => {
+        const tag = item.examTag || 'general';
+        if (groups[tag]) groups[tag].push(item);
+        else groups.general.push(item);
+    });
+
+    // Sort groups by date
+    Object.values(groups).forEach(group => group.sort((a, b) => (a.date || '').localeCompare(b.date || '')));
+
+    const renderGroup = (title, icon, items, colorClass) => {
+        if (!items.length) return '';
+        const rows = items.map(item => {
+            const statusColors = {
+                'not_started': 'border-slate-300 bg-white text-slate-500',
+                'in_progress': 'border-blue-400 bg-blue-50 text-blue-700',
+                'completed': 'border-green-400 bg-green-50 text-green-700',
+                'mastered': 'border-amber-400 bg-amber-50 text-amber-700'
+            };
+            const statusIcon = {
+                'not_started': 'far fa-circle',
+                'in_progress': 'fas fa-circle-notch fa-spin',
+                'completed': 'fas fa-check',
+                'mastered': 'fas fa-star'
+            };
+            const priorityBadge = item.priority === 'bar' ? '<span class="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded font-bold">BAR FAVORITE</span>' : '';
+            const dateDisplay = item.date ? `<span class="text-xs text-slate-500"><i class="far fa-calendar mr-1"></i>${item.date}</span>` : '';
+            
+            return `<div class="flex items-center justify-between p-4 border rounded-xl mb-3 ${statusColors[item.status] || statusColors.not_started} transition hover:shadow-md">
+                <div class="flex items-center gap-4 flex-1">
+                    <button onclick="window.appHandlers.cycleSyllabusStatus('${item.id}', '${item.status}')" class="text-xl w-8 h-8 flex items-center justify-center rounded-full border-2 border-current hover:scale-110 transition">
+                        <i class="${statusIcon[item.status] || 'far fa-circle'}"></i>
+                    </button>
+                    <div>
+                        <p class="font-bold text-slate-800">${Security.escapeHTML(item.title)}</p>
+                        <div class="flex gap-2 mt-1 items-center">${dateDisplay}${priorityBadge}</div>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.appHandlers.addNoteForSyllabus('${Security.escapeHTML(item.title.replace(/'/g, "\\'"))}')" class="text-slate-400 hover:text-blue-600 p-2" title="Create Note"><i class="fas fa-pen-to-square"></i></button>
+                    <button onclick="window.appHandlers.editSyllabusItem('${item.id}')" class="text-slate-400 hover:text-amber-600 p-2"><i class="fas fa-pen"></i></button>
+                    <button onclick="window.appHandlers.deleteSyllabusItem('${item.id}')" class="text-slate-400 hover:text-red-600 p-2"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`;
+        }).join('');
+        return `<div class="mb-8"><h4 class="font-bold text-slate-700 mb-4 flex items-center gap-2 text-lg"><i class="fas ${icon} ${colorClass}"></i>${title} <span class="text-sm font-normal text-slate-400 ml-2">(${items.length})</span></h4>${rows}</div>`;
+    };
+
+    area.innerHTML = `<div class="p-8 overflow-y-auto h-full">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex justify-between items-end mb-6">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Syllabus Tracker</h3>
+                    <p class="text-sm text-slate-500">Track progress, exams, and linked notes.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="window.appHandlers.uploadSyllabusPDF()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-file-pdf mr-2"></i>Upload Syllabus</button>
+                    <button onclick="window.appHandlers.addSyllabusItem()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>Add Topic</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+                <div class="flex justify-between text-sm font-bold text-slate-700 mb-2">
+                    <span>Course Mastery Progress</span>
+                    <span>${progressPercent}%</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-3 mb-6 overflow-hidden">
+                    <div class="bg-gradient-to-r from-blue-500 to-emerald-500 h-3 rounded-full transition-all duration-700" style="width: ${progressPercent}%"></div>
+                </div>
+                <div class="grid grid-cols-4 gap-4 text-center">
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100"><p class="text-2xl font-bold text-slate-800">${total}</p><p class="text-xs text-slate-500 font-bold uppercase">Total Topics</p></div>
+                    <div class="bg-blue-50 p-3 rounded-lg border border-blue-100"><p class="text-2xl font-bold text-blue-700">${inProgress}</p><p class="text-xs text-blue-600 font-bold uppercase">In Progress</p></div>
+                    <div class="bg-green-50 p-3 rounded-lg border border-green-100"><p class="text-2xl font-bold text-green-700">${completed - mastered}</p><p class="text-xs text-green-600 font-bold uppercase">Completed</p></div>
+                    <div class="bg-amber-50 p-3 rounded-lg border border-amber-100"><p class="text-2xl font-bold text-amber-700">${mastered}</p><p class="text-xs text-amber-600 font-bold uppercase">Mastered</p></div>
+                </div>
+            </div>
+
+            ${renderGroup('Midterm Coverage', 'fa-file-lines', groups.midterm, 'text-blue-600')}
+            ${renderGroup('Finals Coverage', 'fa-graduation-cap', groups.finals, 'text-purple-600')}
+            ${renderGroup('Quizzes & Recitations', 'fa-microphone', groups.quiz, 'text-amber-600')}
+            ${renderGroup('General Topics', 'fa-book', groups.general, 'text-slate-600')}
+            
+            ${total === 0 ? '<div class="text-center py-12 text-slate-400"><i class="fas fa-list-check text-5xl mb-4 opacity-30"></i><p class="font-bold">No syllabus items yet.</p><p class="text-sm mt-2">Upload your syllabus PDF or add topics manually to get started.</p></div>' : ''}
+        </div>
+    </div>`;
+}
             showMaterials() {
                 this.activeNoteId = null;
                 this.activePanel = 'materials';
@@ -3101,6 +3213,140 @@ const cleanAiJsonResponse = (text) => {
         }, 100);
     }
 },
+            openSyllabusTracker: () => {
+    views.subject_notebook.activePanel = 'syllabus';
+    views.subject_notebook.showSyllabusTracker();
+},
+addSyllabusItem: () => {
+    Modal.show({
+        title: '<i class="fas fa-plus text-blue-600"></i> Add Syllabus Topic',
+        content: `
+            <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic Title</label><input id="syl-title" class="w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g., Article 1156 - Obligations"></div>
+            <div class="mt-3 grid grid-cols-2 gap-3">
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Date (Optional)</label><input type="date" id="syl-date" class="w-full p-2 border border-slate-300 rounded-lg"></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Exam Coverage</label><select id="syl-tag" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="general">General</option><option value="midterm">Midterm</option><option value="finals">Finals</option><option value="quiz">Quiz</option></select></div>
+            </div>
+            <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Priority</label><select id="syl-priority" class="w-full p-2 border border-slate-300 rounded-lg bg-white"><option value="regular">Regular</option><option value="high">High Yield</option><option value="bar">Bar Favorite</option></select></div>
+        `,
+        onSubmit: async () => {
+            const title = document.getElementById('syl-title').value.trim();
+            if (!title) throw new Error('Title is required');
+            await AppDB.add('syllabus_items', {
+                subjectId: views.subject_notebook.subjectId,
+                title,
+                date: document.getElementById('syl-date').value,
+                examTag: document.getElementById('syl-tag').value,
+                priority: document.getElementById('syl-priority').value,
+                status: 'not_started',
+                created: serverTimestamp()
+            });
+        }
+    });
+},
+editSyllabusItem: (id) => {
+    const item = views.subject_notebook.syllabusData.find(i => i.id === id);
+    if (!item) return;
+    Modal.show({
+        title: '<i class="fas fa-pen text-amber-500"></i> Edit Topic',
+        content: `
+            <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic Title</label><input id="edit-syl-title" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(item.title)}"></div>
+            <div class="mt-3 grid grid-cols-2 gap-3">
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" id="edit-syl-date" class="w-full p-2 border border-slate-300 rounded-lg" value="${item.date || ''}"></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Exam Coverage</label><select id="edit-syl-tag" class="w-full p-2 border border-slate-300 rounded-lg bg-white">
+                    <option value="general" ${item.examTag === 'general' ? 'selected' : ''}>General</option>
+                    <option value="midterm" ${item.examTag === 'midterm' ? 'selected' : ''}>Midterm</option>
+                    <option value="finals" ${item.examTag === 'finals' ? 'selected' : ''}>Finals</option>
+                    <option value="quiz" ${item.examTag === 'quiz' ? 'selected' : ''}>Quiz</option>
+                </select></div>
+            </div>
+        `,
+        submitText: 'Update',
+        submitClass: 'px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-bold',
+        onSubmit: async () => {
+            await AppDB.update('syllabus_items', id, {
+                title: document.getElementById('edit-syl-title').value.trim(),
+                date: document.getElementById('edit-syl-date').value,
+                examTag: document.getElementById('edit-syl-tag').value,
+                updated: serverTimestamp()
+            });
+        }
+    });
+},
+deleteSyllabusItem: (id) => {
+    Modal.show({
+        title: '<i class="fas fa-trash text-red-500"></i> Delete Topic',
+        content: '<p>Remove this topic from your syllabus tracker?</p>',
+        submitText: 'Delete',
+        submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg',
+        onSubmit: async () => await AppDB.delete('syllabus_items', id)
+    });
+},
+cycleSyllabusStatus: async (id, currentStatus) => {
+    const order = ['not_started', 'in_progress', 'completed', 'mastered'];
+    const nextIndex = (order.indexOf(currentStatus) + 1) % order.length;
+    await AppDB.update('syllabus_items', id, { status: order[nextIndex], updated: serverTimestamp() });
+},
+addNoteForSyllabus: (topicTitle) => {
+    // Pre-fills the note title with the syllabus topic
+    window.appHandlers.addNote(views.subject_notebook.subjectId, 'class_notes');
+    setTimeout(() => {
+        const titleInput = document.getElementById('note-title');
+        if (titleInput) titleInput.value = topicTitle;
+    }, 100);
+},
+uploadSyllabusPDF: () => {
+    Modal.show({
+        title: '<i class="fas fa-file-pdf text-red-500"></i> Upload Syllabus PDF',
+        content: '<div class="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 mb-4"><i class="fas fa-info-circle mr-1"></i>Lex will extract the text and use AI to identify topics, dates, and exam coverage automatically.</div><input type="file" id="syllabus-upload-input" accept=".pdf" class="w-full p-2 border border-slate-300 rounded-lg">',
+        submitText: 'Analyze & Import',
+        submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
+        onSubmit: async () => {
+            const fileInput = document.getElementById('syllabus-upload-input');
+            const file = fileInput.files[0];
+            if (!file) throw new Error('Please select a PDF file.');
+            
+            // 1. Extract Text
+            const extracted = await MaterialUtils.extractPdf(file);
+            const fullText = extracted.pages.map(p => p.text).join(' ');
+            if (!fullText.trim()) throw new Error('Could not extract text from PDF. It might be a scanned image.');
+
+            // 2. AI Parsing
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (!apiKey) throw new Error('Please set your Gemini API Key in AI Search first.');
+            
+            const prompt = `You are an academic assistant. Extract the course schedule, topics, and exam dates from the following syllabus text.
+Return a JSON array of objects. Each object must have:
+- "title": string (the topic or lecture name)
+- "date": string (YYYY-MM-DD format if a date is mentioned, otherwise null)
+- "type": string ("lecture", "exam", "quiz", "reading", or "other")
+- "examTag": string ("midterm", "finals", "quiz", or "general")
+
+Text:
+${fullText.substring(0, 12000)}`;
+
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: prompt }] }] });
+            let jsonString = cleanAiJsonResponse(GeminiService.text(data));
+            const items = JSON.parse(jsonString);
+
+            if (!Array.isArray(items) || items.length === 0) throw new Error('AI could not identify any topics in this syllabus.');
+
+            // 3. Save to DB
+            const subjectId = views.subject_notebook.subjectId;
+            for (const item of items) {
+                await AppDB.add('syllabus_items', {
+                    subjectId,
+                    title: item.title,
+                    date: item.date,
+                    examTag: item.examTag || 'general',
+                    priority: item.type === 'exam' ? 'high' : 'regular',
+                    status: 'not_started',
+                    created: serverTimestamp()
+                });
+            }
+            alert(`Successfully imported ${items.length} topics to your Syllabus Tracker!`);
+        }
+    });
+}
 deleteAdvocacyDraft: (id) => {
     Modal.show({ 
         title: '<i class="fas fa-trash text-red-500"></i> Delete Draft', 
