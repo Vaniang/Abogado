@@ -58,13 +58,18 @@
           padding-left: 1.5rem;
         }
         
+        #note-content-editor p,
+        #note-content-editor div,
         #note-content-editor li {
-          margin-bottom: 0.5rem;
-          line-height: 1.6;
+            line-height: 1.6 !important;
+            margin: 0.5em 0 !important;
+            position: static !important;
+            transform: none !important;
         }
+        
         #note-content-editor * {
-          max-width: 100%;
-          box-sizing: border-box;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .material-generated-content h1 { font-family: 'Merriweather', serif; font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 0.65rem; color: #1e293b; }
         .material-generated-content h2 { font-family: 'Merriweather', serif; font-size: 1.25rem; font-weight: 700; margin: 1.2rem 0 0.6rem; color: #1e3a8a; }
@@ -6269,39 +6274,44 @@ sendBarExamMessage: async () => {
                 editor.innerHTML = displayContent;
 
                 // --- PASTE FORMATTING FIX ---
+// --- IMPROVED FORMATTING FIX ---
 editor.addEventListener('paste', (e) => {
     const clipboardData = e.clipboardData || window.clipboardData;
     const pastedHtml = clipboardData.getData('text/html');
+    const plainText = clipboardData.getData('text/plain');
     
     // Only intercept if there is actual HTML being pasted
     if (pastedHtml) {
         e.preventDefault(); // Stop the default paste behavior
-        
-        // 1. SECURITY: Sanitize the HTML to prevent XSS (removes <script>, <iframe>, etc.)
-        // Your app already loads DOMPurify, so we leverage it here.
-        const cleanHtml = window.DOMPurify ? window.DOMPurify.sanitize(pastedHtml, {
-            ALLOWED_TAGS: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'mark', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
-            ALLOWED_ATTR: ['style'] // We allow 'style' temporarily so we can clean it manually below
-        }) : pastedHtml;
-
         const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = cleanHtml;
-
-        // 2. Clean up the pasted HTML to preserve bullets, numbers, and basic formatting
+        tempDiv.innerHTML = pastedHtml;
+        
+        // Clean up the pasted HTML to preserve bullets, numbers, and basic formatting
         tempDiv.querySelectorAll('*').forEach(el => {
             let style = el.getAttribute('style') || '';
             
-            // Remove MS Office / PDF junk styles
+            // 1. Remove MS Office / PDF junk styles
             style = style.replace(/mso-[^;:]+:[^;]+;?/gi, '');
-            // Remove list-style overrides that hide bullets/numbers
+            
+            // 2. Remove list-style overrides that hide bullets/numbers
             style = style.replace(/list-style-type\s*:\s*none;?/gi, '');
             style = style.replace(/list-style\s*:[^;]+;?/gi, '');
-            // Remove text-indent which messes up list alignment
+            
+            // 3. Remove text-indent which messes up list alignment
             style = style.replace(/text-indent\s*:[^;]+;?/gi, '');
             
-            // Optional: Uncomment these if you want to force the editor's font/size
-            // style = style.replace(/font-family\s*:[^;]+;?/gi, '');
-            // style = style = style.replace(/font-size\s*:[^;]+;?/gi, '');
+            // 4. CRITICAL FIX: Remove line-height, position, and transform that cause overlapping
+            style = style.replace(/line-height\s*:[^;]+;?/gi, '');
+            style = style.replace(/position\s*:[^;]+;?/gi, '');
+            style = style.replace(/transform\s*:[^;]+;?/gi, '');
+            style = style.replace(/top\s*:[^;]+;?/gi, '');
+            style = style.replace(/left\s*:[^;]+;?/gi, '');
+            style = style.replace(/right\s*:[^;]+;?/gi, '');
+            style = style.replace(/bottom\s*:[^;]+;?/gi, '');
+            
+            // 5. Normalize margins and padding
+            style = style.replace(/margin[^;]*:\s*0[^;]*;?/gi, 'margin: 0;');
+            style = style.replace(/padding[^;]*:\s*0[^;]*;?/gi, 'padding: 0;');
             
             if (style.trim()) {
                 el.setAttribute('style', style.trim());
@@ -6309,12 +6319,19 @@ editor.addEventListener('paste', (e) => {
                 el.removeAttribute('style');
             }
             
-            // 3. Remove external classes and IDs to prevent CSS conflicts
+            // 6. Remove external classes and IDs to prevent CSS conflicts
             el.removeAttribute('class');
             el.removeAttribute('id');
+            
+            // 7. Convert divs to paragraphs for better flow
+            if (el.tagName === 'DIV' && !el.querySelector('p, br')) {
+                const p = document.createElement('p');
+                p.innerHTML = el.innerHTML;
+                el.parentNode.replaceChild(p, el);
+            }
         });
-
-        // 4. Insert the cleaned HTML using execCommand to preserve cursor position and undo history
+        
+        // Insert the cleaned HTML using execCommand to preserve cursor position and undo history
         document.execCommand('insertHTML', false, tempDiv.innerHTML);
     }
 });
