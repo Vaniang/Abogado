@@ -50,43 +50,44 @@
         mark { background-color: #fde68a; padding: 0.1rem 0.25rem; border-radius: 0.25rem; font-weight: 600; color: #1e293b; }
         [contenteditable]:empty:before { content: "Start typing your notes here..."; color: #cbd5e1; cursor: text; }
         
-        /* NEW: Restore Bullet Points and Numbers inside the Note Editor */
-           /* V2.9.2 — Universal child reset to prevent AI/paste overlapping */
-            #note-content-editor *,
-            #note-content-editor p,
-            #note-content-editor div,
-            #note-content-editor li,
-            #note-content-editor h1,
-            #note-content-editor h2,
-            #note-content-editor h3,
-            #note-content-editor h4,
-            #note-content-editor h5,
-            #note-content-editor h6,
-            #note-content-editor span,
-            #note-content-editor section,
-            #note-content-editor article,
-            #note-content-editor blockquote,
-            #note-content-editor table,
-            #note-content-editor tr,
-            #note-content-editor td,
-            #note-content-editor th,
-            #note-content-editor ul,
-            #note-content-editor ol {
-                line-height: 1.6 !important;
-                margin: 0.5em 0 !important;
-                position: static !important;
-                transform: none !important;
-                top: auto !important;
-                left: auto !important;
-                right: auto !important;
-                bottom: auto !important;
-                display: block !important;
-                float: none !important;
-                clear: none !important;
-                overflow: visible !important;
-                max-width: 100% !important;
-                box-sizing: border-box;
-            }
+       /* V2.9.2 — Universal child reset to prevent AI/paste overlapping */
+#note-content-editor *,
+#note-content-editor p,
+#note-content-editor div,
+#note-content-editor li,
+#note-content-editor h1,
+#note-content-editor h2,
+#note-content-editor h3,
+#note-content-editor h4,
+#note-content-editor h5,
+#note-content-editor h6,
+#note-content-editor span,
+#note-content-editor section,
+#note-content-editor article,
+#note-content-editor blockquote,
+#note-content-editor table,
+#note-content-editor tr,
+#note-content-editor td,
+#note-content-editor th,
+#note-content-editor ul,
+#note-content-editor ol {
+  line-height: 1.6 !important;
+  margin: 0.5em 0 !important;
+  position: static !important;
+  transform: none !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  display: block !important;
+  float: none !important;
+  clear: none !important;
+  overflow: visible !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  white-space: normal !important; /* ADD THIS */
+  word-wrap: break-word; /* ADD THIS */
+}
             /* Keep inline elements inline */
             #note-content-editor span,
             #note-content-editor strong,
@@ -6339,7 +6340,7 @@ sendBarExamMessage: async () => {
                             <button onclick="window.appHandlers.formatText('justifyRight')" class="w-8 h-8 rounded hover:bg-slate-100 text-slate-600 transition" title="Align Right"><i class="fas fa-align-right"></i></button>
                         </div>
 
-                        <div id="note-content-editor" contenteditable="true" class="flex-1 w-full border-none outline-none overflow-y-auto text-slate-700 leading-relaxed text-base font-sans focus:ring-0 bg-transparent" style="min-height: 200px;"></div>
+                        <div id="note-content-editor" contenteditable="true" class="flex-1 w-full border-none outline-none overflow-y-auto text-slate-700 leading-relaxed text-base font-sans focus:ring-0 bg-transparent" style="min-height: 200px; line-height: 1.6; white-space: normal; word-wrap: break-word; overflow-wrap: break-word;"></div>
                         
                         <div class="mt-4 flex justify-between items-center pt-4 border-t border-slate-100">
                             <p class="text-xs text-slate-400 italic">Changes are saved automatically.</p>
@@ -6363,6 +6364,18 @@ editor.addEventListener('paste', (e) => {
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = pastedHtml;
         
+   editor.addEventListener('paste', (e) => {
+    const clipboardData = e.clipboardData || window.clipboardData;
+    const pastedHtml = clipboardData.getData('text/html');
+    const plainText = clipboardData.getData('text/plain');
+
+    // Only intercept if there is actual HTML being pasted
+    if (pastedHtml) {
+        e.preventDefault(); // Stop the default paste behavior
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = pastedHtml;
+
         // Clean up the pasted HTML to preserve bullets, numbers, and basic formatting
         tempDiv.querySelectorAll('*').forEach(el => {
             let style = el.getAttribute('style') || '';
@@ -6370,9 +6383,10 @@ editor.addEventListener('paste', (e) => {
             // 1. Remove MS Office / PDF junk styles
             style = style.replace(/mso-[^;:]+:[^;]+;?/gi, '');
             
-            // 2. Remove list-style overrides that hide bullets/numbers
+            // 2. FIX: ONLY remove list-style if it explicitly hides bullets/numbers. 
+            // Do NOT strip valid list styles (like 'disc' or 'decimal').
             style = style.replace(/list-style-type\s*:\s*none;?/gi, '');
-            style = style.replace(/list-style\s*:[^;]+;?/gi, '');
+            style = style.replace(/list-style\s*:\s*none;?/gi, '');
             
             // 3. Remove text-indent which messes up list alignment
             style = style.replace(/text-indent\s*:[^;]+;?/gi, '');
@@ -6386,9 +6400,10 @@ editor.addEventListener('paste', (e) => {
             style = style.replace(/right\s*:[^;]+;?/gi, '');
             style = style.replace(/bottom\s*:[^;]+;?/gi, '');
             
-            // 5. Normalize margins and padding
-            style = style.replace(/margin[^;]*:\s*0[^;]*;?/gi, 'margin: 0;');
-            style = style.replace(/padding[^;]*:\s*0[^;]*;?/gi, 'padding: 0;');
+            // 5. FIX: Safely remove ALL inline margins/paddings to let your CSS !important rules handle spacing.
+            // The old regex dangerously turned "margin-top: 0" into "margin: 0", squishing everything.
+            style = style.replace(/margin\s*:[^;]+;?/gi, '');
+            style = style.replace(/padding\s*:[^;]+;?/gi, '');
             
             if (style.trim()) {
                 el.setAttribute('style', style.trim());
@@ -6400,13 +6415,18 @@ editor.addEventListener('paste', (e) => {
             el.removeAttribute('class');
             el.removeAttribute('id');
             
-            // 7. Convert divs to paragraphs for better flow
-            if (el.tagName === 'DIV' && !el.querySelector('p, br')) {
+            // 7. FIX: Convert divs to paragraphs, BUT exclude structural elements like lists, tables, and headings
+            if (el.tagName === 'DIV' && !el.querySelector('p, br, ul, ol, table, h1, h2, h3, h4, h5, h6')) {
                 const p = document.createElement('p');
                 p.innerHTML = el.innerHTML;
                 el.parentNode.replaceChild(p, el);
             }
         });
+
+        // Insert the cleaned HTML using execCommand to preserve cursor position and undo history
+        document.execCommand('insertHTML', false, tempDiv.innerHTML);
+    }
+});
         
         // Insert the cleaned HTML using execCommand to preserve cursor position and undo history
         document.execCommand('insertHTML', false, tempDiv.innerHTML);
