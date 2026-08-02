@@ -341,6 +341,34 @@
     #material-assistant-output table { width:100%; border-collapse:collapse; }
     #material-assistant-output th,
     #material-assistant-output td { border:1px solid #ddd; padding:8px; }
+        /* Update the case digest card layout */
+.case-digest-card {
+  display: grid;
+  grid-template-columns: 1fr 2fr; /* Adjust ratio - more space for content */
+  gap: 1.5rem;
+  align-items: start;
+}
+
+/* Make citation more compact */
+.case-citation-block {
+  background: #fef3c7;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  max-height: 200px; /* Limit height */
+  overflow-y: auto;
+}
+
+/* Ensure recitation gist doesn't overflow */
+.recitation-gist {
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  padding: 1rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex overflow-hidden">
