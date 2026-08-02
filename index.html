@@ -51,8 +51,27 @@
         [contenteditable]:empty:before { content: "Start typing your notes here..."; color: #cbd5e1; cursor: text; }
         
        /* V2.9.2 — Universal child reset to prevent AI/paste overlapping */
-#note-content-editor *,
-#note-content-editor p,
+/* Force proper display for all elements in editor */
+#note-content-editor * {
+    position: static !important;
+    transform: none !important;
+    line-height: inherit !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: inline !important;
+}
+
+#note-content-editor p {
+    display: block !important;
+    margin: 0.5em 0 !important;
+    line-height: 1.6 !important;
+}
+
+#note-content-editor br {
+    display: block !important;
+    content: "" !important;
+    margin: 0.5em 0 !important;
+}
 #note-content-editor div,
 #note-content-editor li,
 #note-content-editor h1,
@@ -261,14 +280,14 @@
             .subject-notebook-shell .subject-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
             .subject-notebook-shell .subject-tabs button { white-space: nowrap; }
             #note-content-editor {
-              padding: 1rem !important;
-              font-size: .95rem;
-              line-height: 1.6 !important; /* Add proper line height */
-              white-space: normal !important; /* Allow normal text wrapping */
-              word-wrap: break-word; /* Break long words */
-              overflow-wrap: break-word; /* Modern browser support */
-              text-wrap: wrap; /* Ensure text wraps properly */
-            }
+            padding: 1rem !important;
+            font-size: .95rem;
+            line-height: 1.6 !important;
+            white-space: normal !important;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            text-wrap: wrap;
+        }
 
         @media (min-width: 768px) and (max-width: 1023px) {
             #content-area { padding: 1.5rem; }
@@ -6352,87 +6371,40 @@ sendBarExamMessage: async () => {
                 editor.innerHTML = sanitizeEditorContent(displayContent);
 
                 // --- PASTE FORMATTING FIX ---
-// --- IMPROVED FORMATTING FIX ---
 editor.addEventListener('paste', (e) => {
     const clipboardData = e.clipboardData || window.clipboardData;
     const pastedHtml = clipboardData.getData('text/html');
-    const plainText = clipboardData.getData('text/plain');
     
-    // Only intercept if there is actual HTML being pasted
     if (pastedHtml) {
-        e.preventDefault(); // Stop the default paste behavior
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = pastedHtml;
-        
-   editor.addEventListener('paste', (e) => {
-    const clipboardData = e.clipboardData || window.clipboardData;
-    const pastedHtml = clipboardData.getData('text/html');
-    const plainText = clipboardData.getData('text/plain');
-
-    // Only intercept if there is actual HTML being pasted
-    if (pastedHtml) {
-        e.preventDefault(); // Stop the default paste behavior
+        e.preventDefault();
         
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = pastedHtml;
-
-        // Clean up the pasted HTML to preserve bullets, numbers, and basic formatting
+        
+        // Aggressively clean ALL elements
         tempDiv.querySelectorAll('*').forEach(el => {
-            let style = el.getAttribute('style') || '';
+            // Remove ALL inline styles
+            el.removeAttribute('style');
             
-            // 1. Remove MS Office / PDF junk styles
-            style = style.replace(/mso-[^;:]+:[^;]+;?/gi, '');
-            
-            // 2. FIX: ONLY remove list-style if it explicitly hides bullets/numbers. 
-            // Do NOT strip valid list styles (like 'disc' or 'decimal').
-            style = style.replace(/list-style-type\s*:\s*none;?/gi, '');
-            style = style.replace(/list-style\s*:\s*none;?/gi, '');
-            
-            // 3. Remove text-indent which messes up list alignment
-            style = style.replace(/text-indent\s*:[^;]+;?/gi, '');
-            
-            // 4. CRITICAL FIX: Remove line-height, position, and transform that cause overlapping
-            style = style.replace(/line-height\s*:[^;]+;?/gi, '');
-            style = style.replace(/position\s*:[^;]+;?/gi, '');
-            style = style.replace(/transform\s*:[^;]+;?/gi, '');
-            style = style.replace(/top\s*:[^;]+;?/gi, '');
-            style = style.replace(/left\s*:[^;]+;?/gi, '');
-            style = style.replace(/right\s*:[^;]+;?/gi, '');
-            style = style.replace(/bottom\s*:[^;]+;?/gi, '');
-            
-            // 5. FIX: Safely remove ALL inline margins/paddings to let your CSS !important rules handle spacing.
-            // The old regex dangerously turned "margin-top: 0" into "margin: 0", squishing everything.
-            style = style.replace(/margin\s*:[^;]+;?/gi, '');
-            style = style.replace(/padding\s*:[^;]+;?/gi, '');
-            
-            if (style.trim()) {
-                el.setAttribute('style', style.trim());
-            } else {
-                el.removeAttribute('style');
-            }
-            
-            // 6. Remove external classes and IDs to prevent CSS conflicts
+            // Remove classes and IDs
             el.removeAttribute('class');
             el.removeAttribute('id');
             
-            // 7. FIX: Convert divs to paragraphs, BUT exclude structural elements like lists, tables, and headings
-            if (el.tagName === 'DIV' && !el.querySelector('p, br, ul, ol, table, h1, h2, h3, h4, h5, h6')) {
+            // Convert problematic elements
+            if (el.tagName === 'DIV' && !el.querySelector('p, br, h1, h2, h3, h4, h5, h6, ul, ol, table')) {
                 const p = document.createElement('p');
                 p.innerHTML = el.innerHTML;
                 el.parentNode.replaceChild(p, el);
             }
         });
-
-        // Insert the cleaned HTML using execCommand to preserve cursor position and undo history
-        document.execCommand('insertHTML', false, tempDiv.innerHTML);
-    }
-});
         
-        // Insert the cleaned HTML using execCommand to preserve cursor position and undo history
-        document.execCommand('insertHTML', false, tempDiv.innerHTML);
+        // Get the cleaned text and re-wrap it properly
+        const cleanedHtml = tempDiv.innerHTML;
+        
+        // Insert with proper formatting
+        document.execCommand('insertHTML', false, cleanedHtml);
     }
-});
-                
+});       
                 // --- SAFE AUTO-SAVE LOGIC ---
                 const doneTypingInterval = 1000;
                 const triggerAutoSave = () => {
