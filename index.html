@@ -51,26 +51,66 @@
         [contenteditable]:empty:before { content: "Start typing your notes here..."; color: #cbd5e1; cursor: text; }
         
         /* NEW: Restore Bullet Points and Numbers inside the Note Editor */
-       #note-content-editor ol,
-        #note-content-editor ul {
-          line-height: 1.8 !important;
-          margin: 0.5em 0;
-          padding-left: 1.5rem;
-        }
-        
-        #note-content-editor p,
-        #note-content-editor div,
-        #note-content-editor li {
-            line-height: 1.6 !important;
-            margin: 0.5em 0 !important;
-            position: static !important;
-            transform: none !important;
-        }
-        
-        #note-content-editor * {
-            max-width: 100%;
-            box-sizing: border-box;
-        }
+           /* V2.9.2 — Universal child reset to prevent AI/paste overlapping */
+            #note-content-editor *,
+            #note-content-editor p,
+            #note-content-editor div,
+            #note-content-editor li,
+            #note-content-editor h1,
+            #note-content-editor h2,
+            #note-content-editor h3,
+            #note-content-editor h4,
+            #note-content-editor h5,
+            #note-content-editor h6,
+            #note-content-editor span,
+            #note-content-editor section,
+            #note-content-editor article,
+            #note-content-editor blockquote,
+            #note-content-editor table,
+            #note-content-editor tr,
+            #note-content-editor td,
+            #note-content-editor th,
+            #note-content-editor ul,
+            #note-content-editor ol {
+                line-height: 1.6 !important;
+                margin: 0.5em 0 !important;
+                position: static !important;
+                transform: none !important;
+                top: auto !important;
+                left: auto !important;
+                right: auto !important;
+                bottom: auto !important;
+                display: block !important;
+                float: none !important;
+                clear: none !important;
+                overflow: visible !important;
+                max-width: 100% !important;
+                box-sizing: border-box;
+            }
+            /* Keep inline elements inline */
+            #note-content-editor span,
+            #note-content-editor strong,
+            #note-content-editor em,
+            #note-content-editor b,
+            #note-content-editor i,
+            #note-content-editor u,
+            #note-content-editor a,
+            #note-content-editor mark {
+                display: inline !important;
+            }
+            #note-content-editor li {
+                display: list-item !important;
+            }
+            #note-content-editor table,
+            #note-content-editor tr,
+            #note-content-editor td,
+            #note-content-editor th {
+                display: table-row-group !important;
+            }
+            #note-content-editor table { display: table !important; }
+            #note-content-editor tr    { display: table-row !important; }
+            #note-content-editor td,
+            #note-content-editor th    { display: table-cell !important; }
         .material-generated-content h1 { font-family: 'Merriweather', serif; font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 0.65rem; color: #1e293b; }
         .material-generated-content h2 { font-family: 'Merriweather', serif; font-size: 1.25rem; font-weight: 700; margin: 1.2rem 0 0.6rem; color: #1e3a8a; }
         .material-generated-content h3, .material-generated-content h4 { font-weight: 700; margin: 1rem 0 0.45rem; color: #334155; }
@@ -3171,6 +3211,42 @@ const cleanAiJsonResponse = (text) => {
            MAIN APP HANDLERS OBJECT
            ========================================== */
         window.appHandlers = {
+            const sanitizeEditorContent = (html) => {
+    if (!html) return '';
+    const holder = document.createElement('div');
+    holder.innerHTML = html;
+    holder.querySelectorAll('*').forEach(el => {
+        let style = el.getAttribute('style') || '';
+        // Strip every style that can cause overlapping
+        style = style.replace(/position\s*:\s*[^;]+;?/gi, '');
+        style = style.replace(/transform\s*:[^;]+;?/gi, '');
+        style = style.replace(/line-height\s*:[^;]+;?/gi, '');
+        style = style.replace(/top\s*:[^;]+;?/gi, '');
+        style = style.replace(/left\s*:[^;]+;?/gi, '');
+        style = style.replace(/right\s*:[^;]+;?/gi, '');
+        style = style.replace(/bottom\s*:[^;]+;?/gi, '');
+        style = style.replace(/float\s*:[^;]+;?/gi, '');
+        style = style.replace(/clear\s*:[^;]+;?/gi, '');
+        style = style.replace(/overflow\s*:[^;]+;?/gi, '');
+        style = style.replace(/display\s*:[^;]+;?/gi, '');
+        style = style.replace(/mso-[^;:]+:[^;]+;?/gi, '');
+        style = style.replace(/text-indent\s*:[^;]+;?/gi, '');
+        if (style.trim()) {
+            el.setAttribute('style', style.trim());
+        } else {
+            el.removeAttribute('style');
+        }
+        el.removeAttribute('class');
+        el.removeAttribute('id');
+        // Convert empty block wrappers to paragraphs
+        if (el.tagName === 'DIV' && !el.querySelector('p, br, h1, h2, h3, h4, h5, h6, ul, ol, table')) {
+            const p = document.createElement('p');
+            p.innerHTML = el.innerHTML;
+            el.parentNode.replaceChild(p, el);
+        }
+    });
+    return holder.innerHTML;
+};
             clearAiSearch: () => {
                 views.ai_search.searchHistory = []; 
                 views.ai_search.chatHistory = []; 
@@ -6271,7 +6347,7 @@ sendBarExamMessage: async () => {
                 
                 const editor = document.getElementById('note-content-editor');
                 const titleEditor = document.getElementById('note-title-editor');
-                editor.innerHTML = displayContent;
+                editor.innerHTML = sanitizeEditorContent(displayContent);
 
                 // --- PASTE FORMATTING FIX ---
 // --- IMPROVED FORMATTING FIX ---
@@ -6365,7 +6441,10 @@ editor.addEventListener('paste', (e) => {
             saveNote: async (noteId, isAutoSave = false, capturedSnapshot = null) => { 
                 const titleEl = document.getElementById('note-title-editor');
                 const contentEl = document.getElementById('note-content-editor');
-                const snapshot = capturedSnapshot || (titleEl && contentEl ? { title: titleEl.value.trim() || 'Untitled Page', content: contentEl.innerHTML } : null);
+                const rawContent = capturedSnapshot ? capturedSnapshot.content : (contentEl ? contentEl.innerHTML : '');
+                const snapshot = capturedSnapshot && capturedSnapshot.title
+                    ? capturedSnapshot
+                    : (titleEl && contentEl ? { title: titleEl.value.trim() || 'Untitled Page', content: sanitizeEditorContent(rawContent) } : null);
                 if (!snapshot) return;
                 const status = views.subject_notebook.activeNoteId === noteId ? document.getElementById('note-save-status') : null;
                 
