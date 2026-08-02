@@ -2333,16 +2333,70 @@ const supabase = createClient(
                 const area = document.getElementById('notebook-editor-area'); if (!area) return;
                 const records = this.linkedDigests();
                 const cards = records.map(digest => {
-                    const topic = digest.topic || 'General';
-                    return `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                        <div class="p-5 flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                            <div class="min-w-0"><div class="flex flex-wrap gap-2 mb-2"><span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${Security.escapeHTML(topic)}</span>${Array.isArray(digest.subjectIds) && digest.subjectIds.length > 1 ? `<span class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">Linked to ${digest.subjectIds.length} subjects</span>` : ''}</div><h4 class="text-lg font-bold text-slate-800 serif-text">${Security.escapeHTML(digest.title || 'Untitled Case')}</h4>${digest.citation ? `<p class="text-xs text-slate-500 mt-1">${Security.escapeHTML(digest.citation)}</p>` : ''}</div>
-                          <div class="flex flex-wrap gap-2 flex-shrink-0"><button onclick="window.appHandlers.printLinkedDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100" title="Print Digest"><i class="fas fa-print mr-1"></i>Print</button><button onclick="window.appHandlers.editLinkedDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-pen mr-1"></i>Edit</button><button onclick="window.appHandlers.unlinkDigestFromCurrentSubject('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200"><i class="fas fa-unlink mr-1"></i>Unlink</button><button onclick="window.appHandlers.deleteDigest('${digest.id}')" class="px-3 py-2 text-xs font-bold rounded-lg bg-red-50 text-red-600 hover:bg-red-100" title="Delete from all subjects"><i class="fas fa-trash"></i></button></div>
-                          ${digest.gist ? `<div class="px-5 pb-4 border-b border-slate-100"><div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r text-sm text-amber-900 flex gap-2 items-start"><i class="fas fa-bolt mt-1 text-amber-600"></i><div><span class="font-bold text-[10px] uppercase tracking-wider block mb-0.5 text-amber-700">Recitation Gist</span>${Security.escapeHTML(digest.gist)}</div></div></div>` : ''}
-                          </div>
-                        <details class="border-t border-slate-100 group"><summary class="cursor-pointer list-none px-5 py-3 text-sm font-bold text-blue-600 hover:bg-slate-50 flex items-center gap-2"><i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>Open Digest</summary><div class="p-5 pt-2 grid grid-cols-1 gap-4"><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Facts</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.facts || 'No facts recorded.')}</p></div><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Issue</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.issue || 'No issue recorded.')}</p></div><div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Ruling</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.ruling || 'No ruling recorded.')}</p></div>${digest.notes ? `<div class="bg-amber-50 border border-amber-100 rounded-lg p-4"><h5 class="text-xs font-bold uppercase tracking-wider text-amber-700">Personal Notes</h5><p class="text-sm text-amber-900 mt-1 whitespace-pre-wrap">${Security.escapeHTML(digest.notes)}</p></div>` : ''}</div></details>
-                    </div>`;
-                }).join('');
+  const topic = digest.topic || 'General';
+  // Split title for "v." formatting if possible
+  const titleParts = (digest.title || 'Untitled Case').split(/\s+v\.?\s+/i);
+  const plaintiff = titleParts[0] || 'Untitled';
+  const defendant = titleParts[1] || '';
+  const titleDisplay = defendant ? `${Security.escapeHTML(plaintiff)}<br>v.<br>${Security.escapeHTML(defendant)}` : Security.escapeHTML(digest.title || 'Untitled Case');
+
+  return `<div class="case-digest-card bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-5">
+    <!-- Left side - Citation (more compact) -->
+    <div class="case-citation-block bg-slate-50 p-4 rounded-lg flex flex-col h-full">
+      <div class="text-xs font-bold text-amber-800 mb-3">
+        <span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${Security.escapeHTML(topic)}</span>
+      </div>
+      <div class="space-y-1">
+        <button onclick="window.appHandlers.printLinkedDigest('${digest.id}')" class="flex items-center gap-2 p-2 rounded hover:bg-white/50 w-full text-left text-xs font-bold text-slate-600">
+          <i class="fas fa-print text-slate-400 w-4"></i> Print
+        </button>
+        <button onclick="window.appHandlers.editLinkedDigest('${digest.id}')" class="flex items-center gap-2 p-2 rounded hover:bg-white/50 w-full text-left text-xs font-bold text-slate-600">
+          <i class="fas fa-edit text-blue-600 w-4"></i> Edit
+        </button>
+        <button onclick="window.appHandlers.unlinkDigestFromCurrentSubject('${digest.id}')" class="flex items-center gap-2 p-2 rounded hover:bg-white/50 w-full text-left text-xs font-bold text-slate-600">
+          <i class="fas fa-unlink text-slate-600 w-4"></i> Unlink
+        </button>
+        <button onclick="window.appHandlers.deleteDigest('${digest.id}')" class="flex items-center gap-2 p-2 rounded hover:bg-red-50 w-full text-left text-xs font-bold text-red-600">
+          <i class="fas fa-trash text-red-500 w-4"></i> Delete
+        </button>
+      </div>
+      <div class="mt-4 font-serif text-lg font-bold text-slate-800 leading-tight flex-1">
+        ${titleDisplay}
+      </div>
+      ${digest.citation ? `<div class="mt-2 text-xs text-slate-500 font-medium">${Security.escapeHTML(digest.citation)}</div>` : ''}
+    </div>
+    
+    <!-- Right side - Recitation Gist & Details -->
+    <div class="flex flex-col gap-4 flex-1">
+      ${digest.gist ? `
+      <div class="recitation-gist bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
+        <div class="flex items-start gap-3">
+          <i class="fas fa-bolt text-amber-600 mt-1"></i>
+          <div>
+            <div class="text-xs font-bold uppercase tracking-wider text-amber-700 mb-1">
+              Recitation Gist
+            </div>
+            <p class="text-amber-900 leading-relaxed text-sm">
+              ${Security.escapeHTML(digest.gist)}
+            </p>
+          </div>
+        </div>
+      </div>` : ''}
+      
+      <details class="border border-slate-200 rounded-lg group bg-white flex-1">
+        <summary class="cursor-pointer list-none px-5 py-3 text-sm font-bold text-blue-600 hover:bg-slate-50 flex items-center gap-2 rounded-lg">
+          <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Full Digest
+        </summary>
+        <div class="p-5 pt-2 grid grid-cols-1 gap-4 border-t border-slate-100">
+          <div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Facts</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.facts || 'No facts recorded.')}</p></div>
+          <div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Issue</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.issue || 'No issue recorded.')}</p></div>
+          <div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Ruling</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.ruling || 'No ruling recorded.')}</p></div>
+          ${digest.notes ? `<div class="bg-amber-50 border border-amber-100 rounded-lg p-4"><h5 class="text-xs font-bold uppercase tracking-wider text-amber-700">Personal Notes</h5><p class="text-sm text-amber-900 mt-1 whitespace-pre-wrap">${Security.escapeHTML(digest.notes)}</p></div>` : ''}
+        </div>
+      </details>
+    </div>
+  </div>`;
+}).join('');
                 area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are master records from Consolidated Case Digests, displayed only when linked to this subject.</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
             }
         showDoctrines() {
