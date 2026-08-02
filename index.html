@@ -2334,66 +2334,71 @@ const supabase = createClient(
                 const records = this.linkedDigests();
                 const cards = records.map(digest => {
   const topic = digest.topic || 'General';
-  // Split title for "v." formatting if possible
   const titleParts = (digest.title || 'Untitled Case').split(/\s+v\.?\s+/i);
   const plaintiff = titleParts[0] || 'Untitled';
   const defendant = titleParts[1] || '';
-  const titleDisplay = defendant ? `${Security.escapeHTML(plaintiff)}<br>v.<br>${Security.escapeHTML(defendant)}` : Security.escapeHTML(digest.title || 'Untitled Case');
+  const titleDisplay = defendant 
+    ? `${Security.escapeHTML(plaintiff)} v. ${Security.escapeHTML(defendant)}` 
+    : Security.escapeHTML(digest.title || 'Untitled Case');
 
-  return `<div class="case-digest-card bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-5">
-    <!-- Left side - Citation (more compact) -->
-    <div class="case-citation-block bg-slate-50 p-4 rounded-lg flex flex-col h-full">
-      <div class="text-xs font-bold text-amber-800 mb-3">
-        <span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${Security.escapeHTML(topic)}</span>
+  // Parse citation for G.R. No. and Ponente (if available)
+  const citation = digest.citation || '';
+  const grMatch = citation.match(/G\.R\.\s*No\.\s*\d+/i);
+  const grNo = grMatch ? grMatch[0] : '';
+  const ponente = digest.ponente || 'N/A';
+
+  return `<div class="case-digest-card bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden" style="display: grid; grid-template-columns: 1fr 1fr; min-height: 280px;">
+    
+    <!-- LEFT COLUMN -->
+    <div class="p-5 flex flex-col justify-between border-r border-slate-200">
+      <div>
+        <!-- TITLE -->
+        <h4 class="text-lg font-bold text-slate-900 uppercase tracking-wide mb-2">
+          ${titleDisplay}
+        </h4>
+        
+        <!-- G.R. NO. | PONENTE -->
+        <p class="text-xs text-slate-600 font-medium mb-3">
+          <span class="font-bold">${grNo || 'G.R. No. N/A'}</span> 
+          <span class="mx-1 text-slate-400">|</span> 
+          <span>${Security.escapeHTML(ponente)}</span>
+        </p>
+        
+        <!-- ARTICLES / ISSUE -->
+        <div class="mb-4">
+          <span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase mr-1">
+            ${Security.escapeHTML(topic)}
+          </span>
+          ${digest.issue ? `<p class="text-xs text-slate-500 mt-2 italic">"${Security.escapeHTML(Utils.excerpt(digest.issue, 120))}"</p>` : ''}
+        </div>
       </div>
-      <div class="space-y-1">
-        <button onclick="window.appHandlers.printLinkedDigest('${digest.id}')" class="flex items-center gap-2 p-2 rounded hover:bg-white/50 w-full text-left text-xs font-bold text-slate-600">
-          <i class="fas fa-print text-slate-400 w-4"></i> Print
+      
+      <!-- BUTTONS (at bottom) -->
+      <div class="flex gap-2 mt-auto pt-3 border-t border-slate-100">
+        <button onclick="window.appHandlers.printLinkedDigest('${digest.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 text-xs font-bold text-slate-600 transition">
+          <i class="fas fa-print text-slate-400"></i> Print
         </button>
-        <button onclick="window.appHandlers.editLinkedDigest('${digest.id}')" class="flex items-center gap-2 p-2 rounded hover:bg-white/50 w-full text-left text-xs font-bold text-slate-600">
-          <i class="fas fa-edit text-blue-600 w-4"></i> Edit
+        <button onclick="window.appHandlers.editLinkedDigest('${digest.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-blue-50 text-xs font-bold text-blue-600 transition">
+          <i class="fas fa-edit"></i> Edit
         </button>
-        <button onclick="window.appHandlers.unlinkDigestFromCurrentSubject('${digest.id}')" class="flex items-center gap-2 p-2 rounded hover:bg-white/50 w-full text-left text-xs font-bold text-slate-600">
-          <i class="fas fa-unlink text-slate-600 w-4"></i> Unlink
+        <button onclick="window.appHandlers.unlinkDigestFromCurrentSubject('${digest.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 text-xs font-bold text-slate-600 transition">
+          <i class="fas fa-unlink"></i> Unlink
         </button>
-        <button onclick="window.appHandlers.deleteDigest('${digest.id}')" class="flex items-center gap-2 p-2 rounded hover:bg-red-50 w-full text-left text-xs font-bold text-red-600">
-          <i class="fas fa-trash text-red-500 w-4"></i> Delete
+        <button onclick="window.appHandlers.deleteDigest('${digest.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-50 text-xs font-bold text-red-600 transition ml-auto">
+          <i class="fas fa-trash"></i>
         </button>
       </div>
-      <div class="mt-4 font-serif text-lg font-bold text-slate-800 leading-tight flex-1">
-        ${titleDisplay}
-      </div>
-      ${digest.citation ? `<div class="mt-2 text-xs text-slate-500 font-medium">${Security.escapeHTML(digest.citation)}</div>` : ''}
     </div>
     
-    <!-- Right side - Recitation Gist & Details -->
-    <div class="flex flex-col gap-4 flex-1">
-      ${digest.gist ? `
-      <div class="recitation-gist bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
-        <div class="flex items-start gap-3">
-          <i class="fas fa-bolt text-amber-600 mt-1"></i>
-          <div>
-            <div class="text-xs font-bold uppercase tracking-wider text-amber-700 mb-1">
-              Recitation Gist
-            </div>
-            <p class="text-amber-900 leading-relaxed text-sm">
-              ${Security.escapeHTML(digest.gist)}
-            </p>
-          </div>
-        </div>
-      </div>` : ''}
-      
-      <details class="border border-slate-200 rounded-lg group bg-white flex-1">
-        <summary class="cursor-pointer list-none px-5 py-3 text-sm font-bold text-blue-600 hover:bg-slate-50 flex items-center gap-2 rounded-lg">
-          <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i> Open Full Digest
-        </summary>
-        <div class="p-5 pt-2 grid grid-cols-1 gap-4 border-t border-slate-100">
-          <div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Facts</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.facts || 'No facts recorded.')}</p></div>
-          <div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Issue</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.issue || 'No issue recorded.')}</p></div>
-          <div><h5 class="text-xs font-bold uppercase tracking-wider text-slate-400">Ruling</h5><p class="text-sm text-slate-700 mt-1 whitespace-pre-wrap text-justify">${Security.escapeHTML(digest.ruling || 'No ruling recorded.')}</p></div>
-          ${digest.notes ? `<div class="bg-amber-50 border border-amber-100 rounded-lg p-4"><h5 class="text-xs font-bold uppercase tracking-wider text-amber-700">Personal Notes</h5><p class="text-sm text-amber-900 mt-1 whitespace-pre-wrap">${Security.escapeHTML(digest.notes)}</p></div>` : ''}
-        </div>
-      </details>
+    <!-- RIGHT COLUMN - RECITATION GIST -->
+    <div class="p-5 bg-amber-50/50 flex flex-col">
+      <div class="flex items-center gap-2 mb-3">
+        <i class="fas fa-bolt text-amber-600"></i>
+        <span class="text-xs font-bold uppercase tracking-wider text-amber-700">Recitation Gist</span>
+      </div>
+      <p class="text-sm text-amber-900 leading-relaxed flex-1">
+        ${digest.gist ? Security.escapeHTML(digest.gist) : '<span class="text-amber-400 italic">No gist recorded.</span>'}
+      </p>
     </div>
   </div>`;
 }).join('');
