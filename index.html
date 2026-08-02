@@ -49,87 +49,84 @@
     mark { background-color: #fde68a; padding: 0.1rem 0.25rem; border-radius: 0.25rem; font-weight: 600; color: #1e293b; }
     [contenteditable]:empty:before { content: "Start typing your notes here..."; color: #cbd5e1; cursor: text; }
 
-    /* V2.9.3 — Smart Editor Reset to Prevent Overlapping & Preserve Formatting */
-    #note-content-editor {
-        padding: 1rem !important;
-        font-size: .95rem;
-        line-height: 1.6 !important;
-        white-space: normal !important;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        text-wrap: wrap;
-    }
+   /* V2.9.3 — Smart Editor Reset to Prevent Overlapping */
+#note-content-editor {
+    padding: 1rem !important;
+    font-size: .95rem;
+    line-height: 1.6 !important;
+    white-space: normal !important;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    text-wrap: wrap;
+}
 
-    /* 1. Universal reset for dangerous properties only (prevents overlap) */
-    #note-content-editor * {
-        position: static !important;
-        transform: none !important;
-        top: auto !important;
-        left: auto !important;
-        right: auto !important;
-        bottom: auto !important;
-        float: none !important;
-        clear: none !important;
-        max-width: 100% !important;
-        box-sizing: border-box;
-        white-space: normal !important;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-    }
+/* Remove dangerous positioning only */
+#note-content-editor * {
+    position: static !important;
+    transform: none !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    float: none !important;
+    clear: none !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+}
 
-    /* 2. Block elements */
-    #note-content-editor p,
-    #note-content-editor div,
-    #note-content-editor h1,
-    #note-content-editor h2,
-    #note-content-editor h3,
-    #note-content-editor h4,
-    #note-content-editor h5,
-    #note-content-editor h6,
-    #note-content-editor ul,
-    #note-content-editor ol,
-    #note-content-editor blockquote,
-    #note-content-editor pre,
-    #note-content-editor hr,
-    #note-content-editor table {
-        display: block !important;
-        margin: 0.5em 0 !important;
-        line-height: 1.6 !important;
-    }
+/* Block elements */
+#note-content-editor p,
+#note-content-editor div,
+#note-content-editor h1,
+#note-content-editor h2,
+#note-content-editor h3,
+#note-content-editor h4,
+#note-content-editor h5,
+#note-content-editor h6,
+#note-content-editor ul,
+#note-content-editor ol,
+#note-content-editor blockquote,
+#note-content-editor pre,
+#note-content-editor hr,
+#note-content-editor table {
+    display: block !important;
+    margin: 0.5em 0 !important;
+    line-height: 1.6 !important;
+}
 
-    /* 3. Inline elements - KEEP THEM INLINE (Fixes overlapping text) */
-    #note-content-editor span,
-    #note-content-editor strong,
-    #note-content-editor em,
-    #note-content-editor b,
-    #note-content-editor i,
-    #note-content-editor u,
-    #note-content-editor a,
-    #note-content-editor mark,
-    #note-content-editor code,
-    #note-content-editor sub,
-    #note-content-editor sup {
-        display: inline !important;
-        margin: 0 !important;
-        line-height: inherit !important;
-    }
+/* Inline elements - KEEP THEM INLINE */
+#note-content-editor span,
+#note-content-editor strong,
+#note-content-editor em,
+#note-content-editor b,
+#note-content-editor i,
+#note-content-editor u,
+#note-content-editor a,
+#note-content-editor mark,
+#note-content-editor code,
+#note-content-editor sub,
+#note-content-editor sup {
+    display: inline !important;
+    margin: 0 !important;
+    line-height: inherit !important;
+}
 
-    /* 4. List items */
-    #note-content-editor li {
-        display: list-item !important;
-        margin: 0.2em 0 !important;
-        line-height: 1.6 !important;
-    }
-    #note-content-editor ul { list-style-type: disc; padding-left: 1.5rem; }
-    #note-content-editor ol { list-style-type: decimal; padding-left: 1.5rem; }
+/* List items */
+#note-content-editor li {
+    display: list-item !important;
+    margin: 0.2em 0 !important;
+    line-height: 1.6 !important;
+}
+#note-content-editor ul { list-style-type: disc; padding-left: 1.5rem; }
+#note-content-editor ol { list-style-type: decimal; padding-left: 1.5rem; }
 
-    /* 5. Table elements */
-    #note-content-editor table { display: table !important; border-collapse: collapse; width: 100%; }
-    #note-content-editor tr { display: table-row !important; }
-    #note-content-editor td,
-    #note-content-editor th { display: table-cell !important; padding: 0.5rem; border: 1px solid #e2e8f0; }
-    #note-content-editor thead { display: table-header-group !important; }
-    #note-content-editor tbody { display: table-row-group !important; }
+/* Table elements */
+#note-content-editor table { display: table !important; border-collapse: collapse; width: 100%; }
+#note-content-editor tr { display: table-row !important; }
+#note-content-editor td,
+#note-content-editor th { display: table-cell !important; padding: 0.5rem; border: 1px solid #e2e8f0; }
+#note-content-editor thead { display: table-header-group !important; }
+#note-content-editor tbody { display: table-row-group !important; }
 
     /* Material Generated Content Styles */
     .material-generated-content h1 { font-family: 'Merriweather', serif; font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 0.65rem; color: #1e293b; }
@@ -6336,30 +6333,53 @@ editor.addEventListener('paste', (e) => {
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = pastedHtml;
         
-        // Aggressively clean ALL elements
+        // Clean up the pasted HTML
         tempDiv.querySelectorAll('*').forEach(el => {
-            // Remove ALL inline styles
-            el.removeAttribute('style');
+            let style = el.getAttribute('style') || '';
             
-            // Remove classes and IDs
+            // 1. Remove MS Office / PDF junk styles
+            style = style.replace(/mso-[^;:]+:[^;]+;?/gi, '');
+            
+            // 2. Remove dangerous positioning that causes overlap
+            style = style.replace(/position\s*:[^;]+;?/gi, '');
+            style = style.replace(/transform\s*:[^;]+;?/gi, '');
+            style = style.replace(/top\s*:[^;]+;?/gi, '');
+            style = style.replace(/left\s*:[^;]+;?/gi, '');
+            style = style.replace(/right\s*:[^;]+;?/gi, '');
+            style = style.replace(/bottom\s*:[^;]+;?/gi, '');
+            style = style.replace(/z-index\s*:[^;]+;?/gi, '');
+            
+            // 3. Remove fixed dimensions that can cause issues
+            style = style.replace(/width\s*:\s*\d+px;?/gi, '');
+            style = style.replace(/height\s*:\s*\d+px;?/gi, '');
+            
+            // 4. Normalize margins and padding
+            style = style.replace(/margin[^;]*:\s*0[^;]*;?/gi, 'margin: 0;');
+            style = style.replace(/padding[^;]*:\s*0[^;]*;?/gi, 'padding: 0;');
+            
+            // Apply cleaned style or remove if empty
+            if (style.trim()) {
+                el.setAttribute('style', style.trim());
+            } else {
+                el.removeAttribute('style');
+            }
+            
+            // 5. Remove external classes and IDs
             el.removeAttribute('class');
             el.removeAttribute('id');
             
-            // Convert problematic elements
-            if (el.tagName === 'DIV' && !el.querySelector('p, br, h1, h2, h3, h4, h5, h6, ul, ol, table')) {
+            // 6. Convert divs to paragraphs ONLY if they contain simple text
+            if (el.tagName === 'DIV' && !el.querySelector('p, br, h1, h2, h3, h4, h5, h6, ul, ol, table, blockquote')) {
                 const p = document.createElement('p');
                 p.innerHTML = el.innerHTML;
                 el.parentNode.replaceChild(p, el);
             }
         });
         
-        // Get the cleaned text and re-wrap it properly
-        const cleanedHtml = tempDiv.innerHTML;
-        
-        // Insert with proper formatting
-        document.execCommand('insertHTML', false, cleanedHtml);
+        // Insert cleaned HTML
+        document.execCommand('insertHTML', false, tempDiv.innerHTML);
     }
-});       
+});   
                 // --- SAFE AUTO-SAVE LOGIC ---
                 const doneTypingInterval = 1000;
                 const triggerAutoSave = () => {
