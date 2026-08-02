@@ -51,9 +51,21 @@
         [contenteditable]:empty:before { content: "Start typing your notes here..."; color: #cbd5e1; cursor: text; }
         
         /* NEW: Restore Bullet Points and Numbers inside the Note Editor */
-        #note-content-editor ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-bottom: 0.5rem !important; }
-        #note-content-editor ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-bottom: 0.5rem !important; }
-        #note-content-editor li { margin-bottom: 0.25rem !important; display: list-item !important; }
+       #note-content-editor ol,
+        #note-content-editor ul {
+          line-height: 1.8 !important;
+          margin: 0.5em 0;
+          padding-left: 1.5rem;
+        }
+        
+        #note-content-editor li {
+          margin-bottom: 0.5rem;
+          line-height: 1.6;
+        }
+        #note-content-editor * {
+          max-width: 100%;
+          box-sizing: border-box;
+        }
         .material-generated-content h1 { font-family: 'Merriweather', serif; font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 0.65rem; color: #1e293b; }
         .material-generated-content h2 { font-family: 'Merriweather', serif; font-size: 1.25rem; font-weight: 700; margin: 1.2rem 0 0.6rem; color: #1e3a8a; }
         .material-generated-content h3, .material-generated-content h4 { font-weight: 700; margin: 1rem 0 0.45rem; color: #334155; }
@@ -69,7 +81,10 @@
         .note-template-block h1 { font-family: 'Merriweather', serif; font-size: 1.65rem; font-weight: 700; margin: 0 0 .75rem; color: #0f172a; }
         .note-template-block h2 { font-family: 'Merriweather', serif; font-size: 1.15rem; font-weight: 700; margin: 1rem 0 .35rem; color: #1e293b; }
         .note-template-block h3 { font-family: 'Merriweather', serif; font-size: 1rem; font-weight: 700; margin: .85rem 0 .25rem; color: #334155; }
-        .note-template-block p { margin-bottom: .75rem; }
+        .note-template-block p {
+              margin-bottom: 0.75rem;
+              line-height: 1.6;
+            }
         .note-template-block blockquote { margin: .5rem 0 1rem; padding: .75rem 1rem; border-left: 4px solid #cbd5e1; background: #f8fafc; border-radius: .35rem; }
         .note-template-placeholder { color: #94a3b8; font-style: italic; }
         .subject-master-reviewer .reviewer-meta { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: .75rem; padding: 1rem; margin-bottom: 1rem; }
@@ -199,8 +214,15 @@
             .subject-notebook-shell > div:first-child > div { width: 100%; }
             .subject-notebook-shell .subject-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
             .subject-notebook-shell .subject-tabs button { white-space: nowrap; }
-            #note-content-editor { padding: 1rem !important; font-size: .95rem; }
-        }
+            #note-content-editor {
+              padding: 1rem !important;
+              font-size: .95rem;
+              line-height: 1.6 !important; /* Add proper line height */
+              white-space: normal !important; /* Allow normal text wrapping */
+              word-wrap: break-word; /* Break long words */
+              overflow-wrap: break-word; /* Modern browser support */
+              text-wrap: wrap; /* Ensure text wraps properly */
+            }
 
         @media (min-width: 768px) and (max-width: 1023px) {
             #content-area { padding: 1.5rem; }
@@ -250,11 +272,17 @@
             #lex-alarm-action-btn { grid-column: 1 / -1; }
         }
 
-   #material-assistant-output{
-    min-height:700px;
-    max-height:none;
-    overflow-y:visible;
-}
+   #material-assistant-output {
+      min-height: 700px;
+      max-height: none;
+      overflow-y: visible;
+      line-height: 1.6;
+    }
+    
+    #material-assistant-output p {
+      margin-bottom: 12px;
+      line-height: 1.8;
+    }
 
 #material-assistant-output h1,
 #material-assistant-output h2,
@@ -6248,20 +6276,32 @@ editor.addEventListener('paste', (e) => {
     // Only intercept if there is actual HTML being pasted
     if (pastedHtml) {
         e.preventDefault(); // Stop the default paste behavior
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = pastedHtml;
+        
+        // 1. SECURITY: Sanitize the HTML to prevent XSS (removes <script>, <iframe>, etc.)
+        // Your app already loads DOMPurify, so we leverage it here.
+        const cleanHtml = window.DOMPurify ? window.DOMPurify.sanitize(pastedHtml, {
+            ALLOWED_TAGS: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'mark', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'div'],
+            ALLOWED_ATTR: ['style'] // We allow 'style' temporarily so we can clean it manually below
+        }) : pastedHtml;
 
-        // Clean up the pasted HTML to preserve bullets, numbers, and basic formatting
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = cleanHtml;
+
+        // 2. Clean up the pasted HTML to preserve bullets, numbers, and basic formatting
         tempDiv.querySelectorAll('*').forEach(el => {
             let style = el.getAttribute('style') || '';
             
-            // 1. Remove MS Office / PDF junk styles
+            // Remove MS Office / PDF junk styles
             style = style.replace(/mso-[^;:]+:[^;]+;?/gi, '');
-            // 2. Remove list-style overrides that hide bullets/numbers
+            // Remove list-style overrides that hide bullets/numbers
             style = style.replace(/list-style-type\s*:\s*none;?/gi, '');
             style = style.replace(/list-style\s*:[^;]+;?/gi, '');
-            // 3. Remove text-indent which messes up list alignment
+            // Remove text-indent which messes up list alignment
             style = style.replace(/text-indent\s*:[^;]+;?/gi, '');
+            
+            // Optional: Uncomment these if you want to force the editor's font/size
+            // style = style.replace(/font-family\s*:[^;]+;?/gi, '');
+            // style = style = style.replace(/font-size\s*:[^;]+;?/gi, '');
             
             if (style.trim()) {
                 el.setAttribute('style', style.trim());
@@ -6269,12 +6309,12 @@ editor.addEventListener('paste', (e) => {
                 el.removeAttribute('style');
             }
             
-            // 4. Remove external classes and IDs to prevent CSS conflicts
+            // 3. Remove external classes and IDs to prevent CSS conflicts
             el.removeAttribute('class');
             el.removeAttribute('id');
         });
 
-        // Insert the cleaned HTML using execCommand to preserve cursor position and undo history
+        // 4. Insert the cleaned HTML using execCommand to preserve cursor position and undo history
         document.execCommand('insertHTML', false, tempDiv.innerHTML);
     }
 });
