@@ -5701,35 +5701,52 @@ getCurrentSubjectContext: () => ({
                 }
                 await updateDoc(recordRef, payload);
             },
-            addDigestForCurrentSubject: () => {
-                const subject = window.appHandlers.getCurrentSubjectContext();
-                Modal.show({
-                    title: '<i class="fas fa-gavel text-amber-600"></i> New Linked Case Digest',
-                    content: `<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 mb-4">This creates one master digest linked to <b>${Security.escapeHTML(subject.name)}</b>. It will also appear in Consolidated Case Digests.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="subject-digest-title" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" placeholder="e.g., Picart v. Smith"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="subject-digest-citation" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="G.R. No., date"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="subject-digest-topic" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Negligence"></div></div><div class="mt-3"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist</label><textarea id="dig-gist-edit" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-amber-500">${decodeHtml(gist || '')}</textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="subject-digest-facts" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="subject-digest-issue" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="subject-digest-ruling" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>`,
-                    submitText: 'Create Linked Digest',
-                    submitClass: 'px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-bold',
-                    onSubmit: async () => {
-                        const title = document.getElementById('subject-digest-title').value.trim();
-                        if (!title) throw new Error('Case title is required.');
-                        await AppDB.add('digests', {
-                            title,
-                            citation: document.getElementById('subject-digest-citation').value.trim(),
-                            topic: document.getElementById('subject-digest-topic').value.trim(),
-                            facts: document.getElementById('subject-digest-facts').value.trim(),
-                            issue: document.getElementById('subject-digest-issue').value.trim(),
-                            ruling: document.getElementById('subject-digest-ruling').value.trim(),
-                            subject: subject.name,
-                            subjectName: subject.name,
-                            primarySubjectId: subject.id,
-                            subjectIds: [subject.id],
-                            semesterId: subject.semesterId,
-                            semesterIds: subject.semesterId ? [subject.semesterId] : [],
-                            created: serverTimestamp(),
-                            updated: serverTimestamp()
-                        });
-                    }
-                });
-            },
+           addDigestForCurrentSubject: () => {
+    const subject = window.appHandlers.getCurrentSubjectContext();
+    Modal.show({
+        title: '<i class="fas fa-gavel text-amber-600"></i> New Linked Case Digest',
+        content: `<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 mb-4">This creates one master digest linked to <b>${Security.escapeHTML(subject.name)}</b>. It will also appear in Consolidated Case Digests.</div>
+        <div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="subject-digest-title" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" placeholder="e.g., Picart v. Smith"></div>
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="subject-digest-citation" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="G.R. No., date"></div>
+            <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="subject-digest-topic" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Negligence"></div>
+        </div>
+        <div class="mt-3"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist (1-2 sentences)</label><textarea id="subject-digest-gist" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-amber-500" placeholder="e.g. Minors sued to cancel TLAs; SC ruled standing for future generations."></textarea></div>
+        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="subject-digest-facts" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>
+        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="subject-digest-issue" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>
+        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="subject-digest-ruling" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>`,
+        submitText: 'Create Linked Digest',
+        submitClass: 'px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-bold',
+        onSubmit: async () => {
+            const title = document.getElementById('subject-digest-title').value.trim();
+            if (!title) throw new Error('Case title is required.');
+            
+            // ✅ FIX: Read the new fields using the correct IDs
+            const gist = document.getElementById('subject-digest-gist').value.trim();
+            const facts = document.getElementById('subject-digest-facts').value.trim();
+            const issue = document.getElementById('subject-digest-issue').value.trim();
+            const ruling = document.getElementById('subject-digest-ruling').value.trim();
+
+            await AppDB.add('digests', {
+                title,
+                citation: document.getElementById('subject-digest-citation').value.trim(),
+                topic: document.getElementById('subject-digest-topic').value.trim(),
+                gist,      // ✅ FIX: Save the gist to the database
+                facts,
+                issue,
+                ruling,
+                subject: subject.name,
+                subjectName: subject.name,
+                primarySubjectId: subject.id,
+                subjectIds: [subject.id],
+                semesterId: subject.semesterId,
+                semesterIds: subject.semesterId ? [subject.semesterId] : [],
+                created: serverTimestamp(),
+                updated: serverTimestamp()
+            });
+        }
+    });
+},
             editLinkedDigest: (id) => {
                 const digest = views.subject_notebook.digestsData.find(item => item.id === id);
                 if (!digest) return;
