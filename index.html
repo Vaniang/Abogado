@@ -6528,7 +6528,7 @@ await AppDB.add('digests', digestData);
                         const gist = d.gist || ''; // ✅ ADDED
                         
                         const escapeStr = (str) => {
-                            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\n').replace(/\r/g, '');
+                            return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n').replace(/\r/g, '');
                         };
                         
                         const safeTitle = escapeStr(title);
@@ -6538,7 +6538,7 @@ await AppDB.add('digests', digestData);
                         const safeIssue = escapeStr(issue);
                         const safeRuling = escapeStr(ruling);
                         const safeNotes = escapeStr(notes);
-                        const safeGist = escapeStr(gist); /
+                        const safeGist = escapeStr(gist); 
                         
                         const safeDlText = escapeStr(`Title: ${title}\nSubject: ${subject}\nTopic: ${topic}\n\nFACTS:\n${facts}\n\nISSUE:\n${issue}\n\nRULING:\n${ruling}\n\nNOTES:\n${notes}`);
                         
