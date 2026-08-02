@@ -3207,11 +3207,7 @@ const cleanAiJsonResponse = (text) => {
             }
         };
 
-        /* ==========================================
-           MAIN APP HANDLERS OBJECT
-           ========================================== */
-        window.appHandlers = {
-            const sanitizeEditorContent = (html) => {
+         const sanitizeEditorContent = (html) => {
     if (!html) return '';
     const holder = document.createElement('div');
     holder.innerHTML = html;
@@ -3247,6 +3243,11 @@ const cleanAiJsonResponse = (text) => {
     });
     return holder.innerHTML;
 };
+
+        /* ==========================================
+           MAIN APP HANDLERS OBJECT
+           ========================================== */
+        window.appHandlers = {
             clearAiSearch: () => {
                 views.ai_search.searchHistory = []; 
                 views.ai_search.chatHistory = []; 
