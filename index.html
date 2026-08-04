@@ -2374,7 +2374,10 @@ const supabase = createClient(
       </div>
       
       <!-- BUTTONS (at bottom) -->
-      <div class="flex gap-2 mt-auto pt-3 border-t border-slate-100">
+      <div class="flex flex-wrap gap-2 mt-auto pt-3 border-t border-slate-100">
+        <button onclick="window.appHandlers.openLinkedDigest('${digest.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm">
+        <i class="fas fa-book-open"></i> Open Digest
+        </button>
         <button onclick="window.appHandlers.printLinkedDigest('${digest.id}')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 text-xs font-bold text-slate-600 transition">
           <i class="fas fa-print text-slate-400"></i> Print
         </button>
@@ -5930,6 +5933,42 @@ getCurrentSubjectContext: () => ({
                     }
                 });
             },
+
+            openLinkedDigest: (id) => {
+  const digest = views.subject_notebook.digestsData.find(d => d.id === id);
+  if (!digest) { console.warn('Digest not found for opening:', id); return; }
+  const esc = Security.escapeHTML;
+  const grNo = (digest.citation || '').match(/G\.R\.\s*No\.\s*\d+/i);
+  const block = (icon, label, text, boxClass) => {
+    if (!text) return '';
+    return `<div class="mb-4"><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 pb-1 border-b border-slate-200"><i class="fas ${icon} mr-1"></i>${label}</h5><div class="p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap ${boxClass}">${esc(text)}</div></div>`;
+  };
+  const titleParts = (digest.title || 'Untitled Case').split(/\s+v\.?\s+/i);
+  const titleDisplay = titleParts[1] ? `${esc(titleParts[0])} v. ${esc(titleParts[1])}` : esc(digest.title || 'Untitled Case');
+  const hasContent = digest.facts || digest.issue || digest.ruling || digest.notes;
+  Modal.show({
+    title: `<i class="fas fa-book-open text-emerald-600"></i> ${titleDisplay}`,
+    content: `
+      <div class="text-xs text-slate-500 font-medium mb-4 flex flex-wrap items-center gap-2">
+        <span class="font-bold text-slate-700">${esc(grNo ? grNo[0] : 'G.R. No. N/A')}</span>
+        <span class="text-slate-400">|</span>
+        <span>Ponente: ${esc(digest.ponente || 'N/A')}</span>
+        ${digest.topic ? `<span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${esc(digest.topic)}</span>` : ''}
+      </div>
+      ${digest.gist ? `<div class="mb-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 leading-relaxed"><span class="font-bold text-[10px] uppercase tracking-wider block mb-1 text-amber-700"><i class="fas fa-bolt mr-1"></i>Recitation Gist</span>${esc(digest.gist)}</div>` : ''}
+      ${block('fa-file-lines', 'Facts', digest.facts, 'bg-slate-50 border-slate-200 text-slate-700')}
+      ${block('fa-circle-question', 'Issue', digest.issue, 'bg-blue-50 border-blue-200 text-slate-800')}
+      ${block('fa-gavel', 'Ruling', digest.ruling, 'bg-slate-50 border-slate-200 text-slate-700')}
+      ${block('fa-sticky-note', 'My Notes', digest.notes, 'bg-amber-100/50 border-amber-200 text-amber-900')}
+      ${hasContent ? '' : '<div class="text-center py-8 text-slate-400 text-sm"><i class="fas fa-file-circle-question text-4xl mb-3 opacity-40"></i><p class="font-bold">No full digest content yet.</p><p class="text-xs mt-1">Click "Edit Digest" below to add Facts, Issue, and Ruling.</p></div>'}
+    `,
+    submitText: 'Edit Digest',
+    onSubmit: async () => {
+      setTimeout(() => window.appHandlers.editLinkedDigest(id), 60);
+    }
+  });
+},
+            
             printLinkedDigest: (id) => {
     // Find the digest in the currently loaded notebook data
     const digest = views.subject_notebook.digestsData.find(d => d.id === id);
