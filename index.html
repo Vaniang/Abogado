@@ -533,8 +533,8 @@ getRedirectResult(auth)
 // ==========================
 // CLOUDINARY FILE STORAGE (replaces Supabase Storage)
 // ==========================
-const CLOUDINARY_CLOUD_NAME = "YOUR_CLOUD_NAME";
-const CLOUDINARY_UPLOAD_PRESET = "YOUR_UNSIGNED_PRESET";
+const CLOUDINARY_CLOUD_NAME = "zhgwa2ng";
+const CLOUDINARY_UPLOAD_PRESET = "lex-materials";
 const CloudStorage = {
 async upload(file) {
 const formData = new FormData();
@@ -5212,34 +5212,24 @@ initPomoPosition: () => {
                 updated: serverTimestamp()
                 });
 
-console.log("UPLOAD DATA:", uploadData);
-console.log("UPLOAD ERROR:", error);
-
-if (error) {
-    console.error(error);
-    alert(JSON.stringify(error, null, 2));
-    throw error;
-}
-
-const { data: publicUrlData } = supabase.storage
-    .from("materials")
-    .getPublicUrl(path);
-
-const downloadURL = publicUrlData.publicUrl;
-
-                await AppDB.update("materials", materialId, {
-
-                    storagePath: path,
-
-                    downloadURL,
-
-                    status: "extracting",
-
-                    extractionStatus: "extracting",
-
-                    updated: serverTimestamp()
-
-                });
+            console.log("UPLOAD DATA:", uploadData);
+            console.log("UPLOAD ERROR:", error);
+            if (error) {
+            console.error(error);
+            alert(JSON.stringify(error, null, 2));
+            throw error;
+            }
+            const { data: publicUrlData } = supabase.storage
+            .from("materials")
+            .getPublicUrl(path);
+            const downloadURL = publicUrlData.publicUrl;
+            await AppDB.update("materials", materialId, {
+            storagePath: path,
+            downloadURL,
+            status: "extracting",
+            extractionStatus: "extracting",
+            updated: serverTimestamp()
+            });
 
                 const extracted =
                     await MaterialUtils.extractPdf(file);
@@ -5483,10 +5473,6 @@ const downloadURL = publicUrlData.publicUrl;
                     try {
                 
                         const downloadURL = material.downloadURL;
-                
-                        // ===========================
-                        // SUPABASE VERSION
-                        // ===========================
                         if (!downloadURL && material.storagePath) {
                             const { data } = supabase.storage
                                 .from("materials")
@@ -5639,28 +5625,8 @@ const downloadURL = publicUrlData.publicUrl;
 
         onSubmit: async () => {
 
-            await MaterialUtils.deleteChunks(id);
-
+           await MaterialUtils.deleteChunks(id);
             await CloudStorage.remove(material.storagePath, material.deleteToken, material.resourceType);
-
-                try {
-
-                    const { error } = await supabase.storage
-                        .from("materials")
-                        .remove([material.storagePath]);
-
-                    if (error) {
-                        console.warn("Supabase delete:", error);
-                    }
-
-                } catch (error) {
-
-                    console.warn("Delete failed:", error);
-
-                }
-
-            }
-
             await AppDB.delete('materials', id);
 
             if (views.subject_notebook.currentMaterialId === id) {
