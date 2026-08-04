@@ -503,7 +503,6 @@
                 signOut
             } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, setDoc, getDoc, getDocs, writeBatch, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
         
         const firebaseConfig = {
             apiKey: "AIzaSyDxKEf2v5P2LN_a2BcR_ODYDGINZMmVPWk",
@@ -531,12 +530,42 @@ getRedirectResult(auth)
     console.error("Error completing redirect sign-in:", error);
   });
 
-const SUPABASE_URL = "https://suzfwoclznsumtxvzpai.supabase.co";
-const SUPABASE_KEY = "sb_publishable_CiBDva2nLm0nnlmnMWLpMw_WM9lMd4P";
-const supabase = createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-);
+// ==========================
+// CLOUDINARY FILE STORAGE (replaces Supabase Storage)
+// ==========================
+const CLOUDINARY_CLOUD_NAME = "YOUR_CLOUD_NAME";
+const CLOUDINARY_UPLOAD_PRESET = "YOUR_UNSIGNED_PRESET";
+const CloudStorage = {
+async upload(file) {
+const formData = new FormData();
+formData.append("file", file);
+formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+formData.append("folder", "lex-materials");
+const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
+if (!response.ok) {
+let message = `Cloudinary upload failed (HTTP ${response.status}).`;
+try { const payload = await response.json(); message = payload?.error?.message || message; } catch (_) {}
+throw new Error(message);
+}
+const result = await response.json();
+if (!result.secure_url) throw new Error("Cloudinary did not return a file URL.");
+return {
+downloadURL: result.secure_url,
+storagePath: result.public_id,
+deleteToken: result.delete_token || "",
+resourceType: result.resource_type || "raw"
+};
+},
+async remove(storagePath, deleteToken, resourceType = "raw") {
+if (!storagePath || !deleteToken) return; // old Supabase files are simply skipped
+try {
+const formData = new FormData();
+formData.append("public_id", storagePath);
+formData.append("token", deleteToken);
+await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/destroy`, { method: "POST", body: formData });
+} catch (error) { console.warn("Cloudinary delete failed:", error); }
+}
+};
                 
        let currentUser = null;
         let currentView = 'dashboard';
@@ -835,53 +864,25 @@ const supabase = createClient(
         return data.embedding.values;
     },
 
-    async saveChunks(materialId, subjectId, semesterId, chunks = [], apiKey = null) {
-        if (!currentUser || !chunks.length) return;
-        const root = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks');
-        const embeddingsToSave = [];
-        
-        // Save to Firestore
-        for (let start = 0; start < chunks.length; start += 400) {
+    async saveChunks(materialId, subjectId, semesterId, chunks = []) {
+            if (!currentUser || !chunks.length) return;
+            const root = collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'material_chunks');
+            for (let start = 0; start < chunks.length; start += 400) {
             const batch = writeBatch(db);
             chunks.slice(start, start + 400).forEach(chunk => {
-                const chunkRef = doc(root);
-                batch.set(chunkRef, {
-                    materialId, subjectId, semesterId: semesterId || null,
-                    order: Number(chunk.order || 0), pageStart: Number(chunk.pageStart || 1),
-                    pageEnd: Number(chunk.pageEnd || chunk.pageStart || 1),
-                    text: String(chunk.text || ''), created: serverTimestamp()
-                });
-                embeddingsToSave.push({ id: chunkRef.id, text: chunk.text });
+            const chunkRef = doc(root);
+            batch.set(chunkRef, {
+            materialId, subjectId, semesterId: semesterId || null,
+            order: Number(chunk.order || 0), pageStart: Number(chunk.pageStart || 1),
+            pageEnd: Number(chunk.pageEnd || chunk.pageStart || 1),
+            text: String(chunk.text || ''), created: serverTimestamp()
+            });
             });
             await batch.commit();
-        }
-
-        // Save vectors to Supabase
-        if (apiKey && supabase && embeddingsToSave.length) {
-            if (!this._vectorBatch) this._vectorBatch = [];
-            for (const chunk of embeddingsToSave) {
-                try {
-                    const vector = await this.getEmbedding(apiKey, chunk.text);
-                    await new Promise(r => setTimeout(r, 250)); // Rate limit delay
-                    this._vectorBatch.push({
-                        chunk_id: chunk.id, user_id: currentUser.uid, material_id: materialId,
-                        content: chunk.text.substring(0, 500), embedding: vector
-                    });
-                    if (this._vectorBatch.length >= 100) {
-                        await supabase.from('material_embeddings').insert(this._vectorBatch);
-                        this._vectorBatch = [];
-                    }
-                } catch (e) { console.warn("Vector generation failed:", e); }
             }
-            if (this._vectorBatch?.length) {
-                await supabase.from('material_embeddings').insert(this._vectorBatch);
-                this._vectorBatch = [];
-            }
-        }
-    },
+            },
 
-    async semanticRelevantChunks(materialId, queryText, apiKey, limit = 8) {
-        if (!apiKey || !supabase) return [];
+    async semanticRelevantChunks() { return []; },
         try {
             const queryVector = await this.getEmbedding(apiKey, queryText);
             const { data, error } = await supabase.rpc('match_chunks', {
@@ -5050,7 +5051,7 @@ initPomoPosition: () => {
 
         content: `
         <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-900 mb-4">
-            The PDF will be stored in Supabase Storage. Searchable text is extracted page by page and kept in your private workspace.
+           The PDF will be stored in your Cloudinary cloud. Searchable text is extracted page by page and kept in your private workspace.
         </div>
 
         <div>
@@ -5198,19 +5199,18 @@ initPomoPosition: () => {
 
                 });
 
-                materialId = materialRef.id;
-
-                const path =
-                    `artifacts/${appNamespace}/users/${currentUser.uid}/subjects/${subject.id}/materials/${materialId}/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
-
-                // Upload to Supabase
-
-                const { data: uploadData, error } = await supabase.storage
-    .from("materials")
-    .upload(path, file, {
-        upsert: true,
-        contentType: "application/pdf"
-    });
+               materialId = materialRef.id;
+                // Upload to Cloudinary
+                const uploaded = await CloudStorage.upload(file);
+                await AppDB.update("materials", materialId, {
+                storagePath: uploaded.storagePath,
+                deleteToken: uploaded.deleteToken,
+                resourceType: uploaded.resourceType,
+                downloadURL: uploaded.downloadURL,
+                status: "extracting",
+                extractionStatus: "extracting",
+                updated: serverTimestamp()
+                });
 
 console.log("UPLOAD DATA:", uploadData);
 console.log("UPLOAD ERROR:", error);
@@ -5350,31 +5350,12 @@ const downloadURL = publicUrlData.publicUrl;
                                 updated: serverTimestamp()
                             });
                 
-                            const path =
-                                `artifacts/${appNamespace}/users/${currentUser.uid}/subjects/${material.subjectId}/materials/${id}/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
-                
                             // ==========================
-                            // SUPABASE UPLOAD
-                            // ==========================
-                
-                            const { error } = await supabase.storage
-                                .from("materials")
-                                .upload(path, file, {
-                                    upsert: true,
-                                    contentType: "application/pdf"
-                                });
-                
-                            if (error) throw error;
-                
-                            // ==========================
-                            // GET PUBLIC URL
-                            // ==========================
-                
-                            const { data } = supabase.storage
-                                .from("materials")
-                                .getPublicUrl(path);
-                
-                            const downloadURL = data.publicUrl;
+                        // CLOUDINARY UPLOAD
+                        // ==========================
+                        const uploaded = await CloudStorage.upload(file);
+                        const path = uploaded.storagePath;
+                        const downloadURL = uploaded.downloadURL;
                 
                             // ==========================
                             // EXISTING AI EXTRACTION
@@ -5401,13 +5382,11 @@ const downloadURL = publicUrlData.publicUrl;
                             }
                 
                             const update = {
-                
                                 filename: file.name,
-                
                                 sizeBytes: file.size,
-                
                                 storagePath: path,
-                
+                                deleteToken: uploaded.deleteToken,
+                                resourceType: uploaded.resourceType,
                                 downloadURL,
                 
                                 status: 'ready',
@@ -5503,7 +5482,7 @@ const downloadURL = publicUrlData.publicUrl;
                 
                     try {
                 
-                        let downloadURL = material.downloadURL;
+                        const downloadURL = material.downloadURL;
                 
                         // ===========================
                         // SUPABASE VERSION
@@ -5662,7 +5641,7 @@ const downloadURL = publicUrlData.publicUrl;
 
             await MaterialUtils.deleteChunks(id);
 
-            if (material.storagePath) {
+            await CloudStorage.remove(material.storagePath, material.deleteToken, material.resourceType);
 
                 try {
 
