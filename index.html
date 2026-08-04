@@ -883,25 +883,6 @@ await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resource
             },
 
     async semanticRelevantChunks() { return []; },
-        try {
-            const queryVector = await this.getEmbedding(apiKey, queryText);
-            const { data, error } = await supabase.rpc('match_chunks', {
-                query_embedding: queryVector, match_material_id: materialId,
-                match_user_id: currentUser.uid, match_limit: limit
-            });
-            if (error) throw error;
-            if (data?.length) {
-                const fullChunks = await this.getChunks(materialId);
-                const chunkMap = new Map(fullChunks.map(c => [c.id, c]));
-                return data.map(item => chunkMap.get(item.chunk_id)).filter(Boolean)
-                           .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
-            }
-            return [];
-        } catch (error) {
-            console.error("Semantic search failed:", error);
-            return [];
-        }
-    },
 
     formatBytes(bytes = 0) {
         const value = Number(bytes || 0);
@@ -5212,25 +5193,6 @@ initPomoPosition: () => {
                 updated: serverTimestamp()
                 });
 
-            console.log("UPLOAD DATA:", uploadData);
-            console.log("UPLOAD ERROR:", error);
-            if (error) {
-            console.error(error);
-            alert(JSON.stringify(error, null, 2));
-            throw error;
-            }
-            const { data: publicUrlData } = supabase.storage
-            .from("materials")
-            .getPublicUrl(path);
-            const downloadURL = publicUrlData.publicUrl;
-            await AppDB.update("materials", materialId, {
-            storagePath: path,
-            downloadURL,
-            status: "extracting",
-            extractionStatus: "extracting",
-            updated: serverTimestamp()
-            });
-
                 const extracted =
                     await MaterialUtils.extractPdf(file);
 
@@ -5472,14 +5434,7 @@ initPomoPosition: () => {
                 
                     try {
                 
-                        const downloadURL = material.downloadURL;
-                        if (!downloadURL && material.storagePath) {
-                            const { data } = supabase.storage
-                                .from("materials")
-                                .getPublicUrl(material.storagePath);
-                
-                            downloadURL = data.publicUrl;
-                        }
+                       const downloadURL = material.downloadURL;
                 
                         if (!downloadURL)
                             throw new Error(
@@ -5523,33 +5478,8 @@ initPomoPosition: () => {
                         const chunks = MaterialUtils.makeChunks(extracted.pages);
                 
                         await MaterialUtils.deleteChunks(id);
-                
-                        if (chunks.length)
-                            await MaterialUtils.saveChunks(
-                                id,
-                                material.subjectId,
-                                material.semesterId,
-                                chunks
-                            );
-                
-                        const update = {
-                            downloadURL,
-                            status: "ready",
-                            extractionStatus: extracted.scannedLikely
-                                ? "scanned"
-                                : "ready",
-                            pageCount: extracted.pageCount,
-                            processedPages: extracted.processedPages,
-                            extractedCharacters: extracted.totalCharacters,
-                            chunkCount: chunks.length,
-                            extractionTruncated: extracted.truncated,
-                            extractionError: extracted.scannedLikely
-                                ? "Little or no selectable text was detected. Run OCR on this PDF before using material-grounded AI features."
-                                : "",
-                            updated: serverTimestamp()
-                        };
-                
-                        await AppDB.update("materials", id, update);
+                        await CloudStorage.remove(material.storagePath, material.deleteToken, material.resourceType);
+                        await AppDB.delete('materials', id);
                 
                         Object.assign(material, update);
                 
