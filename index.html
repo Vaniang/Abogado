@@ -5874,15 +5874,42 @@ getCurrentSubjectContext: () => ({
         onSubmit: async () => {
             const provisionText = document.getElementById('discuss-provision-text').value.trim();
             if (!provisionText) throw new Error('Please enter a provision to analyze.');
+            // NEW: Ground the discussion in the subject's uploaded Study Materials
+            const readyMaterials = (views.subject_notebook.materialsData || [])
+            .filter(m => (m.extractionStatus || m.status) === 'ready')
+            .slice(0, 5);
+            let materialContext = '';
+            const usedSources = [];
+            let contextBudget = 24000;
+            for (const material of readyMaterials) {
+            if (contextBudget <= 0) break;
+            try {
+            const chunks = await MaterialUtils.getChunks(material.id);
+            if (!chunks.length) continue;
+            const relevant = MaterialUtils.relevantChunks(chunks, provisionText, 4, contextBudget);
+            if (relevant.length) {
+            const ctx = MaterialUtils.context(material, relevant);
+            materialContext += `${ctx}\n---\n`;
+            contextBudget -= ctx.length;
+            usedSources.push({ title: material.title || material.filename || 'Material', pages: MaterialUtils.sourcePages(relevant) });
+            }
+            } catch (e) { console.warn('Material grounding skipped:', material.title, e); }
+            }
             const apiKey = localStorage.getItem('gemini_api_key');
             if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
             
            // DE LEON–ANCHORED PROMPT (6-part blueprint, clean HTML output)
                 const promptText = `Act as a distinguished Law Professor, Legal Scholar, and Bar Examiner whose teaching methodology is strictly anchored in the commentaries and textbooks of HECTOR S. DE LEON. Your task is to analyze the legal provision specified below and output a comprehensive, exam-ready review module.
                 You MUST follow the exact 6-part structural blueprint and formatting style provided below, explicitly integrating Hector S. De Leon's commentary, illustrations, legal distinctions, statutory exceptions, counter-exceptions, and jurisprudence.
-                PROVISION TO ANALYZE:
+               PROVISION TO ANALYZE:
                 ${provisionText}
                 PREFERRED TEXTBOOK: Hector S. De Leon (Comments and Cases)
+                UPLOADED SUBJECT MATERIALS (PRIMARY GROUNDING):
+                ${materialContext || '(No uploaded material excerpts matched this provision. Rely on the preferred textbook and general Philippine law sources.)'}
+                GROUNDING RULES:
+                1. When uploaded material excerpts are provided, prioritize them: integrate their commentary, definitions, elements, illustrations, exceptions, and doctrines.
+                2. Cite the uploaded material and page in square brackets after key statements, e.g., [De Leon Comments & Cases, p. 322].
+                3. Do not invent page citations; use only the SOURCE/page labels given in the excerpts.
                 OUTPUT FORMAT REQUIREMENT:
                 Article [Insert Provision Number and Code Name]
                 1. Codal Provision & Context
@@ -5954,17 +5981,23 @@ getCurrentSubjectContext: () => ({
                 // Clean up any accidental markdown blocks from the AI
                 resultHtml = resultHtml.replace(/^```html\s*/i, '').replace(/```\s*$/i, '').trim();
                 
-                // Store the result for saving
+                // Store the result for saving (with material sources)
+                const sourcesHtml = usedSources.length
+                ? `<div class="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900"><b><i class="fas fa-book-open mr-1"></i>Grounded in your uploaded materials:</b> ${usedSources.map(s => `${Security.escapeHTML(s.title)}${s.pages.length ? ` (pp. ${s.pages.join(', ')})` : ''}`).join(' • ')}</div>`
+                : '';
+                const sourcesNoteBlock = usedSources.length
+                ? `<h2>Source Materials Used</h2><ul>${usedSources.map(s => `<li>${Security.escapeHTML(s.title)}${s.pages.length ? ` — pp. ${s.pages.join(', ')}` : ''}</li>`).join('')}</ul>`
+                : '';
                 window.appHandlers.currentProvisionAnalysis = {
-                    title: safeTitleForSave,
-                    content: `<div class="note-template-block">${resultHtml}</div>`,
-                    provision: provisionText
+                title: safeTitleForSave,
+                content: `<div class="note-template-block">${resultHtml}${sourcesNoteBlock}</div>`,
+                provision: provisionText,
+                sources: usedSources
                 };
-                
                 // Display the result
                 const contentDiv = document.getElementById('provision-analysis-content');
-                contentDiv.innerHTML = `<div class="prose max-w-none text-sm leading-relaxed text-slate-700">${resultHtml}</div>`;
-                
+                contentDiv.innerHTML = `${sourcesHtml}<div class="prose max-w-none text-sm leading-relaxed text-slate-700">${resultHtml}</div>`;
+                                
                 // Add save button event listener
                 const saveBtn = document.getElementById('save-provision-analysis');
                 saveBtn.onclick = async () => {
