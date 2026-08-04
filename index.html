@@ -5961,6 +5961,7 @@ getCurrentSubjectContext: () => ({
       ${block('fa-file-lines', 'Facts', digest.facts, 'bg-slate-50 border-slate-200 text-slate-700')}
       ${block('fa-circle-question', 'Issue', digest.issue, 'bg-blue-50 border-blue-200 text-slate-800')}
       ${block('fa-gavel', 'Ruling', digest.ruling, 'bg-slate-50 border-slate-200 text-slate-700')}
+      ${block('fa-quote-left', 'Verbatim Notes', digest.verbatimNotes, 'bg-emerald-50 border-emerald-200 text-slate-700')}
       ${block('fa-sticky-note', 'My Notes', digest.notes, 'bg-amber-100/50 border-amber-200 text-amber-900')}
       ${hasContent ? '' : '<div class="text-center py-8 text-slate-400 text-sm"><i class="fas fa-file-circle-question text-4xl mb-3 opacity-40"></i><p class="font-bold">No full digest content yet.</p><p class="text-xs mt-1">Click "Edit Digest" below to add Facts, Issue, and Ruling.</p></div>'}
     `,
@@ -6882,15 +6883,16 @@ SYLLABUS: ${selectedSubjectName}
 TARGET CASE: ${textToDigest.substring(0, 40000)}
 
 REQUIRED OUTPUT:
-I. CODAL PROVISION — Full text/excerpt of applicable Constitutional provision(s).
+I. CODAL PROVISION — Full text/excerpt of the applicable provision(s) relevant to ${selectedSubjectName}.
 II. TEXTBOOK / LEGAL FRAMEWORK — General Rule, Requisites/Elements/Tests, Exceptions, Conceptual Explanation.
-III. CASE DIGEST — Doctrine (1-2 sentences), Brief Facts (bulleted, essential only), Issue (constitutional question), Ruling (Yes/No + disposition), Ratio Decidendi (step-by-step reasoning).
+III. CASE DIGEST — Doctrine (1-2 sentences), Brief Facts (bulleted, essential only), Issue (framed for ${selectedSubjectName}), Ruling (Yes/No + disposition), Ratio Decidendi (step-by-step reasoning).
 IV. RECITATION TAKEAWAY — Memory Trigger keyword + 30-Second Recitation Pitch.
-
+V. VERBATIM NOTES — Exact word-for-word excerpts copied directly from the TARGET CASE text that are most relevant to ${selectedSubjectName}. Quote the case's exact words inside quotation marks (do NOT paraphrase or invent), and after each quote add one line starting with "Connection:" explaining how it relates to ${selectedSubjectName}. Include 3-6 quotes, prioritizing the ruling, doctrine, elements, and exceptions that match the subject.
 GUIDELINES:
 1. Academic precision, strict legal accuracy, formal law-school terminology.
-2. Focus strictly on Constitutional Law 1 principles.
+2. Focus strictly on ${selectedSubjectName} principles and connect every section to that subject.
 3. Lean, relevant factual background.
+4. VERBATIM NOTES must be literal copies of sentences from the TARGET CASE text, never rewritten.
 
 Return STRICTLY as a raw JSON object with these exact keys:
 {
@@ -6901,7 +6903,8 @@ Return STRICTLY as a raw JSON object with these exact keys:
   "ruling": "string (Yes/No answer + ratio decidendi + disposition)",
   "doctrine": "string (1-2 sentence core doctrine)",
   "recitation_summary": "string (memory trigger + 30-sec pitch)",
-  "recitation_gist": "string (1-2 sentence ultra-short summary for quick glance)"
+  "recitation_gist": "string (1-2 sentence ultra-short summary for quick glance)",
+  "verbatim_notes": "string (3-6 exact word-for-word quotes from the case text. Format each as: "[exact quote]" followed by a new line "Connection: [how it relates to ${selectedSubjectName}]", separated by blank lines)"
 }
 
 Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.`;
@@ -6931,8 +6934,9 @@ Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.`;
         const doctrine = parsedDigest.doctrine || "";
         const recitation = parsedDigest.recitation_summary || "Not found.";
         const gist = parsedDigest.recitation_gist || "";
+        const verbatimNotes = parsedDigest.verbatim_notes || "";
 
-        const fullText = `DOCTRINE:\n${doctrine}\n\nI. CODAL PROVISION\n${codal}\n\nII. TEXTBOOK / LEGAL FRAMEWORK\n${framework}\n\nIII. RULING & RATIO\n${ruling}\n\nIV. RECITATION TAKEAWAY\n${recitation}`;
+        const fullText = `DOCTRINE:\n${doctrine}\n\nI. CODAL PROVISION\n${codal}\n\nII. TEXTBOOK / LEGAL FRAMEWORK\n${framework}\n\nIII. RULING & RATIO\n${ruling}\n\nIV. RECITATION TAKEAWAY\n${recitation}\n\nV. VERBATIM NOTES (CONNECTED TO ${selectedSubjectName.toUpperCase()})\n${verbatimNotes || "No verbatim excerpts returned."}`;
 
         const digestData = {
             title: titleInput,
@@ -6941,8 +6945,9 @@ Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.`;
             topic: topicInput,
             gist: gist,
             facts: facts,      // FIX #5: Now stores actual facts, not a substring
-            issue: issue,      // FIX #5: Now stores actual issue, not a duplicate
-            ruling: fullText, 
+           issue: issue,      // FIX #5: Now stores actual issue, not a duplicate
+            ruling: fullText,
+            verbatimNotes: verbatimNotes,
             created: serverTimestamp()
         };
 
@@ -6976,6 +6981,7 @@ Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.`;
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">IV. Issue</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(issue)}</p></div>
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">V. Ruling & Ratio</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(ruling)}</p></div>
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">VI. Recitation Takeaway</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(recitation)}</p></div>
+            ${verbatimNotes ? `<div class="bg-white p-5 rounded-xl shadow-sm border border-emerald-200"><h4 class="font-bold text-emerald-700 text-xs tracking-wider uppercase mb-2"><i class="fas fa-quote-left mr-1"></i> VII. Verbatim Notes — Connected to ${Security.escapeHTML(selectedSubjectName)}</h4><p class="text-sm whitespace-pre-wrap text-slate-700">${Security.escapeHTML(verbatimNotes)}</p></div>` : ''}
         </div>`; 
     } catch (error) { 
         // FIX #7: Escape error message to prevent XSS
