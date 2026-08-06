@@ -2504,59 +2504,71 @@ async ocrPdf(file, onProgress = () => {}) {
             }
         }
 
-    class CodalTrainerView {
-constructor() { this.unsubscribe = null; }
-render() {
-return `
-<div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
-<div class="flex justify-between items-center mb-6">
-<div>
-<h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-book-medical text-red-500"></i> Codal Trainer</h3>
-<p class="text-xs text-slate-500 mt-1">De Leon–anchored coach: /flashcard • /exam • /recite • /compare</p>
-</div>
-</div>
-<div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 mb-6">
-<div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-<button onclick="window.appHandlers.setCodalCommand('flashcard')" id="codal-cmd-flashcard" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition"><i class="fas fa-clone mr-1"></i> /flashcard</button>
-<button onclick="window.appHandlers.setCodalCommand('exam')" id="codal-cmd-exam" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition"><i class="fas fa-gavel mr-1"></i> /exam</button>
-<button onclick="window.appHandlers.setCodalCommand('recite')" id="codal-cmd-recite" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition"><i class="fas fa-microphone mr-1"></i> /recite</button>
-<button onclick="window.appHandlers.setCodalCommand('compare')" id="codal-cmd-compare" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition"><i class="fas fa-code-compare mr-1"></i> /compare</button>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-<div>
-<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Law Subject</label>
-<select id="booster-subject" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
-<option value="Civil Law">Civil Law</option>
-<option value="Criminal Law">Criminal Law</option>
-<option value="Political Law">Political Law</option>
-<option value="Remedial Law">Remedial Law</option>
-<option value="Commercial Law">Commercial Law</option>
-<option value="Labor Law">Labor Law</option>
-<option value="Taxation Law">Taxation Law</option>
-<option value="Legal Ethics">Legal Ethics</option>
-</select>
-</div>
-<div>
-<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1" id="codal-topic-label">Provision / Topic</label>
-<input type="text" id="booster-topic" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Art. 1874 or Agency by necessity">
-</div>
-<div id="codal-topic-b-wrap" class="hidden">
-<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Provision B</label>
-<input type="text" id="booster-topic-b" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Art. 1878">
-</div>
-</div>
-<button onclick="window.appHandlers.runCodalTrainer()" id="btn-booster-gen" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-bolt mr-2"></i> Run Command</button>
-</div>
-<div id="booster-output" class="flex-1 overflow-y-auto pr-2">
-<div class="flex flex-col items-center justify-center h-64 text-slate-400 opacity-50">
-<i class="fas fa-layer-group text-6xl mb-4"></i>
-<p>Pick a command, subject, and topic to begin.</p>
-</div>
-</div>
-</div>`;
-}
-init() { window.appHandlers.setCodalCommand(window.appHandlers.codalCommand || 'flashcard'); }
-}
+            class CodalTrainerView {
+            constructor() { this.unsubscribe = null; this.savedItems = []; }
+            render() {
+            return `
+            <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
+            <div class="flex justify-between items-center mb-6">
+            <div>
+            <h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-book-medical text-red-500"></i> Codal Trainer</h3>
+            <p class="text-xs text-slate-500 mt-1">/flashcard • /exam • /recite • /compare — every result can be saved under its subject & topic.</p>
+            </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 mb-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <button onclick="window.appHandlers.setCodalCommand('flashcard')" id="codal-cmd-flashcard" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition"><i class="fas fa-clone mr-1"></i> /flashcard</button>
+            <button onclick="window.appHandlers.setCodalCommand('exam')" id="codal-cmd-exam" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition"><i class="fas fa-gavel mr-1"></i> /exam</button>
+            <button onclick="window.appHandlers.setCodalCommand('recite')" id="codal-cmd-recite" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition"><i class="fas fa-microphone mr-1"></i> /recite</button>
+            <button onclick="window.appHandlers.setCodalCommand('compare')" id="codal-cmd-compare" class="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition"><i class="fas fa-code-compare mr-1"></i> /compare</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Law Subject</label>
+            <select id="codal-subject" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
+            <option value="Civil Law">Civil Law</option>
+            <option value="Criminal Law">Criminal Law</option>
+            <option value="Political Law">Political Law</option>
+            <option value="Remedial Law">Remedial Law</option>
+            <option value="Commercial Law">Commercial Law</option>
+            <option value="Labor Law">Labor Law</option>
+            <option value="Taxation Law">Taxation Law</option>
+            <option value="Legal Ethics">Legal Ethics</option>
+            </select>
+            </div>
+            <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1" id="codal-topic-label">Topic / Range</label>
+            <input type="text" id="codal-topic" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Agency (Arts. 1868–1930)">
+            </div>
+            <div id="codal-topic-b-wrap" class="hidden">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Provision B</label>
+            <input type="text" id="codal-topic-b" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Art. 1878">
+            </div>
+            </div>
+            <button onclick="window.appHandlers.runCodalTrainer()" id="btn-codal-run" class="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-bolt mr-2"></i>Run Command</button>
+            </div>
+            <div id="codal-output" class="flex-1 overflow-y-auto pr-2 mb-8">
+            <div class="flex flex-col items-center justify-center h-64 text-slate-400 opacity-50">
+            <i class="fas fa-layer-group text-6xl mb-4"></i>
+            <p>Pick a command, subject, and topic — then save the result to your library.</p>
+            </div>
+            </div>
+            <div>
+            <h4 class="font-bold text-slate-700 mb-3 flex items-center gap-2"><i class="fas fa-folder-open text-amber-500"></i> Trainer Library — saved by subject & topic</h4>
+            <div id="codal-library" class="space-y-4"><div class="text-center py-8 text-slate-400 text-sm">Loading…</div></div>
+            </div>
+            </div>`;
+            }
+            init() {
+            window.appHandlers.setCodalCommand(window.appHandlers.codalCommand || 'flashcard');
+            this.unsubscribe = AppDB.subscribe('codal_trainer_items', snapshot => {
+            this.savedItems = [];
+            snapshot.forEach(doc => this.savedItems.push({ id: doc.id, ...doc.data() }));
+            window.appHandlers.renderCodalLibrary(this.savedItems);
+            });
+            }
+            destroy() { if (this.unsubscribe) { try { this.unsubscribe(); } catch (e) {} this.unsubscribe = null; } }
+            }
 
         class MnemonicView {
             constructor() { this.unsubscribe = null; this.generatedTitle = ""; this.generatedContent = ""; this.subjects = []; }
@@ -3931,231 +3943,292 @@ deleteAdvocacyDraft: (id) => {
             },
 
           // --- CODAL BOOSTER HANDLERS ---
-codalCommand: 'flashcard',
-codalSession: null,
-codalPersona: () => `You are the Lex Codal Trainer: a distinguished Senior Law Professor, Bar Examiner, and Legal Scholar whose teaching and testing methodology is strictly anchored in HECTOR S. DE LEON's commentaries and textbooks and Philippine jurisprudence.`,
-setCodalCommand: (cmd) => {
-window.appHandlers.codalCommand = cmd;
-const labels = { flashcard: 'Generate Flashcard', exam: 'Generate Bar Scenario', recite: 'Start Cold-Call Recitation', compare: 'Build Distinction Matrix' };
-['flashcard', 'exam', 'recite', 'compare'].forEach(c => {
-const b = document.getElementById('codal-cmd-' + c);
-if (!b) return;
-b.className = c === cmd
-? 'px-3 py-2 rounded-lg text-xs font-bold border transition bg-red-600 border-red-600 text-white shadow-sm'
-: 'px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition';
-});
-const wrapB = document.getElementById('codal-topic-b-wrap');
-if (wrapB) wrapB.classList.toggle('hidden', cmd !== 'compare');
-const label = document.getElementById('codal-topic-label');
-const topicInput = document.getElementById('booster-topic');
-if (label && topicInput) {
-if (cmd === 'compare') { label.innerText = 'Provision A'; topicInput.placeholder = 'e.g. Art. 1874 (Special authority)'; }
-else if (cmd === 'flashcard') { label.innerText = 'Provision / Topic'; topicInput.placeholder = "e.g. 'FC Arts 1-20' or 'Justifying Circumstances'"; }
-else { label.innerText = 'Topic / Article'; topicInput.placeholder = 'e.g. Art. 1156 or Delay'; }
-}
-const btn = document.getElementById('btn-booster-gen');
-if (btn) btn.innerHTML = `<i class="fas fa-bolt mr-2"></i> ${labels[cmd]}`;
-},
-codalList: (arr) => (Array.isArray(arr) && arr.length) ? `<ul class="list-disc pl-5 space-y-1">${arr.map(x => `<li>${Security.escapeHTML(x)}</li>`).join('')}</ul>` : '',
-runCodalTrainer: async () => {
-const cmd = window.appHandlers.codalCommand;
-const subject = document.getElementById('booster-subject').value;
-const topic = document.getElementById('booster-topic').value.trim();
-const topicB = (document.getElementById('booster-topic-b')?.value || '').trim();
-const output = document.getElementById('booster-output');
-const btn = document.getElementById('btn-booster-gen');
-const apiKey = localStorage.getItem('gemini_api_key');
-if (!apiKey) { alert('Please enter your Gemini API Key in the AI Search tab first.'); return; }
-if (!topic) { alert('Please enter a provision or topic.'); return; }
-if (cmd === 'compare' && !topicB) { alert('Please enter both Provision A and Provision B.'); return; }
-btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Working...';
-output.innerHTML = `<div class="flex flex-col justify-center h-40 items-center text-slate-400"><div class="loader mb-3"></div><p class="text-xs">Consulting De Leon and jurisprudence...</p></div>`;
-try {
-if (cmd === 'flashcard') {
-const promptText = `${window.appHandlers.codalPersona()}
-COMMAND: /flashcard
-SUBJECT: ${subject}
-PROVISION/TOPIC: ${topic}
-Generate structured legal flashcards. If a range is given, cover the most important provisions (max 5); otherwise 1 card. Each card MUST follow this exact JSON structure:
-[{"subject":"string","provision":"Article number and statute name","recall_question":"1-2 direct recitation questions testing the core rule","codal_text":"Exact statutory text or core extract","general_rule":"1-2 clear, direct sentences","elements":["..."],"elements_mnemonic":"catchy mnemonic","elements_breakdown":["A - ..."],"exceptions":["..."],"exceptions_mnemonic":"simple mnemonic","exceptions_breakdown":["..."],"ratio_legis":"why the law exists","plain_english":"De Leon-style plain-English explanation with a real-life illustration","subject_link":"how this provision connects to the broader goals of the subject"}]
-Return ONLY a raw JSON array. No markdown.`;
-const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
-const cards = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
-window.appHandlers.renderCodalFlashcards(Array.isArray(cards) ? cards : [cards]);
-} else if (cmd === 'exam') {
-const promptText = `${window.appHandlers.codalPersona()}
-COMMAND: /exam
-SUBJECT: ${subject}
-TOPIC/ARTICLE: ${topic}
-Create ONE realistic, bar-style factual problem (2-3 paragraphs) ending with a clear question. Return ONLY raw JSON: {"scenario":"string","question":"string"}`;
-const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
-const item = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
-window.appHandlers.codalSession = { type: 'exam', subject, item };
-window.appHandlers.renderCodalExam(item);
-} else if (cmd === 'recite') {
-const promptText = `${window.appHandlers.codalPersona()}
-COMMAND: /recite
-SUBJECT: ${subject}
-TOPIC/ARTICLE: ${topic}
-Simulate a fierce cold-call recitation. Return ONLY raw JSON: {"question":"the first tough recitation question","followups":["follow-up 1","follow-up 2","follow-up 3"]}`;
-const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
-const item = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
-window.appHandlers.codalSession = { type: 'recite', subject, item, followIndex: 0 };
-window.appHandlers.renderCodalRecite(item.question, 1);
-} else {
-const promptText = `${window.appHandlers.codalPersona()}
-COMMAND: /compare
-SUBJECT: ${subject}
-PROVISION A: ${topic}
-PROVISION B: ${topicB}
-Generate a De Leon distinction matrix with at least 6 comparison rows. Return ONLY raw JSON: {"title_a":"...","title_b":"...","rows":[{"basis":"General Rule","a":"...","b":"..."}]}`;
-const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
-const item = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
-window.appHandlers.renderCodalCompare(item);
-}
-} catch (e) {
-console.error(e);
-output.innerHTML = `<div class="bg-red-50 text-red-600 p-6 rounded-xl text-center text-sm border border-red-100 flex flex-col items-center gap-2"><i class="fas fa-exclamation-circle text-2xl"></i><p class="font-bold">Command failed</p><p class="opacity-80">${Security.escapeHTML(e.message)}</p></div>`;
-} finally {
-btn.disabled = false;
-window.appHandlers.setCodalCommand(cmd);
-}
-},
-renderCodalFlashcards: (cards) => {
-const output = document.getElementById('booster-output');
-output.innerHTML = `<div class="grid grid-cols-1 gap-4 pb-10">` + cards.map(c => `
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition" data-flip="1">
-<div class="bg-slate-50 p-3 border-b border-slate-100 flex justify-between items-center">
-<span class="font-bold text-red-700 text-sm tracking-wider uppercase">${Security.escapeHTML(c.provision || '')}</span>
-<span class="text-xs text-slate-500 font-medium text-right">${Security.escapeHTML(c.subject || '')}</span>
-</div>
-<div class="p-5">
-<div class="card-inner">
-<p class="text-[10px] text-blue-600 font-bold uppercase tracking-widest mb-2"><i class="fas fa-clone mr-1"></i> Front — Active Recall</p>
-<p class="text-slate-800 font-semibold leading-relaxed">${Security.escapeHTML(c.recall_question || '')}</p>
-<p class="text-xs text-slate-400 mt-6 text-center">(Click card to reveal the Back)</p>
-</div>
-<div class="card-back hidden">
-<p class="text-[10px] text-green-600 font-bold uppercase tracking-widest mb-3"><i class="fas fa-book-open mr-1"></i> Back</p>
-<div class="space-y-3 text-sm text-slate-700 leading-relaxed">
-<div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Codal Provision & Context</p><p class="serif-text italic bg-slate-50 border-l-4 border-slate-300 pl-3 py-2">${Security.escapeHTML(c.codal_text || '')}</p></div>
-<div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">General Rule</p><p>${Security.escapeHTML(c.general_rule || '')}</p></div>
-<div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Elements / Requisites</p>${window.appHandlers.codalList(c.elements)}${c.elements_mnemonic ? `<p class="mt-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><i class="fas fa-lightbulb mr-1"></i> Mnemonic: ${Security.escapeHTML(c.elements_mnemonic)}</p>${window.appHandlers.codalList(c.elements_breakdown)}` : ''}</div>
-<div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Exceptions</p>${window.appHandlers.codalList(c.exceptions) || '<p class="text-xs text-slate-400">None stated.</p>'}${c.exceptions_mnemonic ? `<p class="mt-2 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><i class="fas fa-lightbulb mr-1"></i> Mnemonic: ${Security.escapeHTML(c.exceptions_mnemonic)}</p>${window.appHandlers.codalList(c.exceptions_breakdown)}` : ''}</div>
-<div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Discussion & De Leon Commentary</p><p><b>Ratio Legis:</b> ${Security.escapeHTML(c.ratio_legis || '')}</p><p class="mt-1"><b>Plain-English:</b> ${Security.escapeHTML(c.plain_english || '')}</p><p class="mt-1"><b>Subject Link:</b> ${Security.escapeHTML(c.subject_link || '')}</p></div>
-</div>
-<p class="text-xs text-slate-400 mt-4 text-center">(Click card to flip back)</p>
-</div>
-</div>
-</div>`).join('') + `</div>`;
-output.querySelectorAll('[data-flip]').forEach(el => { el.onclick = () => handleCardFlip(el); });
-},
-renderCodalExam: (item) => {
-const output = document.getElementById('booster-output');
-output.innerHTML = `
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-<p class="text-xs font-bold text-purple-600 uppercase tracking-widest mb-3"><i class="fas fa-gavel mr-1"></i> /exam — Bar-Style Scenario</p>
-<p class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">${Security.escapeHTML(item.scenario || '')}</p>
-<p class="text-sm font-bold text-slate-900 mt-4">${Security.escapeHTML(item.question || '')}</p>
-<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mt-5 mb-1">Your ALAC Answer</label>
-<textarea id="codal-exam-answer" rows="8" class="w-full p-3 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500" placeholder="Answer → Legal Basis → Application → Conclusion"></textarea>
-<button id="codal-eval-btn" class="mt-3 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><i class="fas fa-check-double mr-1"></i> Evaluate My Answer</button>
-<div id="codal-eval-result" class="mt-4"></div>
-</div>`;
-document.getElementById('codal-eval-btn').onclick = window.appHandlers.evaluateCodalExam;
-},
-evaluateCodalExam: async () => {
-const session = window.appHandlers.codalSession;
-const answer = document.getElementById('codal-exam-answer')?.value.trim();
-const btn = document.getElementById('codal-eval-btn');
-const result = document.getElementById('codal-eval-result');
-if (!session || !answer) { alert('Type your ALAC answer first.'); return; }
-const apiKey = localStorage.getItem('gemini_api_key');
-btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...';
-try {
-const promptText = `${window.appHandlers.codalPersona()}
-Evaluate the student's answer strictly against the ALAC framework (Answer, Legal Basis, Application, Conclusion).
-SCENARIO: ${session.item.scenario}
-QUESTION: ${session.item.question}
-STUDENT ANSWER: ${answer}
-Return ONLY raw JSON: {"score":0-10,"answer_comments":"...","legal_basis_comments":"...","application_comments":"...","conclusion_comments":"...","model_answer":"textbook ALAC model answer","next_step":"..."}`;
-const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
-const g = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
-result.innerHTML = `
-<div class="bg-purple-50 border border-purple-200 rounded-xl p-5 text-sm">
-<div class="flex items-center justify-between mb-3"><p class="font-bold text-purple-800"><i class="fas fa-marker mr-1"></i> Examiner's Evaluation</p><span class="text-lg font-black text-purple-700">${Security.escapeHTML(String(g.score ?? '—'))}/10</span></div>
-<ul class="list-disc pl-5 space-y-1 text-slate-700">
-<li><b>Answer:</b> ${Security.escapeHTML(g.answer_comments || '')}</li>
-<li><b>Legal Basis:</b> ${Security.escapeHTML(g.legal_basis_comments || '')}</li>
-<li><b>Application:</b> ${Security.escapeHTML(g.application_comments || '')}</li>
-<li><b>Conclusion:</b> ${Security.escapeHTML(g.conclusion_comments || '')}</li>
-</ul>
-<p class="mt-3 text-slate-700"><b>Next Step:</b> ${Security.escapeHTML(g.next_step || '')}</p>
-<details class="mt-3"><summary class="cursor-pointer font-bold text-purple-700">View Model Answer</summary><p class="mt-2 whitespace-pre-wrap text-slate-700 leading-relaxed">${Security.escapeHTML(g.model_answer || '')}</p></details>
-</div>`;
-} catch (e) { result.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">${Security.escapeHTML(e.message)}</div>`; }
-finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Evaluate My Answer'; }
-},
-renderCodalRecite: (question, number) => {
-const output = document.getElementById('booster-output');
-output.innerHTML = `
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-<p class="text-xs font-bold text-red-600 uppercase tracking-widest mb-3"><i class="fas fa-microphone mr-1"></i> /recite — Cold-Call Question ${number}</p>
-<p class="text-sm font-bold text-slate-900 leading-relaxed">${Security.escapeHTML(question)}</p>
-<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mt-5 mb-1">Your Answer (optional)</label>
-<textarea id="codal-recite-answer" rows="5" class="w-full p-3 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-red-500" placeholder="Type your recitation answer..."></textarea>
-<div class="flex flex-wrap gap-2 mt-3">
-<button id="codal-recite-eval" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><i class="fas fa-check-double mr-1"></i> Evaluate My Answer</button>
-<button id="codal-recite-next" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><i class="fas fa-arrow-right mr-1"></i> Next Follow-up</button>
-</div>
-<div id="codal-recite-result" class="mt-4"></div>
-</div>`;
-document.getElementById('codal-recite-eval').onclick = window.appHandlers.evaluateCodalRecite;
-document.getElementById('codal-recite-next').onclick = window.appHandlers.nextCodalFollowUp;
-},
-nextCodalFollowUp: () => {
-const session = window.appHandlers.codalSession;
-if (!session || session.type !== 'recite') return;
-const followups = session.item.followups || [];
-if (session.followIndex < followups.length) {
-session.followIndex += 1;
-window.appHandlers.renderCodalRecite(followups[session.followIndex - 1], session.followIndex + 1);
-} else {
-alert('Follow-ups exhausted. Great recitation! Run /recite again for a new line of questions.');
-}
-},
-evaluateCodalRecite: async () => {
-const session = window.appHandlers.codalSession;
-const answer = document.getElementById('codal-recite-answer')?.value.trim();
-const result = document.getElementById('codal-recite-result');
-const btn = document.getElementById('codal-recite-eval');
-if (!answer) { alert('Type your answer first.'); return; }
-const apiKey = localStorage.getItem('gemini_api_key');
-btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Evaluating...';
-try {
-const promptText = `${window.appHandlers.codalPersona()}
-The student is being recited. Evaluate the answer briefly and strictly.
-QUESTION: ${session.item.question}
-STUDENT ANSWER: ${answer}
-Return ONLY raw JSON: {"verdict":"PASS / ALMOST / MISS","comments":"...","model_answer":"..."}`;
-const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
-const g = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
-result.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-xl p-5 text-sm"><p class="font-bold text-red-800 mb-2"><i class="fas fa-stamp mr-1"></i> Verdict: ${Security.escapeHTML(g.verdict || '')}</p><p class="text-slate-700">${Security.escapeHTML(g.comments || '')}</p><details class="mt-3"><summary class="cursor-pointer font-bold text-red-700">View Model Answer</summary><p class="mt-2 whitespace-pre-wrap text-slate-700 leading-relaxed">${Security.escapeHTML(g.model_answer || '')}</p></details></div>`;
-} catch (e) { result.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">${Security.escapeHTML(e.message)}</div>`; }
-finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Evaluate My Answer'; }
-},
-renderCodalCompare: (item) => {
-const output = document.getElementById('booster-output');
-const rows = Array.isArray(item.rows) ? item.rows : [];
-output.innerHTML = `
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 overflow-x-auto">
-<p class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3"><i class="fas fa-code-compare mr-1"></i> /compare — De Leon Distinction Matrix</p>
-<table class="w-full text-sm border-collapse min-w-[600px]">
-<thead><tr class="bg-slate-50"><th class="border border-slate-200 p-3 text-left w-1/5">Basis</th><th class="border border-slate-200 p-3 text-left">${Security.escapeHTML(item.title_a || 'Provision A')}</th><th class="border border-slate-200 p-3 text-left">${Security.escapeHTML(item.title_b || 'Provision B')}</th></tr></thead>
-<tbody>${rows.map(r => `<tr><td class="border border-slate-200 p-3 font-bold text-slate-700">${Security.escapeHTML(r.basis || '')}</td><td class="border border-slate-200 p-3 text-slate-600">${Security.escapeHTML(r.a || '')}</td><td class="border border-slate-200 p-3 text-slate-600">${Security.escapeHTML(r.b || '')}</td></tr>`).join('')}</tbody>
-</table>
-</div>`;
-},
+            codalCommand: 'flashcard',
+            codalSession: null,
+            setCodalCommand: (cmd) => {
+            window.appHandlers.codalCommand = cmd;
+            const labels = { flashcard: 'Generate Flashcard', exam: 'Generate Bar Scenario', recite: 'Start Cold-Call Recitation', compare: 'Build Distinction Matrix' };
+            ['flashcard', 'exam', 'recite', 'compare'].forEach(c => {
+            const b = document.getElementById('codal-cmd-' + c);
+            if (!b) return;
+            b.className = c === cmd
+            ? 'px-3 py-2 rounded-lg text-xs font-bold border transition bg-red-600 border-red-600 text-white shadow-sm'
+            : 'px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition';
+            });
+            const wrapB = document.getElementById('codal-topic-b-wrap');
+            if (wrapB) wrapB.classList.toggle('hidden', cmd !== 'compare');
+            const label = document.getElementById('codal-topic-label');
+            const topicInput = document.getElementById('codal-topic');
+            if (label && topicInput) {
+            if (cmd === 'compare') { label.innerText = 'Provision A'; topicInput.placeholder = 'e.g. Art. 1874 (Special authority)'; }
+            else if (cmd === 'flashcard') { label.innerText = 'Topic / Range'; topicInput.placeholder = 'e.g. Agency (Arts. 1868–1930)'; }
+            else { label.innerText = 'Topic / Article'; topicInput.placeholder = 'e.g. Art. 1156 or Delay'; }
+            }
+            const btn = document.getElementById('btn-codal-run');
+            if (btn) btn.innerHTML = `<i class="fas fa-bolt mr-2"></i>${labels[cmd]}`;
+            },
+            codalList: (arr) => (Array.isArray(arr) && arr.length) ? `<ul class="list-disc pl-5 space-y-1">${arr.map(x => `<li>${Security.escapeHTML(x)}</li>`).join('')}</ul>` : '',
+            codalSaveBar: (meta) => `<div class="mb-4 flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+            <p class="text-xs text-blue-900 font-bold"><i class="fas fa-bookmark mr-1"></i>${Security.escapeHTML(meta.subject)} — ${Security.escapeHTML(meta.topic)} <span class="uppercase text-blue-600">/${meta.command}</span></p>
+            <button onclick="window.appHandlers.saveCodalTrainerItem()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap"><i class="fas fa-save mr-1"></i>Save to Trainer Library</button>
+            </div>`,
+            saveCodalTrainerItem: async () => {
+            const s = window.appHandlers.codalSession;
+            if (!s) { alert('Generate a result first.'); return; }
+            try {
+            await AppDB.add('codal_trainer_items', {
+            command: s.command,
+            subject: s.subject,
+            topic: s.topic,
+            title: s.title || `${s.subject} — ${s.topic}`,
+            payload: s.payload,
+            created: serverTimestamp()
+            });
+            alert(`Saved under ${s.subject} — ${s.topic} in your Trainer Library.`);
+            } catch (e) { alert('Save failed: ' + e.message); }
+            },
+            deleteSavedCodalItem: (id) => {
+            Modal.show({
+            title: '<i class="fas fa-trash text-red-500"></i> Delete Saved Item',
+            content: '<p>Remove this saved trainer item from your library?</p>',
+            submitText: 'Delete',
+            submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg',
+            onSubmit: async () => await AppDB.delete('codal_trainer_items', id)
+            });
+            },
+            openSavedCodalItem: (id) => {
+            const it = (views.codal_trainer.savedItems || []).find(x => x.id === id);
+            if (!it) return;
+            const meta = { subject: it.subject || 'General', topic: it.topic || 'General', command: it.command };
+            window.appHandlers.codalSession = { ...meta, payload: it.payload, savedId: id, title: it.title };
+            if (it.command === 'flashcard') window.appHandlers.renderCodalFlashcards(it.payload?.cards || [], meta);
+            else if (it.command === 'exam') window.appHandlers.renderCodalExam(it.payload || {}, meta);
+            else if (it.command === 'recite') window.appHandlers.renderCodalRecite(it.payload?.question || '', 1, meta);
+            else if (it.command === 'compare') window.appHandlers.renderCodalCompare(it.payload || {}, meta);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            },
+            renderCodalLibrary: (items) => {
+            const wrap = document.getElementById('codal-library');
+            if (!wrap) return;
+            if (!items || !items.length) {
+            wrap.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm bg-white border-2 border-dashed border-slate-300 rounded-xl">No saved trainer items yet. Run a command, then press "Save to Trainer Library".</div>';
+            return;
+            }
+            const typeColors = { flashcard: 'text-blue-600', exam: 'text-purple-600', recite: 'text-red-600', compare: 'text-emerald-600' };
+            const typeIcons = { flashcard: 'fa-clone', exam: 'fa-gavel', recite: 'fa-microphone', compare: 'fa-code-compare' };
+            const bySubject = {};
+            items.forEach(it => { const k = it.subject || 'General'; (bySubject[k] = bySubject[k] || []).push(it); });
+            wrap.innerHTML = Object.keys(bySubject).sort().map(subject => {
+            const byTopic = {};
+            bySubject[subject].forEach(it => { const t = it.topic || 'General'; (byTopic[t] = byTopic[t] || []).push(it); });
+            return `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div class="px-5 py-3 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 uppercase tracking-wider text-sm"><i class="fas fa-book text-blue-500 mr-2"></i>${Security.escapeHTML(subject)}</div>
+            <div class="p-5 space-y-4">` +
+            Object.keys(byTopic).sort().map(topic => `<div>
+            <h5 class="font-bold text-slate-600 text-sm mb-2"><i class="fas fa-tag text-amber-500 mr-1"></i>${Security.escapeHTML(topic)}</h5>
+            <div class="flex flex-wrap gap-2">` +
+            byTopic[topic].map(it => `<span class="inline-flex items-center gap-1 border border-slate-200 rounded-lg pl-2 pr-1 py-1 text-xs bg-slate-50">
+            <span class="font-bold uppercase ${typeColors[it.command] || 'text-slate-600'}"><i class="fas ${typeIcons[it.command] || 'fa-circle'} mr-1"></i>${it.command}</span>
+            <button onclick="window.appHandlers.openSavedCodalItem('${it.id}')" class="text-blue-600 hover:bg-blue-50 px-2 py-0.5 rounded font-bold"><i class="fas fa-folder-open mr-1"></i>Open</button>
+            <button onclick="window.appHandlers.deleteSavedCodalItem('${it.id}')" class="text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"><i class="fas fa-trash"></i></button>
+            </span>`).join('') +
+            `</div></div>`).join('') +
+            `</div></div>`;
+            }).join('');
+            },
+            runCodalTrainer: async () => {
+            const cmd = window.appHandlers.codalCommand;
+            const subject = document.getElementById('codal-subject').value;
+            const topic = document.getElementById('codal-topic').value.trim();
+            const topicB = (document.getElementById('codal-topic-b')?.value || '').trim();
+            const output = document.getElementById('codal-output');
+            const btn = document.getElementById('btn-codal-run');
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (!apiKey) { alert('Please enter your Gemini API Key in the AI Search tab first.'); return; }
+            if (!topic) { alert('Please enter a topic or article.'); return; }
+            if (cmd === 'compare' && !topicB) { alert('Please enter both Provision A and Provision B.'); return; }
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Working...';
+            output.innerHTML = '<div class="flex flex-col justify-center h-40 items-center text-slate-400"><div class="loader mb-3"></div><p class="text-xs">Consulting De Leon and jurisprudence...</p></div>';
+            const persona = `You are the Lex Codal Trainer: a distinguished Senior Law Professor, Bar Examiner, and Legal Scholar whose teaching and testing methodology is strictly anchored in HECTOR S. DE LEON's commentaries and textbooks and Philippine jurisprudence.`;
+            try {
+            if (cmd === 'flashcard') {
+            const promptText = `${persona}
+            COMMAND: /flashcard
+            SUBJECT: ${subject}
+            TOPIC/RANGE: ${topic}
+            Generate structured legal flashcards (up to 5 if a range; 1 if a single article). Return ONLY a raw JSON array:
+            [{"subject":"string","provision":"Article number and statute name","recall_question":"1-2 direct recitation questions","codal_text":"exact statutory text or core extract","general_rule":"1-2 sentences","elements":["..."],"elements_mnemonic":"catchy mnemonic","elements_breakdown":["A - ..."],"exceptions":["..."],"exceptions_mnemonic":"mnemonic","exceptions_breakdown":["..."],"ratio_legis":"why the law exists","plain_english":"De Leon-style plain-English explanation","subject_link":"connection to ${subject}"}]
+            Do NOT use markdown. Output raw JSON only.`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
+            const list = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
+            const cards = Array.isArray(list) ? list : [list];
+            window.appHandlers.codalSession = { command: cmd, subject, topic, title: `${subject} — ${topic} (Flashcards)`, payload: { cards } };
+            window.appHandlers.renderCodalFlashcards(cards, { subject, topic, command: cmd });
+            } else if (cmd === 'exam') {
+            const promptText = `${persona}
+            COMMAND: /exam
+            SUBJECT: ${subject}
+            TOPIC/ARTICLE: ${topic}
+            Create ONE realistic bar-style factual problem (2-3 paragraphs) ending with a clear question. Return ONLY raw JSON: {"scenario":"string","question":"string"}`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
+            const item = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
+            window.appHandlers.codalSession = { command: cmd, subject, topic, title: `${subject} — ${topic} (Bar Scenario)`, payload: item };
+            window.appHandlers.renderCodalExam(item, { subject, topic, command: cmd });
+            } else if (cmd === 'recite') {
+            const promptText = `${persona}
+            COMMAND: /recite
+            SUBJECT: ${subject}
+            TOPIC/ARTICLE: ${topic}
+            Simulate a fierce cold-call recitation. Return ONLY raw JSON: {"question":"first tough question","followups":["follow-up 1","follow-up 2","follow-up 3"]}`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
+            const item = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
+            window.appHandlers.codalSession = { command: cmd, subject, topic, title: `${subject} — ${topic} (Recitation)`, payload: item };
+            window.appHandlers.renderCodalRecite(item.question, 1, { subject, topic, command: cmd });
+            } else {
+            const promptText = `${persona}
+            COMMAND: /compare
+            SUBJECT: ${subject}
+            PROVISION A: ${topic}
+            PROVISION B: ${topicB}
+            Generate a De Leon distinction matrix with at least 6 rows. Return ONLY raw JSON: {"title_a":"...","title_b":"...","rows":[{"basis":"General Rule","a":"...","b":"..."}]}`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
+            const item = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
+            window.appHandlers.codalSession = { command: cmd, subject, topic: `${topic} vs ${topicB}`, title: `${subject} — ${topic} vs ${topicB} (Matrix)`, payload: item };
+            window.appHandlers.renderCodalCompare(item, { subject, topic: `${topic} vs ${topicB}`, command: cmd });
+            }
+            } catch (e) {
+            console.error(e);
+            output.innerHTML = `<div class="bg-red-50 text-red-600 p-6 rounded-xl text-center text-sm border border-red-100 flex flex-col items-center gap-2"><i class="fas fa-exclamation-circle text-2xl"></i><p class="font-bold">Generation Failed</p><p class="opacity-80">${Security.escapeHTML(e.message)}</p></div>`;
+            } finally {
+            btn.disabled = false;
+            window.appHandlers.setCodalCommand(cmd);
+            }
+            },
+            renderCodalFlashcards: (cards, meta) => {
+            const output = document.getElementById('codal-output');
+            output.innerHTML = window.appHandlers.codalSaveBar(meta) + `<div class="grid grid-cols-1 gap-6 pb-10">` + cards.map(c => `
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition" data-flip="1">
+            <div class="bg-slate-50 px-5 py-4 border-b border-slate-200 flex justify-between items-center">
+            <span class="font-bold text-red-700 text-base tracking-wider uppercase">${Security.escapeHTML(c.provision || '')}</span>
+            <span class="text-sm text-slate-500 font-medium text-right">${Security.escapeHTML(c.subject || meta.subject)}</span>
+            </div>
+            <div class="p-6 md:p-8">
+            <div class="card-inner">
+            <p class="text-xs text-blue-600 font-bold uppercase tracking-widest mb-3"><i class="fas fa-clone mr-1"></i> Front — Active Recall</p>
+            <p class="text-slate-800 text-base md:text-lg font-semibold leading-8">${Security.escapeHTML(c.recall_question || '')}</p>
+            <p class="text-xs text-slate-400 mt-8 text-center">(Click card to reveal the Back)</p>
+            </div>
+            <div class="card-back hidden">
+            <p class="text-xs text-green-600 font-bold uppercase tracking-widest mb-4"><i class="fas fa-book-open mr-1"></i> Back</p>
+            <div class="space-y-5 text-[15px] md:text-base text-slate-700 leading-7">
+            <div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Codal Provision & Context</p><p class="serif-text italic bg-slate-50 border-l-4 border-slate-300 pl-4 py-3">${Security.escapeHTML(c.codal_text || '')}</p></div>
+            <div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">General Rule</p><p>${Security.escapeHTML(c.general_rule || '')}</p></div>
+            <div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Elements / Requisites</p>${window.appHandlers.codalList(c.elements)}${c.elements_mnemonic ? `<p class="mt-3 text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3"><i class="fas fa-lightbulb mr-1"></i> Mnemonic: ${Security.escapeHTML(c.elements_mnemonic)}</p>${window.appHandlers.codalList(c.elements_breakdown)}` : ''}</div>
+            <div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Exceptions</p>${window.appHandlers.codalList(c.exceptions) || '<p class="text-sm text-slate-400">None stated.</p>'}${c.exceptions_mnemonic ? `<p class="mt-3 text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3"><i class="fas fa-lightbulb mr-1"></i> Mnemonic: ${Security.escapeHTML(c.exceptions_mnemonic)}</p>${window.appHandlers.codalList(c.exceptions_breakdown)}` : ''}</div>
+            <div><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Discussion & De Leon Commentary</p><p class="mb-2"><b>Ratio Legis:</b> ${Security.escapeHTML(c.ratio_legis || '')}</p><p class="mb-2"><b>Plain-English:</b> ${Security.escapeHTML(c.plain_english || '')}</p><p><b>Subject Link:</b> ${Security.escapeHTML(c.subject_link || '')}</p></div>
+            </div>
+            <p class="text-xs text-slate-400 mt-6 text-center">(Click card to flip back)</p>
+            </div>
+            </div>
+            </div>`).join('') + `</div>`;
+            output.querySelectorAll('[data-flip]').forEach(el => { el.onclick = () => handleCardFlip(el); });
+            },
+            renderCodalExam: (item, meta) => {
+            const output = document.getElementById('codal-output');
+            output.innerHTML = window.appHandlers.codalSaveBar(meta) + `
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 md:p-8">
+            <p class="text-xs font-bold text-purple-600 uppercase tracking-widest mb-3"><i class="fas fa-gavel mr-1"></i> /exam — Bar-Style Scenario</p>
+            <p class="text-sm md:text-base text-slate-700 leading-relaxed whitespace-pre-wrap">${Security.escapeHTML(item.scenario || '')}</p>
+            <p class="text-sm md:text-base font-bold text-slate-900 mt-4">${Security.escapeHTML(item.question || '')}</p>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mt-5 mb-1">Your ALAC Answer</label>
+            <textarea id="codal-exam-answer" rows="8" class="w-full p-3 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500" placeholder="Answer → Legal Basis → Application → Conclusion"></textarea>
+            <button id="codal-eval-btn" class="mt-3 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><i class="fas fa-check-double mr-1"></i> Evaluate My Answer</button>
+            <div id="codal-eval-result" class="mt-4"></div>
+            </div>`;
+            document.getElementById('codal-eval-btn').onclick = window.appHandlers.evaluateCodalExam;
+            },
+            evaluateCodalExam: async () => {
+            const session = window.appHandlers.codalSession;
+            const answer = document.getElementById('codal-exam-answer')?.value.trim();
+            const btn = document.getElementById('codal-eval-btn');
+            const result = document.getElementById('codal-eval-result');
+            if (!answer) { alert('Type your ALAC answer first.'); return; }
+            const apiKey = localStorage.getItem('gemini_api_key');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...';
+            try {
+            const promptText = `You are a strict Philippine Bar Examiner. Evaluate the student's answer using ALAC. Scenario: ${session.payload.scenario} Question: ${session.payload.question} Student answer: ${answer} Return ONLY raw JSON: {"score":8,"answer_comments":"...","legal_basis_comments":"...","application_comments":"...","conclusion_comments":"...","model_answer":"textbook ALAC model answer","next_step":"..."}`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
+            const g = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
+            result.innerHTML = `<div class="bg-purple-50 border border-purple-200 rounded-xl p-5 text-sm">
+            <div class="flex items-center justify-between mb-3"><p class="font-bold text-purple-800"><i class="fas fa-marker mr-1"></i> Examiner's Evaluation</p><span class="text-lg font-black text-purple-700">${Security.escapeHTML(String(g.score ?? '—'))}/10</span></div>
+            <ul class="list-disc pl-5 space-y-1 text-slate-700">
+            <li><b>Answer:</b> ${Security.escapeHTML(g.answer_comments || '')}</li>
+            <li><b>Legal Basis:</b> ${Security.escapeHTML(g.legal_basis_comments || '')}</li>
+            <li><b>Application:</b> ${Security.escapeHTML(g.application_comments || '')}</li>
+            <li><b>Conclusion:</b> ${Security.escapeHTML(g.conclusion_comments || '')}</li>
+            </ul>
+            <p class="mt-3 text-slate-700"><b>Next Step:</b> ${Security.escapeHTML(g.next_step || '')}</p>
+            <details class="mt-3"><summary class="cursor-pointer font-bold text-purple-700">View Model Answer</summary><p class="mt-2 whitespace-pre-wrap text-slate-700 leading-relaxed">${Security.escapeHTML(g.model_answer || '')}</p></details>
+            </div>`;
+            } catch (e) { result.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">${Security.escapeHTML(e.message)}</div>`; }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Evaluate My Answer'; }
+            },
+            renderCodalRecite: (question, number, meta) => {
+            const output = document.getElementById('codal-output');
+            output.innerHTML = window.appHandlers.codalSaveBar(meta) + `
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 md:p-8">
+            <p class="text-xs font-bold text-red-600 uppercase tracking-widest mb-3"><i class="fas fa-microphone mr-1"></i> /recite — Cold-Call Question ${number}</p>
+            <p class="text-sm md:text-base font-bold text-slate-900 leading-relaxed">${Security.escapeHTML(question)}</p>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mt-5 mb-1">Your Answer (optional)</label>
+            <textarea id="codal-recite-answer" rows="5" class="w-full p-3 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-red-500" placeholder="Type your recitation answer..."></textarea>
+            <div class="flex flex-wrap gap-2 mt-3">
+            <button id="codal-recite-eval" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><i class="fas fa-check-double mr-1"></i> Evaluate My Answer</button>
+            <button id="codal-recite-next" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold transition"><i class="fas fa-arrow-right mr-1"></i> Next Follow-up</button>
+            </div>
+            <div id="codal-recite-result" class="mt-4"></div>
+            </div>`;
+            document.getElementById('codal-recite-eval').onclick = window.appHandlers.evaluateCodalRecite;
+            document.getElementById('codal-recite-next').onclick = window.appHandlers.nextCodalFollowUp;
+            },
+            nextCodalFollowUp: () => {
+            const session = window.appHandlers.codalSession;
+            if (!session || session.command !== 'recite') return;
+            const followups = session.payload?.followups || [];
+            if ((session.followIndex || 0) < followups.length) {
+            session.followIndex = (session.followIndex || 0) + 1;
+            window.appHandlers.renderCodalRecite(followups[session.followIndex - 1], session.followIndex + 1, session);
+            } else {
+            alert('Follow-ups exhausted. Great recitation! Run /recite again for a new line of questions.');
+            }
+            },
+            evaluateCodalRecite: async () => {
+            const session = window.appHandlers.codalSession;
+            const answer = document.getElementById('codal-recite-answer')?.value.trim();
+            const btn = document.getElementById('codal-recite-eval');
+            const result = document.getElementById('codal-recite-result');
+            if (!answer) { alert('Type your answer first.'); return; }
+            const apiKey = localStorage.getItem('gemini_api_key');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Evaluating...';
+            try {
+            const promptText = `You are a fierce Philippine law professor reciting a student. Question: ${session.payload.question} Student answer: ${answer} Return ONLY raw JSON: {"verdict":"PASS / ALMOST / MISS","comments":"...","model_answer":"..."}`;
+            const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
+            const g = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
+            result.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-xl p-5 text-sm"><p class="font-bold text-red-800 mb-2"><i class="fas fa-stamp mr-1"></i> Verdict: ${Security.escapeHTML(g.verdict || '')}</p><p class="text-slate-700">${Security.escapeHTML(g.comments || '')}</p><details class="mt-3"><summary class="cursor-pointer font-bold text-red-700">View Model Answer</summary><p class="mt-2 whitespace-pre-wrap text-slate-700 leading-relaxed">${Security.escapeHTML(g.model_answer || '')}</p></details></div>`;
+            } catch (e) { result.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">${Security.escapeHTML(e.message)}</div>`; }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Evaluate My Answer'; }
+            },
+            renderCodalCompare: (item, meta) => {
+            const output = document.getElementById('codal-output');
+            const rows = Array.isArray(item.rows) ? item.rows : [];
+            output.innerHTML = window.appHandlers.codalSaveBar(meta) + `
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 md:p-8 overflow-x-auto">
+            <p class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3"><i class="fas fa-code-compare mr-1"></i> /compare — De Leon Distinction Matrix</p>
+            <table class="w-full text-sm border-collapse min-w-[600px]">
+            <thead><tr class="bg-slate-50"><th class="border border-slate-200 p-3 text-left w-1/5">Basis</th><th class="border border-slate-200 p-3 text-left">${Security.escapeHTML(item.title_a || 'Provision A')}</th><th class="border border-slate-200 p-3 text-left">${Security.escapeHTML(item.title_b || 'Provision B')}</th></tr></thead>
+            <tbody>${rows.map(r => `<tr><td class="border border-slate-200 p-3 font-bold text-slate-700">${Security.escapeHTML(r.basis || '')}</td><td class="border border-slate-200 p-3 text-slate-600">${Security.escapeHTML(r.a || '')}</td><td class="border border-slate-200 p-3 text-slate-600">${Security.escapeHTML(r.b || '')}</td></tr>`).join('')}</tbody>
+            </table>
+            </div>`;
+            },
 
           renderMatrixRows: (data) => { 
                 const list = document.getElementById('matrix-list'); if (!list) return; 
