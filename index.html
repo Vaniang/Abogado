@@ -4005,7 +4005,7 @@ deleteAdvocacyDraft: (id) => {
             else if (it.command === 'exam') window.appHandlers.renderCodalExam(it.payload || {}, meta);
             else if (it.command === 'recite') window.appHandlers.renderCodalRecite(it.payload?.question || '', 1, meta);
             else if (it.command === 'compare') window.appHandlers.renderCodalCompare(it.payload || {}, meta);
-           document.getElementById('codal-output')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          document.getElementById('codal-output')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             },
             renderCodalLibrary: (items) => {
             const wrap = document.getElementById('codal-library');
@@ -4103,7 +4103,6 @@ deleteAdvocacyDraft: (id) => {
             btn.disabled = false;
             window.appHandlers.setCodalCommand(cmd);
             }
-                document.getElementById('codal-output')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             },
             renderCodalFlashcards: (cards, meta) => {
             const output = document.getElementById('codal-output');
