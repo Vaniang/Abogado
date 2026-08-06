@@ -582,17 +582,11 @@ await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resource
 
         const DEFAULT_NOTE_SECTIONS = [
             { id: 'dashboard', order: 0, label: '00 — Subject Dashboard', icon: 'fa-chart-pie' },
-            { id: 'syllabus', order: 1, label: '01 — Syllabus and Course Coverage', icon: 'fa-list-check' },
-            { id: 'class_notes', order: 2, label: '02 — Class Notes', icon: 'fa-pen-to-square' },
-            { id: 'codal_provisions', order: 3, label: '03 — Codal Provisions', icon: 'fa-scale-balanced' },
-            { id: 'assigned_cases', order: 4, label: '04 — Assigned Cases', icon: 'fa-book-bookmark' },
-            { id: 'case_digests', order: 5, label: '05 — Case Analysis Notes', icon: 'fa-gavel' },
-            { id: 'doctrines', order: 6, label: '06 — Doctrine Notes and Class Synthesis', icon: 'fa-landmark' },
-            { id: 'recitation', order: 7, label: '07 — Recitation Questions', icon: 'fa-microphone' },
-            { id: 'assignments', order: 8, label: '08 — Assignments and Legal Research', icon: 'fa-file-signature' },
-            { id: 'exam_review', order: 9, label: '09 — Quiz and Exam Review', icon: 'fa-graduation-cap' },
-            { id: 'master_outline', order: 10, label: '10 — Subject Master Reviewer', icon: 'fa-sitemap' }
-        ];
+            { id: 'class_notes', order: 1, label: '01 — Class Notes', icon: 'fa-pen-to-square' },
+            { id: 'codal_provisions', order: 2, label: '02 — Codal Provisions', icon: 'fa-scale-balanced' },
+            { id: 'case_digests', order: 3, label: '03 — Case Analysis Notes', icon: 'fa-gavel' },
+            { id: 'master_outline', order: 4, label: '04 — Subject Master Reviewer', icon: 'fa-sitemap' }
+            ];
 
         const NOTE_TEMPLATES = {
             blank: '',
@@ -1990,7 +1984,7 @@ async ocrPdf(file, onProgress = () => {}) {
                         <button onclick="window.appHandlers.showSubjectDigests()" class="bg-white border border-amber-200 rounded-xl p-5 text-left hover:shadow-md hover:border-amber-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Case Digests</h4></div><span class="text-4xl font-bold text-amber-600">${digestCount}</span></div><p class="text-sm text-slate-500 mt-3">The same records shown in Consolidated Case Digests—no duplicate copies.</p></button>
                         <button onclick="window.appHandlers.showSubjectDoctrines()" class="bg-white border border-blue-200 rounded-xl p-5 text-left hover:shadow-md hover:border-blue-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-blue-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Doctrine Matrix</h4></div><span class="text-4xl font-bold text-blue-600">${doctrineCount}</span></div><p class="text-sm text-slate-500 mt-3">Edit once and the doctrine updates globally and inside this subject.</p></button>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-6">${sectionCards}</div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">${sectionCards}</div>
                     <div class="mt-6 bg-gradient-to-r from-indigo-700 to-slate-900 rounded-xl p-6 text-white shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4"><div><p class="text-xs uppercase tracking-widest text-indigo-200 font-bold">Final Consolidated Reviewer</p><h4 class="text-xl font-bold serif-text mt-1">Subject Master Reviewer</h4><p class="text-sm text-indigo-100 mt-2 max-w-2xl">Create a structured blank reviewer or compile your existing notes, linked case digests, and linked doctrines into one editable page.</p></div><div class="flex flex-wrap gap-2 flex-shrink-0"><button onclick="window.appHandlers.addNote('${this.subjectId}', 'master_outline')" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-file-lines mr-2"></i>Use Template</button><button onclick="window.appHandlers.generateMasterReviewer('${this.subjectId}')" class="bg-amber-400 hover:bg-amber-300 text-slate-900 px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-wand-magic-sparkles mr-2"></i>Generate from Materials</button></div></div>
                     <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-5"><h4 class="font-bold text-amber-800"><i class="fas fa-link mr-2"></i>One record, multiple views</h4><p class="text-sm text-amber-900/80 mt-2">Use the linked Case Digests and Doctrine Matrix tabs for master records. Use notebook sections 05 and 06 only for personal analysis, professor comments, and class synthesis.</p></div>
                 </div></div>`;
@@ -6448,12 +6442,10 @@ sendBarExamMessage: async () => {
                 const templateOptions = [
                     ['blank', 'Blank Page'],
                     ['class_note', 'Class Note'],
-                    ['case_digest', 'Case Digest'],
                     ['codal_note', 'Codal Note'],
-                    ['case_comparison', 'Case Comparison'],
-                    ['recitation', 'Recitation / ALAC Practice'],
+                    ['case_digest', 'Case Digest'],
                     ['master_reviewer', 'Subject Master Reviewer']
-                ].map(([value, label]) => `<option value="${value}" ${value === defaultTemplate ? 'selected' : ''}>${label}</option>`).join('');
+                    ].map(([value, label]) => `<option value="${value}" ${value === defaultTemplate ? 'selected' : ''}>${label}</option>`).join('');
                 Modal.show({
                     title: '<i class="fas fa-file-alt text-blue-600"></i> New Notebook Page',
                     content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Page Title</label><input type="text" id="note-title" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value="${Security.escapeHTML(defaultTitle)}" placeholder="e.g., Class 01 — Sources of Obligations"></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Notebook Section</label><select id="note-section" class="w-full p-2 border border-slate-300 rounded-lg outline-none">${sectionOptions}</select></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Page Template</label><select id="note-template" class="w-full p-2 border border-slate-300 rounded-lg outline-none">${templateOptions}</select></div>${presetSection === 'master_outline' ? `<div class="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-800"><i class="fas fa-circle-info mr-1"></i>This creates a structured blank reviewer. Use <strong>Generate from Materials</strong> to compile existing subject content automatically.</div>` : ''}`,
