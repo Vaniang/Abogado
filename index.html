@@ -850,10 +850,10 @@ await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resource
         };
 
     const MaterialUtils = {
-    maxFileBytes: 40 * 1024 * 1024,
-    maxPages: 400,
-    maxExtractedCharacters: 1800000,
-    chunkCharacters: 14000,
+            maxFileBytes: 50 * 1024 * 1024,   // 50 MB upload limit ✅
+            maxPages: 1200,                   // index up to 1,200 pages (was 400)
+            maxExtractedCharacters: 3000000,  // ~3M chars ≈ 1,200 pages of text
+            chunkCharacters: 14000,           // ⚠️ KEEP AT 14000 — do NOT change
 
     async getEmbedding(apiKey, text) {
         const safeText = text.length > 6000 ? text.substring(0, 6000) : text;
@@ -5415,7 +5415,7 @@ initPomoPosition: () => {
 
         <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
             <i class="fas fa-circle-info mr-1"></i>
-            Maximum file size: 40 MB.
+                    Maximum file size: 50 MB.
         </div>
         `,
 
@@ -5443,8 +5443,8 @@ initPomoPosition: () => {
 
                 if (file.size > MaterialUtils.maxFileBytes)
                     throw new Error(
-                        "The PDF is larger than 40 MB."
-                    );
+                        "The PDF is larger than 50 MB."
+                        );
 
                 const title =
                     document.getElementById("material-title").value.trim() ||
@@ -5599,7 +5599,7 @@ initPomoPosition: () => {
                         }
                 
                         if (file.size > MaterialUtils.maxFileBytes) {
-                            alert('The PDF is larger than 40 MB.');
+                            alert('The PDF is larger than 50 MB.');
                             return;
                         }
                 
