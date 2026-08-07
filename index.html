@@ -3639,7 +3639,7 @@ deleteAdvocacyDraft: (id) => {
           downloadNoteAsPDF: (title) => {
             const element = document.getElementById('note-content-editor');
             const opt = {
-            margin: 10,
+            margin: [18, 12, 16, 12], // mm: top (room for header), left/right, bottom (room for footer)
             filename: `${title}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true },
@@ -3647,10 +3647,32 @@ deleteAdvocacyDraft: (id) => {
             pagebreak: { mode: ['css', 'legacy'] }
             };
             const originalStyle = element.style.cssText;
-            element.style.padding = '20px';
+            element.style.padding = '8px';
             element.style.background = 'white';
             element.style.color = 'black';
-            html2pdf().set(opt).from(element).save().then(() => {
+            html2pdf().set(opt).from(element).toContainer().toPdf().then(function () {
+            const pdf = this.pdf;
+            const totalPages = pdf.getNumberOfPages ? pdf.getNumberOfPages() : pdf.internal.getNumberOfPages();
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            for (let i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            // ---- PROFESSIONAL HEADER (centered title + rule line) ----
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(9);
+            pdf.setTextColor(30, 58, 138);
+            pdf.text(String(title || 'Lex Note').toUpperCase(), pageWidth / 2, 10, { align: 'center' });
+            pdf.setDrawColor(203, 213, 225);
+            pdf.setLineWidth(0.3);
+            pdf.line(12, 13, pageWidth - 12, 13);
+            // ---- FOOTER: brand (left) + page number (bottom-right) ----
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(8);
+            pdf.setTextColor(130, 130, 130);
+            pdf.text('Lex — Law School Companion', 12, pageHeight - 8);
+            pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 12, pageHeight - 8, { align: 'right' });
+            }
+            }).save().then(() => {
             element.style.cssText = originalStyle;
             });
             },
@@ -4383,14 +4405,12 @@ deleteAdvocacyDraft: (id) => {
                 window.appHandlers.printContent('Doctrine Matrix', html);
             },
             
-            printContent: (title, htmlContent) => { 
-                const printWindow = window.open('', '', 'height=600,width=800'); 
-                printWindow.document.write('<html><head><title>'+title+'</title><script src="https://cdn.tailwindcss.com"></' + 'script><link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet"><style>h1,h2,h3,h4,h5,p,li,blockquote,table,tr{break-inside:avoid;page-break-inside:avoid;}</style></head><body class="p-10 font-serif leading-relaxed text-slate-800">');
-                printWindow.document.write(htmlContent); 
-                printWindow.document.write('</body></html>'); 
-                printWindow.document.close(); 
-                setTimeout(() => printWindow.print(), 800); 
-            },
+            printContent: (title, htmlContent) => {
+                const printWindow = window.open('', '', 'height=600,width=800');
+                printWindow.document.write('<html><head><title>'+title+'</title><script src="https://cdn.tailwindcss.com"></' + 'script><link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet"><style>@page { size: A4; margin: 16mm 14mm 14mm 14mm; } body { padding-top: 10mm; } .lex-print-header { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; font-family: Inter, sans-serif; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: #1e3a8a; }</style></head><body class="p-10 font-serif leading-relaxed text-slate-800"><div class="lex-print-header"><span>'+title+'</span><span>Lex — Law School Companion</span></div>' + htmlContent + '</body></html>');
+                printWindow.document.close();
+                setTimeout(() => printWindow.print(), 800);
+                },
             downloadText: (filename, textContent) => { const cleanText = typeof textContent === 'string' ? textContent.replace(/\\n/g, '\n') : textContent; const element = document.createElement('a'); element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(cleanText)); element.setAttribute('download', filename); element.style.display = 'none'; document.body.appendChild(element); element.click(); document.body.removeChild(element); },
             
             openAlarmSettings: () => {
