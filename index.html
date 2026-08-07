@@ -3638,42 +3638,43 @@ deleteAdvocacyDraft: (id) => {
 },
           downloadNoteAsPDF: (title) => {
             const element = document.getElementById('note-content-editor');
+            if (!element) { alert('Open a note first before downloading it as PDF.'); return; }
+            // 1) Off-screen clone so html2pdf captures ALL content (not just the visible scroll window)
+            const clone = document.createElement('div');
+            clone.innerHTML = element.innerHTML;
+            clone.style.cssText = 'position:absolute;left:-10000px;top:0;width:794px;background:#ffffff;color:#111111;padding:0;font-family:Georgia,"Times New Roman",serif;font-size:13px;line-height:1.6;overflow:visible;';
+            clone.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, blockquote, table').forEach(el => { el.style.pageBreakInside = 'avoid'; });
+            document.body.appendChild(clone);
+            const cleanTitle = (title || 'Lex Note').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'Lex Note';
             const opt = {
-            margin: [18, 12, 16, 12], // mm: top (room for header), left/right, bottom (room for footer)
-            filename: `${title}.pdf`,
+            margin: [0.6, 0.5, 0.6, 0.5],
+            filename: `${cleanTitle}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            html2canvas: { scale: 2, useCORS: true, windowWidth: 794 },
+            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' },
             pagebreak: { mode: ['css', 'legacy'] }
             };
-            const originalStyle = element.style.cssText;
-            element.style.padding = '8px';
-            element.style.background = 'white';
-            element.style.color = 'black';
-            html2pdf().set(opt).from(element).toContainer().toPdf().then(function () {
+            html2pdf().set(opt).from(clone).toPdf().then(function () {
+            // 2) Professional header + page number at bottom-right of every page
             const pdf = this.pdf;
-            const totalPages = pdf.getNumberOfPages ? pdf.getNumberOfPages() : pdf.internal.getNumberOfPages();
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            for (let i = 1; i <= totalPages; i++) {
+            const pages = pdf.internal.getNumberOfPages ? pdf.internal.getNumberOfPages() : (pdf.internal.pages.length - 1);
+            const pw = pdf.internal.pageSize.getWidth();
+            const ph = pdf.internal.pageSize.getHeight();
+            for (let i = 1; i <= pages; i++) {
             pdf.setPage(i);
-            // ---- PROFESSIONAL HEADER (centered title + rule line) ----
-            pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(9);
-            pdf.setTextColor(30, 58, 138);
-            pdf.text(String(title || 'Lex Note').toUpperCase(), pageWidth / 2, 10, { align: 'center' });
-            pdf.setDrawColor(203, 213, 225);
-            pdf.setLineWidth(0.3);
-            pdf.line(12, 13, pageWidth - 12, 13);
-            // ---- FOOTER: brand (left) + page number (bottom-right) ----
-            pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(8);
-            pdf.setTextColor(130, 130, 130);
-            pdf.text('Lex — Law School Companion', 12, pageHeight - 8);
-            pdf.text(`Page ${i} of ${totalPages}`, pageWidth - 12, pageHeight - 8, { align: 'right' });
+            pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(120);
+            pdf.text(cleanTitle.toUpperCase(), pw / 2, 0.35, { align: 'center' });
+            pdf.setDrawColor(180); pdf.setLineWidth(0.01); pdf.line(0.5, 0.45, pw - 0.5, 0.45);
+            pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(140);
+            pdf.text('Lex — Law School Companion', 0.5, ph - 0.3);
+            pdf.text(`Page ${i} of ${pages}`, pw - 0.5, ph - 0.3, { align: 'right' });
             }
             }).save().then(() => {
-            element.style.cssText = originalStyle;
+            if (clone.parentNode) document.body.removeChild(clone);
+            }).catch(err => {
+            console.error('PDF download failed:', err);
+            if (clone.parentNode) document.body.removeChild(clone);
+            alert('PDF download failed: ' + (err && err.message ? err.message : err));
             });
             },
 
@@ -4044,37 +4045,40 @@ deleteAdvocacyDraft: (id) => {
           document.getElementById('codal-output')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             },
           renderCodalLibrary: (items) => {
-            const wrap = document.getElementById('codal-library');
-            if (!wrap) return;
-            if (!items || !items.length) {
-            wrap.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm bg-white border-2 border-dashed border-slate-300 rounded-xl">No saved trainer items yet. Run a command, then press "Save to Trainer Library".</div>';
-            return;
-            }
-            const typeColors = { flashcard: 'text-blue-600', exam: 'text-purple-600', recite: 'text-red-600', compare: 'text-emerald-600' };
-            const typeIcons = { flashcard: 'fa-clone', exam: 'fa-gavel', recite: 'fa-microphone', compare: 'fa-code-compare' };
-            const bySubject = {};
-            items.forEach(it => { const k = it.subject || 'General'; (bySubject[k] = bySubject[k] || []).push(it); });
-            wrap.innerHTML = Object.keys(bySubject).sort().map(subject => {
-            const byTopic = {};
-            bySubject[subject].forEach(it => { const t = it.topic || 'General'; (byTopic[t] = byTopic[t] || []).push(it); });
-            return `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div class="px-5 py-3 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 uppercase tracking-wider text-sm"><i class="fas fa-book text-blue-500 mr-2"></i>${Security.escapeHTML(subject)}</div>
-            <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">` +
-            Object.keys(byTopic).sort().map(topic => {
-            const its = byTopic[topic];
-            const chips = its.map(it => `<span class="inline-flex items-center gap-1 border border-slate-200 rounded-lg pl-2 pr-1 py-1 text-xs bg-slate-50">
-            <span class="font-bold uppercase ${typeColors[it.command] || 'text-slate-600'}"><i class="fas ${typeIcons[it.command] || 'fa-circle'} mr-1"></i>${it.command}</span>
-            <button onclick="window.appHandlers.openSavedCodalItem('${it.id}')" class="text-blue-600 hover:bg-blue-50 px-2 py-0.5 rounded font-bold"><i class="fas fa-folder-open mr-1"></i>Open</button>
-            <button onclick="window.appHandlers.deleteSavedCodalItem('${it.id}')" class="text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"><i class="fas fa-trash"></i></button>
-            </span>`).join('');
-            return `<div class="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:border-blue-300 transition flex flex-col gap-3">
-            <h5 class="font-bold text-slate-700 text-sm flex items-center gap-2"><i class="fas fa-tag text-amber-500"></i>${Security.escapeHTML(topic)}</h5>
-            <div class="flex flex-wrap gap-2">${chips}</div>
-            </div>`;
-            }).join('') +
-            `</div></div>`;
-            }).join('');
-            },
+                const wrap = document.getElementById('codal-library');
+                if (!wrap) return;
+                if (!items || !items.length) {
+                wrap.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm bg-white border-2 border-dashed border-slate-300 rounded-xl">No saved trainer items yet. Run a command, then press "Save to Trainer Library".</div>';
+                return;
+                }
+                const typeColors = { flashcard: 'text-blue-600', exam: 'text-purple-600', recite: 'text-red-600', compare: 'text-emerald-600' };
+                const typeIcons = { flashcard: 'fa-clone', exam: 'fa-gavel', recite: 'fa-microphone', compare: 'fa-code-compare' };
+                const typeOrder = { flashcard: 0, exam: 1, recite: 2, compare: 3 };
+                // Numeric-aware sort: Article 2 now comes BEFORE Article 10
+                const naturalSort = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+                const bySubject = {};
+                items.forEach(it => { const k = it.subject || 'General'; (bySubject[k] = bySubject[k] || []).push(it); });
+                wrap.innerHTML = Object.keys(bySubject).sort(naturalSort).map(subject => {
+                const byTopic = {};
+                bySubject[subject].forEach(it => { const t = it.topic || 'General'; (byTopic[t] = byTopic[t] || []).push(it); });
+                return `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div class="px-5 py-3 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 uppercase tracking-wider text-sm"><i class="fas fa-book text-blue-500 mr-2"></i>${Security.escapeHTML(subject)}</div>
+                <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">` +
+                Object.keys(byTopic).sort(naturalSort).map(topic => {
+                const its = byTopic[topic].sort((a, b) => (typeOrder[a.command] ?? 9) - (typeOrder[b.command] ?? 9));
+                const chips = its.map(it => `<span class="inline-flex items-center gap-1 border border-slate-200 rounded-lg pl-2 pr-1 py-1 text-xs bg-slate-50">
+                <span class="font-bold uppercase ${typeColors[it.command] || 'text-slate-600'}"><i class="fas ${typeIcons[it.command] || 'fa-circle'} mr-1"></i>${it.command}</span>
+                <button onclick="window.appHandlers.openSavedCodalItem('${it.id}')" class="text-blue-600 hover:bg-blue-50 px-2 py-0.5 rounded font-bold"><i class="fas fa-folder-open mr-1"></i>Open</button>
+                <button onclick="window.appHandlers.deleteSavedCodalItem('${it.id}')" class="text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"><i class="fas fa-trash"></i></button>
+                </span>`).join('');
+                return `<div class="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:border-blue-300 transition flex flex-col gap-3">
+                <h5 class="font-bold text-slate-700 text-sm flex items-center gap-2"><i class="fas fa-tag text-amber-500"></i>${Security.escapeHTML(topic)}</h5>
+                <div class="flex flex-wrap gap-2">${chips}</div>
+                </div>`;
+                }).join('') +
+                `</div></div>`;
+                }).join('');
+                },
             runCodalTrainer: async () => {
             const cmd = window.appHandlers.codalCommand;
             const subject = document.getElementById('codal-subject').value;
