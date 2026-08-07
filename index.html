@@ -3849,9 +3849,11 @@ deleteAdvocacyDraft: (id) => {
             saveAiSearch: async (index) => {
                 const historyItem = views.ai_search.searchHistory[index]; const subjectSelect = document.getElementById(`save-select-${index}`); const subjectId = subjectSelect.value;
                 if (!subjectId) { alert("Please select a notebook from the dropdown first."); return; }
-                const title = `AI Search: ${historyItem.query.substring(0, 30)}...`; const content = `QUERY:\n${historyItem.query}\n\nANSWER:\n${historyItem.plainText.trim()}`;
+                const title = `AI Search: ${historyItem.query.substring(0, 30)}...`;
+                // ✅ Preserve the AI's formatting: save sanitized HTML (headings, bullets, bold) instead of flat plain text
+                const content = `<div class="note-template-block"><h2>Query</h2><p>${Security.escapeHTML(historyItem.query)}</p><h2>Professor Gemini's Answer</h2>${Security.sanitizeAI(historyItem.answerHtml)}</div>`;
                 try { await AppDB.add('notes', { subjectId: subjectId, title: title, content: content, created: serverTimestamp() }); alert("Search result successfully saved to your notebook!"); const subjectName = subjectSelect.options[subjectSelect.selectedIndex].text; window.appHandlers.openSubject(subjectId, subjectName); } catch(e) { alert("Error saving to notebook."); console.error(e); }
-            },
+                },
 
             generateTree: async () => {
                 const apiKey = document.getElementById('tree-api-key').value.trim(); 
