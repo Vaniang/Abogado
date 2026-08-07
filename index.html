@@ -78,12 +78,19 @@
 }
 
 /* Block elements */
+/* ===== PDF page-break protection: never slice text mid-line ===== */
+#note-content-editor h1, #note-content-editor h2, #note-content-editor h3,
+#note-content-editor h4, #note-content-editor h5, #note-content-editor p,
+#note-content-editor li, #note-content-editor blockquote, #note-content-editor table,
+.note-template-block h1, .note-template-block h2, .note-template-block h3,
+.note-template-block p, .note-template-block li {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 #note-content-editor p,
 #note-content-editor div,
-#note-content-editor h1,
 #note-content-editor h2,
 #note-content-editor h3,
-#note-content-editor h4,
 #note-content-editor h5,
 #note-content-editor h6,
 #note-content-editor ul,
@@ -3629,27 +3636,24 @@ deleteAdvocacyDraft: (id) => {
         onSubmit: async () => await AppDB.delete('advocacy_sessions', id) 
     });
 },
-            downloadNoteAsPDF: (title) => {
-    const element = document.getElementById('note-content-editor');
-    const opt = {
-        margin: 1,
-        filename: `${title}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-    
-    // Temporarily style the content for better PDF output
-    const originalStyle = element.style.cssText;
-    element.style.padding = '20px';
-    element.style.background = 'white';
-    element.style.color = 'black';
-    
-    html2pdf().set(opt).from(element).save().then(() => {
-        // Restore original style
-        element.style.cssText = originalStyle;
-    });
-},
+          downloadNoteAsPDF: (title) => {
+            const element = document.getElementById('note-content-editor');
+            const opt = {
+            margin: 10,
+            filename: `${title}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'] }
+            };
+            const originalStyle = element.style.cssText;
+            element.style.padding = '20px';
+            element.style.background = 'white';
+            element.style.color = 'black';
+            html2pdf().set(opt).from(element).save().then(() => {
+            element.style.cssText = originalStyle;
+            });
+            },
 
             // --- LEX-VOCAB HANDLERS ---
             addVocab: () => {
@@ -4379,7 +4383,7 @@ deleteAdvocacyDraft: (id) => {
             
             printContent: (title, htmlContent) => { 
                 const printWindow = window.open('', '', 'height=600,width=800'); 
-                printWindow.document.write('<html><head><title>'+title+'</title><script src="https://cdn.tailwindcss.com"></' + 'script><link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet"></head><body class="p-10 font-serif leading-relaxed text-slate-800">'); 
+                printWindow.document.write('<html><head><title>'+title+'</title><script src="https://cdn.tailwindcss.com"></' + 'script><link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet"><style>h1,h2,h3,h4,h5,p,li,blockquote,table,tr{break-inside:avoid;page-break-inside:avoid;}</style></head><body class="p-10 font-serif leading-relaxed text-slate-800">');
                 printWindow.document.write(htmlContent); 
                 printWindow.document.write('</body></html>'); 
                 printWindow.document.close(); 
