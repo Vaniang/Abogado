@@ -378,10 +378,15 @@
   font-size: 0.875rem;
   line-height: 1.6;
 }
-        /* ===== A4 paper writing surface + document scrolling (ALL screen sizes) ===== */
+/* ===== Notebook editor: scrolling + A4 paper + sticky toolbar (consolidated) ===== */
 #notebook-editor-area { overflow-y: auto; }
-#notebook-editor-area > div { flex: 0 0 auto !important; min-height: auto !important; }
+#notebook-editor-area > div {
+  flex: 0 0 auto !important;
+  min-height: auto !important;
+  align-self: stretch; /* keeps the card full-width — prevents the narrow-column collapse */
+}
 #note-content-editor {
+  width: 100% !important;
   max-width: 210mm !important;
   min-height: 297mm;
   margin: 8px auto 24px auto !important;
@@ -392,13 +397,12 @@
   font-size: 12pt;
   line-height: 1.75 !important;
 }
-        /* ===== Sticky formatting toolbar — always within reach while writing ===== */
 #note-toolbar {
   position: sticky;
   top: 0;
   z-index: 40;
   background: #ffffff;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, .08);
+  box-shadow: 0 6px 14px rgba(15,23,42,.08);
   border-radius: 0 0 .75rem .75rem;
 }
 </style>
