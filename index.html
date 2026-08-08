@@ -3905,8 +3905,8 @@ deleteAdvocacyDraft: (id) => {
                 localStorage.setItem('gemini_api_key', apiKey); 
                 if (!topic) { alert("Please enter a legal topic."); return; }
                 
-                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Mapping...'; 
-              outputArea.innerHTML = `
+               btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Mapping...';
+                    outputArea.innerHTML = `
                     <div class="w-full flex justify-between items-center mb-4">
                     <h4 class="font-bold text-slate-800 text-sm tracking-wider uppercase">Visual Map: ${Security.escapeHTML(topic)}</h4>
                     </div>
