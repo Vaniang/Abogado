@@ -6636,13 +6636,14 @@ sendBarExamMessage: async () => {
                         
                         <div class="flex justify-between items-center mb-4 mt-2 pr-28">
                             <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300 serif-text bg-transparent flex-1" value="${displayTitle.replace(/"/g, '&quot;')}" placeholder="Page Title...">
-                            <div class="flex gap-2">
+                           <div class="flex gap-2">
+                                <button onclick="window.appHandlers.printNote('${safeTitleForPrint}')" class="text-slate-400 hover:text-blue-600 p-2" title="Print"><i class="fas fa-print"></i></button>
+                                <button onclick="window.appHandlers.downloadNoteAsPDF('${safeTitleForPrint}')" class="text-slate-400 hover:text-emerald-600 p-2" title="Save as PDF"><i class="fas fa-file-pdf"></i></button>
                                 <button onclick="window.appHandlers.downloadText('${safeTitleForPrint}.txt', document.getElementById('note-content-editor').innerText)" class="text-slate-400 hover:text-slate-600 p-2" title="Download Text"><i class="fas fa-file-alt"></i></button>
                                 <button onclick="window.appHandlers.saveNote('${noteId}', false)" class="text-slate-400 hover:text-green-600 p-2" title="Force Save"><i class="fas fa-save"></i></button>
                                 <button onclick="window.appHandlers.toggleNoteToolbar()" class="text-slate-400 hover:text-blue-600 p-2" title="Minimize / maximize toolbar (like Word)"><i class="fas fa-chevron-up" id="note-toolbar-toggle-icon"></i></button>
-                                </div>
-                        </div>
-                        
+                            </div>
+                                                        
                                 <div id="note-toolbar" class="flex flex-wrap gap-2 mb-4 pb-3 border-b border-slate-100 items-center">
                                 <select onchange="window.appHandlers.formatText('fontName', this.value); this.selectedIndex=0;" class="h-8 rounded border border-slate-200 text-slate-600 text-sm focus:outline-none px-1 bg-slate-50 cursor-pointer" title="Font Style">
                                 <option value="" disabled selected>Font</option>
