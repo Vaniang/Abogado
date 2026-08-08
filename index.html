@@ -219,9 +219,20 @@
             background: rgba(15, 23, 42, .48); backdrop-filter: blur(1px);
         }
         #notebook-mobile-backdrop.mobile-open { display: block; }
-        #notebook-editor-area { width: 100%; min-width: 0; overflow-y: auto; }
+       /* ===== A4 paper writing surface + document-style scrolling ===== */
+        #notebook-editor-area { overflow-y: auto; }
         #notebook-editor-area > div { flex: 0 0 auto !important; min-height: auto !important; }
-        #note-content-editor { min-height: 60vh !important; }
+        #note-content-editor {
+          max-width: 210mm !important;
+          min-height: 297mm;
+          margin: 8px auto 24px auto !important;
+          padding: 20mm 16mm !important;
+          background: #ffffff !important;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 1px 3px rgba(15,23,42,.10), 0 10px 30px rgba(15,23,42,.08);
+          font-size: 12pt;
+          line-height: 1.75 !important;
+        }
         #pomodoro-widget {
             right: calc(.75rem + var(--lex-safe-right)) !important;
             bottom: calc(.75rem + var(--lex-safe-bottom)) !important;
@@ -6618,7 +6629,7 @@ sendBarExamMessage: async () => {
                 const area = document.getElementById('notebook-editor-area');
                 
                 area.innerHTML = `
-                    <div class="flex-1 flex flex-col p-8 bg-white m-6 rounded-2xl shadow-sm border border-slate-200 min-h-0 relative">
+                  <div class="flex-1 flex flex-col p-4 md:p-6 bg-slate-100 m-6 rounded-2xl shadow-sm border border-slate-200 min-h-0 relative">
                         <div class="absolute top-6 right-8 flex items-center gap-2">
                             <span id="note-save-status" class="text-xs font-bold text-slate-400 opacity-0 transition-opacity duration-300"><i class="fas fa-cloud-upload-alt mr-1"></i> Auto-saved</span>
                         </div>
@@ -6626,9 +6637,8 @@ sendBarExamMessage: async () => {
                         <div class="flex justify-between items-center mb-4 mt-2 pr-28">
                             <input type="text" id="note-title-editor" class="text-3xl font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-300 serif-text bg-transparent flex-1" value="${displayTitle.replace(/"/g, '&quot;')}" placeholder="Page Title...">
                             <div class="flex gap-2">
-                                <button onclick="window.appHandlers.printNote('${safeTitleForPrint}')" class="text-slate-400 hover:text-blue-600 p-2" title="Print"><i class="fas fa-print"></i></button>
-                                <button onclick="window.appHandlers.downloadNoteAsPDF('${safeTitleForPrint}')" class="text-slate-400 hover:text-emerald-600 p-2" title="Save as PDF"><i class="fas fa-file-pdf"></i></button>
-                                 <button onclick="window.appHandlers.downloadText('${safeTitleForPrint}.txt', document.getElementById('note-content-editor').innerText)" class="text-slate-400 hover:text-slate-600 p-2" title="Download Text"><i class="fas fa-file-alt"></i></button>
+                                <button onclick="window.appHandlers.downloadText('${safeTitleForPrint}.txt', document.getElementById('note-content-editor').innerText)" class="text-slate-400 hover:text-slate-600 p-2" title="Download Text"><i class="fas fa-file-alt"></i></button>
+                                <button onclick="window.appHandlers.saveNote('${noteId}', false)" class="text-slate-400 hover:text-green-600 p-2" title="Force Save"><i class="fas fa-save"></i></button>
                                 <button onclick="window.appHandlers.toggleNoteToolbar()" class="text-slate-400 hover:text-blue-600 p-2" title="Minimize / maximize toolbar (like Word)"><i class="fas fa-chevron-up" id="note-toolbar-toggle-icon"></i></button>
                                 </div>
                         </div>
