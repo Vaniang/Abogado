@@ -3906,15 +3906,14 @@ deleteAdvocacyDraft: (id) => {
                 if (!topic) { alert("Please enter a legal topic."); return; }
                 
                 btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Mapping...'; 
-               outputArea.innerHTML = `
-                        <div class="w-full flex justify-between items-center mb-4">
-                            <h4 class="font-bold text-slate-800 text-sm tracking-wider uppercase">Visual Map: ${topic}</h4>
-                            <div class="flex items-center gap-2">
-                                <button onclick="window.appHandlers.printContent('Issue Tree: ${topic.replace(/'/g, "\\'")}', document.getElementById('rendered-tree-container').innerHTML)" class="text-slate-500 hover:text-blue-600 transition bg-white border border-slate-200 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Print Tree"><i class="fas fa-print"></i></button>
-                                <button onclick="window.appHandlers.downloadTree('${topic.replace(/'/g, "\\'")}')" class="text-slate-500 hover:text-green-600 transition bg-white border border-slate-200 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Download Map"><i class="fas fa-download"></i></button>
-                            </div>
-                        </div>
-                        <div id="rendered-tree-container" class="mermaid w-full flex justify-center bg-white p-4 rounded border border-slate-100 overflow-x-auto">${svg}</div>
+              outputArea.innerHTML = `
+                    <div class="w-full flex justify-between items-center mb-4">
+                    <h4 class="font-bold text-slate-800 text-sm tracking-wider uppercase">Visual Map: ${Security.escapeHTML(topic)}</h4>
+                    </div>
+                    <div class="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <div class="loader mb-3"></div>
+                    <p class="text-xs font-medium">Drawing your tree…</p>
+                    </div>
                     `;
                 
                 try {
