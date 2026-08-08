@@ -219,20 +219,6 @@
             background: rgba(15, 23, 42, .48); backdrop-filter: blur(1px);
         }
         #notebook-mobile-backdrop.mobile-open { display: block; }
-       /* ===== A4 paper writing surface + document-style scrolling ===== */
-        #notebook-editor-area { overflow-y: auto; }
-        #notebook-editor-area > div { flex: 0 0 auto !important; min-height: auto !important; }
-        #note-content-editor {
-          max-width: 210mm !important;
-          min-height: 297mm;
-          margin: 8px auto 24px auto !important;
-          padding: 20mm 16mm !important;
-          background: #ffffff !important;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 1px 3px rgba(15,23,42,.10), 0 10px 30px rgba(15,23,42,.08);
-          font-size: 12pt;
-          line-height: 1.75 !important;
-        }
         #pomodoro-widget {
             right: calc(.75rem + var(--lex-safe-right)) !important;
             bottom: calc(.75rem + var(--lex-safe-bottom)) !important;
@@ -391,6 +377,20 @@
   border-radius: 0 0.5rem 0.5rem 0;
   font-size: 0.875rem;
   line-height: 1.6;
+}
+        /* ===== A4 paper writing surface + document scrolling (ALL screen sizes) ===== */
+#notebook-editor-area { overflow-y: auto; }
+#notebook-editor-area > div { flex: 0 0 auto !important; min-height: auto !important; }
+#note-content-editor {
+  max-width: 210mm !important;
+  min-height: 297mm;
+  margin: 8px auto 24px auto !important;
+  padding: 20mm 16mm !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15,23,42,.10), 0 10px 30px rgba(15,23,42,.08);
+  font-size: 12pt;
+  line-height: 1.75 !important;
 }
 </style>
 </head>
