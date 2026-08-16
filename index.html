@@ -504,49 +504,91 @@ getRedirectResult(auth)
   });
 
 // ==========================
-// CLOUDINARY FILE STORAGE (replaces Supabase Storage)
+// CLOUDINARY FILE STORAGE (Cloudinary only — no Firebase Storage)
 // ==========================
 const CLOUDINARY_CLOUD_NAME = "zhgwa2ng";
-const CLOUDINARY_UPLOAD_PRESET = "lex_materials";
-const CLOUDINARY_MAX = 10 * 1024 * 1024; // Cloudinary unsigned cap = 10 MB
+const CLOUDINARY_UPLOAD_PRESET = "lex_materials";        // unsigned uploads (≤ 10 MB)
+const CLOUDINARY_API_KEY = "829349181351689";            // Console → gear icon → API Keys
+const CLOUDINARY_API_SECRET = "V0eBE85avCZMefFtby-VxluoyOI";   // ⚠️ Paste your API Secret here!
+const CLOUDINARY_UNSIGNED_MAX = 10 * 1024 * 1024;        // unsigned cap = 10 MB
+const CLOUDINARY_CHUNK_SIZE = 6 * 1024 * 1024;           // 6 MB chunks for large files
+
 const CloudStorage = {
-async upload(file) {
-if (file.size <= CLOUDINARY_MAX) {
-// Small files → Cloudinary (fast CDN)
-const formData = new FormData();
-formData.append("file", file);
-formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-formData.append("folder", "lex_materials");
-const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
-if (!response.ok) {
-let message = `Cloudinary upload failed (HTTP ${response.status}).`;
-try { const payload = await response.json(); message = payload?.error?.message || message; } catch (_) {}
-throw new Error(message);
-}
-const result = await response.json();
-if (!result.secure_url) throw new Error("Cloudinary did not return a file URL.");
-return { downloadURL: result.secure_url, storagePath: result.public_id, deleteToken: result.delete_token || "", resourceType: result.resource_type || "raw" };
-}
-// Large files → Firebase Storage (free tier supports large PDFs)
-const path = `users/${currentUser.uid}/materials/${Date.now()}_${MaterialUtils.safeFilename(file.name)}`;
-const ref = fbStorageRef(storage, path);
-await uploadBytes(ref, file);
-const downloadURL = await getDownloadURL(ref);
-return { downloadURL, storagePath: path, deleteToken: "", resourceType: "firebase" };
-},
-async remove(storagePath, deleteToken, resourceType = "raw") {
-if (resourceType === "firebase") {
-try { await deleteObject(fbStorageRef(storage, storagePath)); } catch (error) { console.warn("Firebase delete failed:", error); }
-return;
-}
-if (!storagePath || !deleteToken) return;
-try {
-const formData = new FormData();
-formData.append("public_id", storagePath);
-formData.append("token", deleteToken);
-await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/destroy`, { method: "POST", body: formData });
-} catch (error) { console.warn("Cloudinary delete failed:", error); }
-}
+  async sha1Hex(text) {
+    const data = new TextEncoder().encode(text);
+    const digest = await crypto.subtle.digest("SHA-1", data);
+    return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+  },
+  async signedParams(extra = {}) {
+    const params = { ...extra, timestamp: Math.floor(Date.now() / 1000) };
+    const toSign = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
+    params.signature = await this.sha1Hex(toSign + CLOUDINARY_API_SECRET);
+    params.api_key = CLOUDINARY_API_KEY;
+    return params;
+  },
+  async upload(file) {
+    // ✅ FIXED: Guard clause now checks if the secret is missing
+    if (file.size > CLOUDINARY_UNSIGNED_MAX && (!CLOUDINARY_API_SECRET || CLOUDINARY_API_SECRET.startsWith("PASTE_"))) {
+      throw new Error("This PDF is over 10 MB. Paste your Cloudinary API Secret into the code to enable large uploads, or compress the PDF first.");
+    }
+    
+    if (file.size <= CLOUDINARY_UNSIGNED_MAX) {
+      // Small files → fast unsigned upload (your existing path, unchanged)
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      formData.append("folder", "lex_materials");
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
+      if (!response.ok) {
+        let message = `Cloudinary upload failed (HTTP ${response.status}).`;
+        try { const payload = await response.json(); message = payload?.error?.message || message; } catch (_) {}
+        throw new Error(message);
+      }
+      const result = await response.json();
+      if (!result.secure_url) throw new Error("Cloudinary did not return a file URL.");
+      return { downloadURL: result.secure_url, storagePath: result.public_id, deleteToken: result.delete_token || "", resourceType: result.resource_type || "raw" };
+    }
+    
+    // Large files → signed chunked upload (free plan OK, up to ~100 MB per file)
+    const uniqueToken = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    let result = null;
+    for (let start = 0; start < file.size; start += CLOUDINARY_CHUNK_SIZE) {
+      const end = Math.min(start + CLOUDINARY_CHUNK_SIZE, file.size);
+      const params = await this.signedParams({ folder: "lex_materials", return_delete_token: true });
+      const formData = new FormData();
+      Object.entries(params).forEach(([key, value]) => formData.append(key, String(value)));
+      formData.append("file", file.slice(start, end), file.name);
+      
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, {
+        method: "POST",
+        headers: {
+          "X-Unique-Upload-Id": uniqueToken, // ✅ FIXED: Must be exactly this header name
+          "Content-Range": `bytes ${start}-${end - 1}/${file.size}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        let message = `Cloudinary chunk upload failed (HTTP ${response.status}).`;
+        try { const payload = await response.json(); message = payload?.error?.message || message; } catch (_) {}
+        throw new Error(message);
+      }
+      result = await response.json();
+    }
+    
+    if (!result?.secure_url) throw new Error("Cloudinary did not return a file URL.");
+    return { downloadURL: result.secure_url, storagePath: result.public_id, deleteToken: result.delete_token || "", resourceType: result.resource_type || "raw" };
+  },
+  
+  async remove(storagePath, deleteToken, resourceType = "raw") {
+    if (!storagePath || !deleteToken) return;
+    try {
+      const formData = new FormData();
+      formData.append("public_id", storagePath);
+      formData.append("token", deleteToken);
+      await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/destroy`, { method: "POST", body: formData });
+    } catch (error) { console.warn("Cloudinary delete failed:", error); }
+  }
 };
                 
        let currentUser = null;
@@ -5722,60 +5764,43 @@ initPomoPosition: () => {
                     });
                 
                     try {
-                
-                       const downloadURL = material.downloadURL;
-                
-                        if (!downloadURL)
-                            throw new Error(
-                                "The stored PDF link is unavailable. Attach the PDF again."
-                            );
-                
-                        await AppDB.update("materials", id, {
-                            downloadURL,
-                            status: "extracting",
-                            extractionStatus: "extracting",
-                            extractionError: "",
+                          const downloadURL = material.downloadURL;
+                          if (!downloadURL) throw new Error("The stored PDF link is unavailable. Attach the PDF again.");
+                          
+                          await AppDB.update("materials", id, { status: "extracting", extractionStatus: "extracting", extractionError: "", updated: serverTimestamp() });
+                          const response = await fetch(downloadURL, { cache: "no-store" });
+                          if (!response.ok) throw new Error(`Unable to read the stored PDF (HTTP ${response.status}).`);
+                          
+                          const blob = await response.blob();
+                          if (!blob.size) throw new Error("The stored PDF is empty. Attach the PDF again.");
+                          
+                          const file = new File([blob], material.filename || "material.pdf", { type: "application/pdf" });
+                          const extracted = await MaterialUtils.extractPdf(file);
+                          const chunks = MaterialUtils.makeChunks(extracted.pages);
+                          
+                          await MaterialUtils.deleteChunks(id);
+                          if (chunks.length) {
+                            await MaterialUtils.saveChunks(id, material.subjectId, material.semesterId, chunks);
+                          }
+                          
+                          // ✅ FIXED: Actually save the extracted data instead of deleting the material
+                          const update = {
+                            status: "ready",
+                            extractionStatus: extracted.scannedLikely ? "scanned" : "ready",
+                            pageCount: extracted.pageCount,
+                            processedPages: extracted.processedPages,
+                            extractedCharacters: extracted.totalCharacters,
+                            chunkCount: chunks.length,
+                            extractionTruncated: extracted.truncated,
+                            extractionError: extracted.scannedLikely ? "Little or no selectable text was detected. Run OCR before using AI tools." : "",
                             updated: serverTimestamp()
-                        });
-                
-                        const response = await fetch(downloadURL, {
-                            cache: "no-store"
-                        });
-                
-                        if (!response.ok)
-                            throw new Error(
-                                `Unable to read the stored PDF (HTTP ${response.status}).`
-                            );
-                
-                        const blob = await response.blob();
-                
-                        if (!blob.size)
-                            throw new Error(
-                                "The stored PDF is empty. Attach the PDF again."
-                            );
-                
-                        const file = new File(
-                            [blob],
-                            material.filename || "material.pdf",
-                            {
-                                type: "application/pdf"
-                            }
-                        );
-                
-                        const extracted = await MaterialUtils.extractPdf(file);
-                
-                        const chunks = MaterialUtils.makeChunks(extracted.pages);
-                
-                        await MaterialUtils.deleteChunks(id);
-                        await CloudStorage.remove(material.storagePath, material.deleteToken, material.resourceType);
-                        await AppDB.delete('materials', id);
-                
-                        Object.assign(material, update);
-                
-                        views.subject_notebook.showMaterialWorkspace(id);
-                
-                    } catch (error) {
-                
+                          };
+                          
+                          await AppDB.update("materials", id, update);
+                          Object.assign(material, update);
+                          views.subject_notebook.showMaterialWorkspace(id);
+                        } catch (error) {
+                                        
                         const message =
                             error.message || "Unable to prepare the material.";
                 
