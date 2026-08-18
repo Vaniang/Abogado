@@ -4425,11 +4425,164 @@ deleteAdvocacyDraft: (id) => {
             },
             
             printContent: (title, htmlContent) => {
-                const printWindow = window.open('', '', 'height=600,width=800');
-                printWindow.document.write('<html><head><title>'+title+'</title><script src="https://cdn.tailwindcss.com"></' + 'script><link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet"><style>@page { size: A4; margin: 16mm 14mm 14mm 14mm; } body { padding-top: 10mm; } .lex-print-header { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; font-family: Inter, sans-serif; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: #1e3a8a; }</style></head><body class="p-10 font-serif leading-relaxed text-slate-800"><div class="lex-print-header"><span>'+title+'</span><span>Lex — Law School Companion</span></div>' + htmlContent + '</body></html>');
-                printWindow.document.close();
-                setTimeout(() => printWindow.print(), 800);
-                },
+    const printWindow = window.open('', '', 'height=600,width=800');
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>${title}</title>
+
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+            <style>
+                @page {
+                    size: A4;
+
+                    /*
+                     * IMPORTANT:
+                     * The larger top margin reserves space
+                     * for the repeating fixed header.
+                     */
+                    margin: 24mm 14mm 16mm 14mm;
+                }
+
+                * {
+                    box-sizing: border-box;
+                }
+
+                html,
+                body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+
+                body {
+                    font-family: 'Merriweather', serif;
+                    font-size: 11pt;
+                    line-height: 1.65;
+                    color: #1e293b;
+                }
+
+                /*
+                 * Repeated header.
+                 *
+                 * The header is moved upward INTO the
+                 * @page top-margin area instead of
+                 * sitting on top of the document text.
+                 */
+                .lex-print-header {
+                    position: fixed;
+
+                    top: -15mm;
+                    left: 0;
+                    right: 0;
+
+                    height: 8mm;
+
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: space-between;
+
+                    padding-bottom: 2.5mm;
+
+                    border-bottom: 1px solid #cbd5e1;
+
+                    font-family: 'Inter', sans-serif;
+                    font-size: 7.5pt;
+                    font-weight: 500;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                    color: #1e3a8a;
+                }
+
+                .lex-print-content {
+                    width: 100%;
+                    margin: 0;
+                    padding: 0;
+                }
+
+                /*
+                 * Prevent awkward page splitting.
+                 */
+                h1,
+                h2,
+                h3,
+                h4 {
+                    break-after: avoid-page;
+                    page-break-after: avoid;
+                }
+
+                p,
+                li,
+                blockquote {
+                    orphans: 3;
+                    widows: 3;
+                }
+
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+
+                thead {
+                    display: table-header-group;
+                }
+
+                tfoot {
+                    display: table-footer-group;
+                }
+
+                tr,
+                img,
+                blockquote {
+                    break-inside: avoid;
+                    page-break-inside: avoid;
+                }
+
+                img,
+                svg {
+                    max-width: 100%;
+                }
+
+                @media print {
+                    body {
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                }
+            </style>
+        </head>
+
+        <body>
+
+            <div class="lex-print-header">
+                <span>${title}</span>
+                <span>Lex — Law School Companion</span>
+            </div>
+
+            <main class="lex-print-content">
+                ${htmlContent}
+            </main>
+
+        </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+
+    /*
+     * Wait for fonts/content before opening
+     * the browser print dialog.
+     */
+    printWindow.onload = () => {
+        setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+        }, 300);
+    };
+},
             downloadText: (filename, textContent) => { const cleanText = typeof textContent === 'string' ? textContent.replace(/\\n/g, '\n') : textContent; const element = document.createElement('a'); element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(cleanText)); element.setAttribute('download', filename); element.style.display = 'none'; document.body.appendChild(element); element.click(); document.body.removeChild(element); },
             
             openAlarmSettings: () => {
