@@ -33,6 +33,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js"></script>
     <script>mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict', suppressErrorEvents: true });</script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -7495,180 +7496,268 @@ await AppDB.add('digests', digestData);
                     }
                 });
             },
-            digestPdfMarkup: (digest) => {
-                const d = DigestUtils.normalize(digest || {});
-                const esc = Security.escapeHTML;
-                const clean = value => esc(String(value || '').trim() || '—');
-                const section = (label, value) => `<section style="margin:0 0 14px;break-inside:avoid;page-break-inside:avoid"><h3 style="margin:0 0 6px;font-size:10.5pt;letter-spacing:.03em;text-transform:uppercase;color:#0f172a">${label}</h3><div style="white-space:pre-wrap;font-size:10.5pt;line-height:1.55;color:#334155">${clean(value)}</div></section>`;
-                const framework = [
-                    ['a. General Rule', d.generalRule],
-                    ['b. Elements / Requisites', d.elementsRequisites],
-                    ['c. Exceptions, if any', d.exceptions],
-                    ['d. Exceptions to the Exceptions, if any', d.exceptionsToExceptions],
-                    ['e. How the Supreme Court Applied the Provision in This Case', d.supremeCourtApplication]
-                ].map(([label, value]) => `<div style="margin:0 0 10px"><div style="font-weight:700;font-size:10pt;color:#1e293b;margin-bottom:3px">${label}</div><div style="white-space:pre-wrap;font-size:10pt;line-height:1.5;color:#334155">${clean(value)}</div></div>`).join('');
-                return `<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;background:#fff;padding:4mm 2mm">
-                    <header style="border-bottom:2px solid #0f172a;padding-bottom:10px;margin-bottom:16px">
-                        <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:18pt;line-height:1.25;margin:0 0 6px">${clean(d.title || 'Untitled Case')}</h1>
-                        <div style="font-size:9.5pt;color:#475569"><strong>G.R. No. / Citation:</strong> ${clean(d.citation || d.grNo)}${d.subject || d.subjectName ? ` &nbsp; | &nbsp; <strong>Subject:</strong> ${clean(d.subject || d.subjectName)}` : ''}${d.topic ? ` &nbsp; | &nbsp; <strong>Topic:</strong> ${clean(d.topic)}` : ''}</div>
-                    </header>
-                    ${section('Recitation Gist', d.gist)}
-                    <div style="border:1px solid #cbd5e1;padding:12px;margin:0 0 16px">
-                        <h2 style="font-size:12pt;margin:0 0 12px;text-transform:uppercase">My Notes</h2>
-                        ${section('1. Doctrine', d.doctrine)}
-                        ${section('2. Codal Provision', d.codalProvision)}
-                        <section style="margin:0 0 12px"><h3 style="margin:0 0 8px;font-size:10.5pt;letter-spacing:.03em;text-transform:uppercase">3. Legal Framework</h3><div style="background:#f8fafc;border:1px solid #e2e8f0;padding:10px">${framework}</div></section>
-                        ${section('4. Verbatim Notes', d.verbatimNotes)}
-                        ${d.personalNotes ? section('Personal / Class Notes', d.personalNotes) : ''}
-                    </div>
-                    <div style="border:1px solid #cbd5e1;padding:12px">
-                        <h2 style="font-size:12pt;margin:0 0 12px;text-transform:uppercase">Digest</h2>
-                        ${section('Facts', d.facts)}
-                        ${section('Issue/s', d.issue)}
-                        ${section('Ruling & Ratio', d.rulingRatio)}
-                    </div>
-                </div>`;
+            // ============================================================
+            // CONS. DIGEST PDF — DIRECT jsPDF RENDERER
+            // ============================================================
+            // IMPORTANT:
+            // We intentionally do NOT use html2canvas/html2pdf for Cons. Digests.
+            // Screenshot-based PDF capture is affected by browser zoom, flex/fixed
+            // positioning, viewport width, and CSS millimeter conversion. Those
+            // conditions caused blank pages and horizontal clipping.
+            //
+            // This renderer writes the stored digest fields directly into jsPDF,
+            // so View PDF / Download PDF are independent of screen size and zoom.
+            normalizeDigestPdfText: (value = '') => {
+                return String(value ?? '')
+                    .replace(/\u00a0/g, ' ')
+                    .replace(/[\u2018\u2019]/g, "'")
+                    .replace(/[\u201c\u201d]/g, '"')
+                    .replace(/[\u2013\u2014]/g, '-')
+                    .replace(/\u2026/g, '...')
+                    .replace(/\u2022/g, '-')
+                    .replace(/\r\n?/g, '\n')
+                    .trim();
             },
-            createDigestPdfSource: (id, message = 'Preparing case digest PDF…') => {
+            createDigestPdfDocument: (id) => {
                 const raw = window.appHandlers.getDigestById(id);
                 if (!raw) throw new Error('Digest not found.');
+
                 const d = DigestUtils.normalize(raw);
-
-                // IMPORTANT:
-                // html2pdf clones the element passed to .from(...). If THAT element is
-                // position:fixed, the clone is removed from the normal layout flow of
-                // html2pdf's temporary container and Chrome/html2canvas can capture a
-                // white page. Keep only the staging WRAPPER fixed; the actual PDF sheet
-                // (`host`) must remain in normal flow.
-                const stage = document.createElement('div');
-                stage.setAttribute('data-lex-pdf-stage', 'true');
-                Object.assign(stage.style, {
-                    position: 'fixed',
-                    left: '0',
-                    top: '0',
-                    width: '210mm',
-                    minHeight: '297mm',
-                    margin: '0',
-                    padding: '0',
-                    boxSizing: 'border-box',
-                    overflow: 'visible',
-                    background: '#ffffff',
-                    zIndex: '2147483000',
-                    pointerEvents: 'none'
-                });
-
-                const host = document.createElement('div');
-                host.setAttribute('data-lex-pdf-source', 'true');
-                Object.assign(host.style, {
-                    // Do NOT change this to fixed/absolute. html2pdf needs this element
-                    // to participate in normal layout inside its cloned container.
-                    position: 'relative',
-                    display: 'block',
-                    width: '190mm',
-                    minHeight: '277mm',
-                    padding: '0',
-                    margin: '0',
-                    boxSizing: 'border-box',
-                    background: '#ffffff',
-                    color: '#0f172a',
-                    overflow: 'visible',
-                    opacity: '1',
-                    visibility: 'visible'
-                });
-                host.innerHTML = window.appHandlers.digestPdfMarkup(d);
-                stage.appendChild(host);
-
-                // Cover the temporary render sheet while html2canvas captures only `host`.
-                const cover = document.createElement('div');
-                cover.setAttribute('data-lex-pdf-cover', 'true');
-                Object.assign(cover.style, {
-                    position: 'fixed',
-                    inset: '0',
-                    zIndex: '2147483001',
-                    background: 'rgba(248,250,252,.98)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '24px',
-                    fontFamily: 'Inter, Arial, sans-serif',
-                    color: '#334155'
-                });
-                cover.innerHTML = `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 22px;box-shadow:0 12px 30px rgba(15,23,42,.12);display:flex;align-items:center;gap:12px"><span class="loader" style="display:inline-block;flex:none"></span><strong>${Security.escapeHTML(message)}</strong></div>`;
-
-                document.body.appendChild(stage);
-                document.body.appendChild(cover);
-                return { stage, host, cover, digest: d };
-            },
-            waitForDigestPdfLayout: async (source) => {
-                if (!source?.host) throw new Error('PDF source was not created.');
-                try { if (document.fonts?.ready) await document.fonts.ready; } catch (_) {}
-                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-                const textLength = (source.host.innerText || '').trim().length;
-                const rect = source.host.getBoundingClientRect();
-                if (textLength < 10 || rect.width < 100 || source.host.scrollHeight < 100) {
-                    throw new Error('The digest content could not be laid out for PDF generation.');
+                const JsPdfCtor = window.jspdf?.jsPDF;
+                if (!JsPdfCtor) {
+                    throw new Error('jsPDF failed to load. Please check your internet connection and reload Lex.');
                 }
-            },
-            cleanupDigestPdfSource: (source) => {
-                source?.cover?.remove();
-                // stage owns host in the corrected PDF pipeline.
-                if (source?.stage) source.stage.remove();
-                else source?.host?.remove();
-            },
-            digestPdfOptions: (filename, host = null) => ({
-                margin: [10, 10, 10, 10],
-                filename,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: {
-                    scale: 2,
-                    useCORS: true,
-                    logging: false,
-                    backgroundColor: '#ffffff',
-                    scrollX: 0,
-                    scrollY: 0,
-                    windowWidth: Math.max(794, Math.ceil(host?.scrollWidth || 794)),
-                    windowHeight: Math.max(1123, Math.ceil(host?.scrollHeight || 1123)),
-                    // Belt-and-suspenders fix: html2pdf/html2canvas works on a cloned DOM.
-                    // Force the cloned digest sheet back into visible normal flow even if
-                    // browser/global styles try to preserve an old fixed-position value.
-                    onclone: (clonedDocument) => {
-                        const clonedSource = clonedDocument.querySelector('[data-lex-pdf-source="true"]');
-                        if (clonedSource) {
-                            Object.assign(clonedSource.style, {
-                                position: 'relative',
-                                left: 'auto',
-                                top: 'auto',
-                                display: 'block',
-                                opacity: '1',
-                                visibility: 'visible',
-                                transform: 'none',
-                                background: '#ffffff',
-                                color: '#0f172a'
-                            });
+
+                const doc = new JsPdfCtor({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4',
+                    compress: true
+                });
+
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const marginLeft = 16;
+                const marginRight = 16;
+                const marginTop = 17;
+                const marginBottom = 17;
+                const contentWidth = pageWidth - marginLeft - marginRight;
+                const bottomLimit = pageHeight - marginBottom;
+                let y = marginTop;
+
+                const txt = value => {
+                    const cleaned = window.appHandlers.normalizeDigestPdfText(value);
+                    return cleaned || '-';
+                };
+
+                const mmPerPt = 0.352777778;
+                const lineHeightFor = (fontSize, factor = 1.35) => fontSize * mmPerPt * factor;
+
+                const addPage = () => {
+                    doc.addPage();
+                    y = marginTop;
+                };
+
+                const ensureSpace = (needed = 8) => {
+                    if (y + needed > bottomLimit) addPage();
+                };
+
+                const setFont = (family = 'helvetica', style = 'normal', size = 10, color = [51, 65, 85]) => {
+                    doc.setFont(family, style);
+                    doc.setFontSize(size);
+                    doc.setTextColor(...color);
+                };
+
+                const drawRule = (color = [203, 213, 225], width = 0.25) => {
+                    ensureSpace(3);
+                    doc.setDrawColor(...color);
+                    doc.setLineWidth(width);
+                    doc.line(marginLeft, y, pageWidth - marginRight, y);
+                    y += 4;
+                };
+
+                const writeParagraph = (value, {
+                    size = 10,
+                    style = 'normal',
+                    family = 'helvetica',
+                    color = [51, 65, 85],
+                    indent = 0,
+                    lineFactor = 1.4,
+                    after = 3,
+                    firstLineIndent = 0
+                } = {}) => {
+                    setFont(family, style, size, color);
+                    const lineHeight = lineHeightFor(size, lineFactor);
+                    const source = txt(value);
+                    const paragraphs = source.split('\n');
+
+                    paragraphs.forEach((paragraph, pIndex) => {
+                        const p = paragraph.trim();
+                        if (!p) {
+                            ensureSpace(lineHeight);
+                            y += lineHeight * 0.7;
+                            return;
                         }
-                    }
-                },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: { mode: ['css', 'legacy'] }
-            }),
+
+                        const firstWidth = contentWidth - indent - firstLineIndent;
+                        const normalWidth = contentWidth - indent;
+                        let lines;
+
+                        if (firstLineIndent > 0) {
+                            const words = p.split(/\s+/);
+                            let first = '';
+                            while (words.length) {
+                                const candidate = first ? `${first} ${words[0]}` : words[0];
+                                if (doc.getTextWidth(candidate) <= firstWidth) {
+                                    first = candidate;
+                                    words.shift();
+                                } else break;
+                            }
+                            lines = [];
+                            if (first) lines.push({ text: first, extraIndent: firstLineIndent });
+                            const rest = words.join(' ');
+                            if (rest) {
+                                doc.splitTextToSize(rest, normalWidth).forEach(line => lines.push({ text: line, extraIndent: 0 }));
+                            }
+                        } else {
+                            lines = doc.splitTextToSize(p, normalWidth).map(line => ({ text: line, extraIndent: 0 }));
+                        }
+
+                        lines.forEach(line => {
+                            ensureSpace(lineHeight + 1);
+                            doc.text(String(line.text), marginLeft + indent + line.extraIndent, y);
+                            y += lineHeight;
+                        });
+
+                        if (pIndex < paragraphs.length - 1) y += lineHeight * 0.3;
+                    });
+
+                    y += after;
+                };
+
+                const writeSectionLabel = (label, { after = 2.5 } = {}) => {
+                    ensureSpace(8);
+                    setFont('helvetica', 'bold', 9.5, [15, 23, 42]);
+                    doc.text(txt(label).toUpperCase(), marginLeft, y);
+                    y += lineHeightFor(9.5, 1.2) + after;
+                };
+
+                const writeSubsection = (label, value) => {
+                    ensureSpace(12);
+                    setFont('helvetica', 'bold', 9.5, [30, 41, 59]);
+                    const labelLines = doc.splitTextToSize(txt(label), contentWidth);
+                    const labelLH = lineHeightFor(9.5, 1.25);
+                    labelLines.forEach(line => {
+                        ensureSpace(labelLH);
+                        doc.text(String(line), marginLeft, y);
+                        y += labelLH;
+                    });
+                    y += 1;
+                    writeParagraph(value, { size: 10, after: 4 });
+                };
+
+                const writeMajorHeader = (label) => {
+                    ensureSpace(14);
+                    y += 1;
+                    doc.setFillColor(241, 245, 249);
+                    doc.setDrawColor(203, 213, 225);
+                    doc.setLineWidth(0.25);
+                    doc.roundedRect(marginLeft, y - 5, contentWidth, 9, 1.2, 1.2, 'FD');
+                    setFont('helvetica', 'bold', 11, [15, 23, 42]);
+                    doc.text(txt(label).toUpperCase(), marginLeft + 3, y + 1);
+                    y += 9;
+                };
+
+                // ---- Document metadata ----
+                const caseTitle = txt(d.title || 'Untitled Case');
+                const safeName = String(d.title || 'Case')
+                    .replace(/[\\/:*?"<>|]+/g, '_')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+                doc.setProperties({
+                    title: `${caseTitle} - Digest`,
+                    subject: txt(d.subject || d.subjectName || ''),
+                    author: 'Lex - Law School Companion',
+                    creator: 'Lex - Law School Companion'
+                });
+
+                // ---- Title ----
+                setFont('times', 'bold', 16, [15, 23, 42]);
+                const titleLines = doc.splitTextToSize(caseTitle, contentWidth);
+                const titleLH = lineHeightFor(16, 1.2);
+                titleLines.forEach(line => {
+                    ensureSpace(titleLH);
+                    doc.text(String(line), marginLeft, y);
+                    y += titleLH;
+                });
+
+                y += 1;
+                setFont('helvetica', 'normal', 9, [71, 85, 105]);
+                const metaParts = [];
+                if (txt(d.citation || d.grNo) !== '-') metaParts.push(`G.R. No. / Citation: ${txt(d.citation || d.grNo)}`);
+                if (txt(d.subject || d.subjectName) !== '-') metaParts.push(`Subject: ${txt(d.subject || d.subjectName)}`);
+                if (txt(d.topic) !== '-') metaParts.push(`Topic: ${txt(d.topic)}`);
+                const metaText = metaParts.length ? metaParts.join('  |  ') : 'Case Digest';
+                writeParagraph(metaText, { size: 9, color: [71, 85, 105], after: 1.5 });
+                drawRule([15, 23, 42], 0.55);
+
+                // ---- Quick identification ----
+                writeSectionLabel('Recitation Gist');
+                writeParagraph(d.gist, { size: 10, after: 5 });
+
+                // ---- My Notes ----
+                writeMajorHeader('My Notes');
+
+                writeSubsection('1. Doctrine', d.doctrine);
+                writeSubsection('2. Codal Provision', d.codalProvision);
+
+                writeSectionLabel('3. Legal Framework');
+                writeSubsection('a. General Rule', d.generalRule);
+                writeSubsection('b. Elements / Requisites', d.elementsRequisites);
+                writeSubsection('c. Exceptions, if any', d.exceptions);
+                writeSubsection('d. Exceptions to the Exceptions, if any', d.exceptionsToExceptions);
+                writeSubsection('e. How the Supreme Court Applied the Provision in This Case', d.supremeCourtApplication);
+
+                writeSubsection('4. Verbatim Notes', d.verbatimNotes);
+                if (window.appHandlers.normalizeDigestPdfText(d.personalNotes)) {
+                    writeSubsection('Personal / Class Notes', d.personalNotes);
+                }
+
+                // ---- Digest ----
+                writeMajorHeader('Digest');
+                writeSubsection('Facts', d.facts);
+                writeSubsection('Issue/s', d.issue);
+                writeSubsection('Ruling & Ratio', d.rulingRatio);
+
+                // ---- Footer on every page ----
+                const totalPages = doc.getNumberOfPages();
+                for (let page = 1; page <= totalPages; page++) {
+                    doc.setPage(page);
+                    doc.setDrawColor(226, 232, 240);
+                    doc.setLineWidth(0.2);
+                    doc.line(marginLeft, pageHeight - 11, pageWidth - marginRight, pageHeight - 11);
+                    setFont('helvetica', 'normal', 7.5, [100, 116, 139]);
+                    doc.text('Lex - Law School Companion', marginLeft, pageHeight - 7);
+                    doc.text(`Page ${page} of ${totalPages}`, pageWidth - marginRight, pageHeight - 7, { align: 'right' });
+                }
+
+                return { doc, digest: d, safeName: safeName || 'Case' };
+            },
             viewDigestPdfById: async (id) => {
                 const preview = window.open('', '_blank');
                 if (!preview) {
                     alert('Please allow pop-ups for Lex so the PDF viewer can open.');
                     return;
                 }
+
                 preview.document.write('<!doctype html><title>Preparing PDF...</title><body style="font-family:Arial,sans-serif;padding:24px">Preparing your case digest PDF...</body>');
-                let source = null;
+
                 try {
-                    source = window.appHandlers.createDigestPdfSource(id, 'Preparing PDF preview…');
-                    await window.appHandlers.waitForDigestPdfLayout(source);
-                    const safeName = String(source.digest.title || 'Case').replace(/[\\/:*?"<>|]+/g, '_');
-                    const worker = html2pdf()
-                        .set(window.appHandlers.digestPdfOptions(`${safeName}_Digest.pdf`, source.host))
-                        .from(source.host)
-                        .toPdf();
-                    const blob = await worker.outputPdf('blob');
+                    const result = window.appHandlers.createDigestPdfDocument(id);
+                    const blob = result.doc.output('blob');
                     if (!blob || blob.size < 1000) throw new Error('The generated PDF was unexpectedly empty.');
+
                     const url = URL.createObjectURL(blob);
                     preview.location.replace(url);
                     setTimeout(() => URL.revokeObjectURL(url), 300000);
@@ -7676,26 +7765,15 @@ await AppDB.add('digests', digestData);
                     console.error('PDF preview failed:', error);
                     preview.close();
                     alert(`Unable to create PDF preview: ${error.message}`);
-                } finally {
-                    window.appHandlers.cleanupDigestPdfSource(source);
                 }
             },
             downloadDigestPdfById: async (id) => {
-                let source = null;
                 try {
-                    source = window.appHandlers.createDigestPdfSource(id, 'Preparing PDF download…');
-                    await window.appHandlers.waitForDigestPdfLayout(source);
-                    const safeName = String(source.digest.title || 'Case').replace(/[\\/:*?"<>|]+/g, '_');
-                    await html2pdf()
-                        .set(window.appHandlers.digestPdfOptions(`${safeName}_Digest.pdf`, source.host))
-                        .from(source.host)
-                        .toPdf()
-                        .save();
+                    const result = window.appHandlers.createDigestPdfDocument(id);
+                    result.doc.save(`${result.safeName}_Digest.pdf`);
                 } catch (error) {
                     console.error('PDF download failed:', error);
                     alert(`Unable to download PDF: ${error.message}`);
-                } finally {
-                    window.appHandlers.cleanupDigestPdfSource(source);
                 }
             },
             // Backward-compatible alias for any older internal call.
