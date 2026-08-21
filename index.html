@@ -2748,7 +2748,7 @@ async ocrPdf(file, onProgress = () => {}) {
         }
 
         class DigestsView {
-            constructor() { this.unsubscribe = null; this.digestsData = []; this.activeSubject = '__all__'; }
+            constructor() { this.unsubscribe = null; this.digestsData = []; this.activeSubject = '__none__'; }
             render() { 
                 return `
                 <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
@@ -2762,12 +2762,12 @@ async ocrPdf(file, onProgress = () => {}) {
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
                         <div class="p-4 border-b border-slate-200 bg-slate-50">
                             <div class="mb-4">
-                                <p class="text-[10px] uppercase tracking-[.16em] font-black text-slate-500 mb-2">Subject Matter</p>
-                                <div id="digest-subject-filter" class="flex gap-2 overflow-x-auto pb-1"></div>
+                                <p class="text-[10px] uppercase tracking-[.16em] font-black text-slate-500 mb-3">Subject Matter</p>
+                                <div id="digest-subject-filter" class="w-full max-w-2xl mx-auto"></div>
                             </div>
-                            <div class="relative">
+                            <div id="digest-search-wrap" class="relative hidden">
                                 <i class="fas fa-search absolute left-3 top-2.5 text-slate-400"></i>
-                                <input type="text" id="digest-search" placeholder="Search within the selected subject..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterDigests()">
+                                <input type="text" id="digest-search" placeholder="Search cases in the selected subject..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterDigests()">
                             </div>
                         </div>
                         <div id="digest-active-subject" class="hidden px-6 pt-5"></div>
@@ -2793,7 +2793,7 @@ async ocrPdf(file, onProgress = () => {}) {
                         const d = DigestUtils.normalize(raw);
                         return (d.subject && d.subject.trim()) || (d.subjectName && d.subjectName.trim()) || 'Uncategorized';
                     }))];
-                    if (this.activeSubject !== '__all__' && !availableSubjects.includes(this.activeSubject)) this.activeSubject = '__all__';
+                    if (this.activeSubject !== '__none__' && !availableSubjects.includes(this.activeSubject)) this.activeSubject = '__none__';
                     window.appHandlers.renderDigestSubjectFilters();
                     window.appHandlers.filterDigests();
                 });
@@ -7490,7 +7490,7 @@ await AppDB.add('digests', digestData);
                 }
             },
 
-      renderDigestRows: (data, activeSubject = '__all__') => {
+      renderDigestRows: (data, activeSubject = '__none__') => {
                 const list = document.getElementById('digest-list');
                 if (!list) return;
                 list.innerHTML = '';
@@ -7637,42 +7637,61 @@ await AppDB.add('digests', digestData);
                 });
 
                 const subjects = [...counts.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-                const active = views.digests.activeSubject || '__all__';
-                const buttonClass = selected => selected
-                    ? 'shrink-0 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-900 text-white shadow-sm text-xs font-black uppercase tracking-wide transition'
-                    : 'shrink-0 px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 text-xs font-black uppercase tracking-wide transition';
+                const active = views.digests.activeSubject || '__none__';
 
-                const allButton = `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter('__all__')" class="${buttonClass(active === '__all__')}"><i class="fas fa-layer-group mr-2"></i>ALL SUBJECTS <span class="ml-1 opacity-70">${views.digests.digestsData.length}</span></button>`;
-                const subjectButtons = subjects.map(subject => {
+                if (!subjects.length) {
+                    wrap.innerHTML = '<div class="border border-slate-300 bg-white px-4 py-4 text-sm text-slate-400 text-center">No subject matter available.</div>';
+                    return;
+                }
+
+                wrap.innerHTML = `<div class="border border-slate-400 bg-white divide-y divide-slate-300">${subjects.map(subject => {
                     const encoded = encodeURIComponent(subject);
-                    return `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter(decodeURIComponent('${encoded}'))" class="${buttonClass(active === subject)}"><i class="fas fa-folder mr-2"></i>${Security.escapeHTML(subject)} <span class="ml-1 opacity-70">${counts.get(subject)}</span></button>`;
-                }).join('');
-                wrap.innerHTML = allButton + subjectButtons;
+                    const selected = active === subject;
+                    return `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter(decodeURIComponent('${encoded}'))" class="w-full min-h-[38px] px-3 py-2 flex items-center justify-between gap-3 text-left text-xs md:text-sm font-medium uppercase tracking-normal transition ${selected ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 hover:bg-slate-100'}" aria-pressed="${selected ? 'true' : 'false'}">
+                        <span class="truncate">${Security.escapeHTML(subject)}</span>
+                        <span class="shrink-0 text-[10px] ${selected ? 'text-slate-300' : 'text-slate-500'}">${counts.get(subject)} CASE${counts.get(subject) === 1 ? '' : 'S'}</span>
+                    </button>`;
+                }).join('')}</div>`;
             },
 
             setDigestSubjectFilter: (subject) => {
                 if (!views.digests) return;
-                views.digests.activeSubject = subject || '__all__';
+                views.digests.activeSubject = subject || '__none__';
+                const search = document.getElementById('digest-search');
+                if (search) search.value = '';
                 window.appHandlers.renderDigestSubjectFilters();
                 window.appHandlers.filterDigests();
             },
 
             filterDigests: () => {
                 const term = (document.getElementById('digest-search')?.value || '').trim().toLowerCase();
-                const activeSubject = views.digests?.activeSubject || '__all__';
+                const activeSubject = views.digests?.activeSubject || '__none__';
+                const heading = document.getElementById('digest-active-subject');
+                const searchWrap = document.getElementById('digest-search-wrap');
+                const list = document.getElementById('digest-list');
+
+                if (activeSubject === '__none__') {
+                    if (searchWrap) searchWrap.classList.add('hidden');
+                    if (heading) heading.classList.add('hidden');
+                    if (list) {
+                        list.innerHTML = `<div class="flex flex-col items-center justify-center min-h-64 text-slate-400 text-center px-6"><i class="fas fa-hand-pointer text-4xl mb-4 opacity-30"></i><p class="font-bold text-slate-500">Select a subject matter above.</p><p class="text-xs mt-1">Only the cases under the selected subject will be shown here.</p></div>`;
+                    }
+                    return;
+                }
+
+                if (searchWrap) searchWrap.classList.remove('hidden');
+
                 const filtered = (views.digests?.digestsData || []).filter(raw => {
                     const d = DigestUtils.normalize(raw);
                     const subject = (d.subject && d.subject.trim()) || (d.subjectName && d.subjectName.trim()) || 'Uncategorized';
-                    const matchesSubject = activeSubject === '__all__' || subject === activeSubject;
+                    const matchesSubject = subject === activeSubject;
                     const matchesSearch = !term || DigestUtils.searchText(raw).includes(term);
                     return matchesSubject && matchesSearch;
                 });
 
-                const heading = document.getElementById('digest-active-subject');
                 if (heading) {
-                    const label = activeSubject === '__all__' ? 'ALL SUBJECTS' : activeSubject;
                     heading.classList.remove('hidden');
-                    heading.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4"><div><p class="text-[10px] font-black uppercase tracking-[.16em] text-blue-600">Currently Viewing</p><h4 class="mt-1 text-lg font-black text-slate-900 uppercase tracking-wide">${Security.escapeHTML(label)}</h4></div><span class="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-full">${filtered.length} CASE${filtered.length === 1 ? '' : 'S'}</span></div>`;
+                    heading.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4"><div><p class="text-[10px] font-black uppercase tracking-[.16em] text-blue-600">Currently Viewing</p><h4 class="mt-1 text-lg font-black text-slate-900 uppercase tracking-wide">${Security.escapeHTML(activeSubject)}</h4></div><span class="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-full">${filtered.length} CASE${filtered.length === 1 ? '' : 'S'}</span></div>`;
                 }
                 window.appHandlers.renderDigestRows(filtered, activeSubject);
             },
