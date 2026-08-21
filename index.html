@@ -344,6 +344,82 @@
     border-radius: 0 0 .75rem .75rem;
     flex-wrap: wrap;
   }
+
+  /* ===== CONS. DIGESTS — Responsive 100% Zoom Layout ===== */
+  .digest-page-shell {
+    width: 100%;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding-bottom: 2.5rem;
+  }
+  .digest-library-panel {
+    width: 100%;
+    overflow: visible;
+  }
+  #digest-subject-filter,
+  #digest-search-wrap,
+  #digest-active-subject,
+  #digest-list {
+    width: 100%;
+    max-width: none !important;
+  }
+  #digest-list {
+    overflow: visible !important;
+  }
+  .digest-subject-button {
+    min-height: 64px;
+  }
+  .digest-subject-name {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere;
+  }
+  .digest-summary-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .digest-summary-cell {
+    min-width: 0;
+  }
+  .digest-summary-cell:first-child {
+    border-right: 1px solid #cbd5e1;
+  }
+  .digest-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .375rem;
+  }
+  .digest-full-panel,
+  .digest-notes-box,
+  .digest-body-box {
+    min-height: 0 !important;
+  }
+
+  @media (max-width: 1279px) {
+    .digest-page-shell { max-width: 1180px; }
+  }
+
+  @media (max-width: 900px) {
+    .digest-summary-grid { grid-template-columns: 1fr; }
+    .digest-summary-cell:first-child {
+      border-right: 0;
+      border-bottom: 1px solid #cbd5e1;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .digest-page-shell { padding-bottom: 1rem; }
+    #digest-list { padding: 1rem !important; }
+    #digest-active-subject { padding-left: 1rem !important; padding-right: 1rem !important; }
+    .digest-subject-button { min-height: 58px; padding: .75rem !important; }
+    .digest-subject-name { font-size: .875rem !important; line-height: 1.25rem !important; }
+    .digest-card-toolbar { align-items: stretch !important; }
+    .digest-card-toolbar > [data-digest-toggle] { width: 100%; justify-content: center; }
+    .digest-card-actions { width: 100%; justify-content: flex-end; }
+  }
+
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex overflow-hidden">
@@ -2751,7 +2827,7 @@ async ocrPdf(file, onProgress = () => {}) {
             constructor() { this.unsubscribe = null; this.digestsData = []; this.activeSubject = '__none__'; this.activeDigestId = null; }
             render() { 
                 return `
-                <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
+                <div class="digest-page-shell">
                     <div class="flex justify-between items-center mb-6 flex-shrink-0">
                         <div>
                             <h3 class="text-xl font-bold text-slate-700">Consolidated Case Digests</h3>
@@ -2759,22 +2835,22 @@ async ocrPdf(file, onProgress = () => {}) {
                         </div>
                         <button onclick="window.appHandlers.addDigest()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>Manual Digest</button>
                     </div>
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
+                    <div class="digest-library-panel bg-white rounded-xl shadow-sm border border-slate-200">
                         <div class="p-4 md:p-5 border-b border-slate-200 bg-slate-50">
                             <div id="digest-subject-menu">
                                 <div class="mb-4 text-center">
                                     <p class="text-[10px] uppercase tracking-[.18em] font-black text-slate-500">Choose Subject Matter</p>
                                     <p class="text-xs text-slate-400 mt-1">Open a subject to view only its consolidated case digests.</p>
                                 </div>
-                                <div id="digest-subject-filter" class="w-full max-w-3xl mx-auto"></div>
+                                <div id="digest-subject-filter" class="w-full"></div>
                             </div>
-                            <div id="digest-search-wrap" class="relative hidden max-w-3xl mx-auto">
+                            <div id="digest-search-wrap" class="relative hidden w-full">
                                 <i class="fas fa-search absolute left-3.5 top-3 text-slate-400"></i>
                                 <input type="text" id="digest-search" placeholder="Search cases in the selected subject..." class="w-full pl-10 pr-4 py-2.5 border border-slate-300 bg-white rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" onkeyup="window.appHandlers.filterDigests()">
                             </div>
                         </div>
-                        <div id="digest-active-subject" class="hidden px-6 pt-5"></div>
-                        <div id="digest-list" class="overflow-y-auto flex-1 p-6 pt-4 space-y-4"></div>
+                        <div id="digest-active-subject" class="hidden px-4 md:px-6 pt-5"></div>
+                        <div id="digest-list" class="p-4 md:p-6 pt-4 space-y-4"></div>
                     </div>
                 </div>`; 
             }
@@ -7604,8 +7680,8 @@ await AppDB.add('digests', digestData);
                         const fullId = `digest-full-${d.id}`;
 
                         article.innerHTML = `
-                            <div class="grid grid-cols-1 lg:grid-cols-2 border-b border-slate-300">
-                                <div class="p-4 md:p-5 lg:border-r border-slate-300 min-h-[165px]">
+                            <div class="digest-summary-grid border-b border-slate-300">
+                                <div class="digest-summary-cell p-4 md:p-5">
                                     <p class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-2">TITLE OF THE CASE | G.R. NO.</p>
                                     <p class="font-black text-slate-950 serif-text leading-snug">${esc(title)} <span class="font-medium text-slate-500">| ${esc(citation)}</span></p>
                                     <div class="mt-5">
@@ -7613,17 +7689,17 @@ await AppDB.add('digests', digestData);
                                         <div class="text-sm leading-6 text-slate-800 whitespace-pre-wrap">${esc(gist)}</div>
                                     </div>
                                 </div>
-                                <div class="p-4 md:p-5 min-h-[165px]">
+                                <div class="digest-summary-cell p-4 md:p-5">
                                     <p class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-2">APPLICABLE PROVISION/S: <span class="normal-case font-medium tracking-normal">(how do the provision/s apply to the case)</span></p>
                                     <div class="text-sm leading-6 text-slate-800">${summaryApplication(d)}</div>
                                 </div>
                             </div>
 
-                            <div class="px-4 py-3 bg-slate-50 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
+                            <div class="digest-card-toolbar px-4 py-3 bg-slate-50 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
                                 <button data-digest-toggle onclick="window.appHandlers.toggleDigestFull('${d.id}', this)" aria-controls="${fullId}" aria-expanded="false" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black tracking-wide transition shadow-sm">
                                     <i class="fas fa-book-open mr-2"></i>READ FULL DIGEST
                                 </button>
-                                <div class="flex items-center gap-1.5 flex-wrap" aria-label="Digest actions">
+                                <div class="digest-card-actions" aria-label="Digest actions">
                                     <button onclick="window.appHandlers.openDigestNotesById('${d.id}')" class="text-slate-500 hover:text-amber-600 transition bg-white border border-slate-300 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Personal Notes"><i class="fas fa-sticky-note"></i></button>
                                     <button onclick="window.appHandlers.editDigestById('${d.id}')" class="text-slate-500 hover:text-blue-600 transition bg-white border border-slate-300 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
                                     <button onclick="window.appHandlers.printDigestById('${d.id}')" class="text-slate-500 hover:text-slate-800 transition bg-white border border-slate-300 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
@@ -7632,8 +7708,8 @@ await AppDB.add('digests', digestData);
                                 </div>
                             </div>
 
-                            <div id="${fullId}" class="hidden p-4 md:p-6 bg-white">
-                                <div class="border border-slate-300 p-4 md:p-5 min-h-[220px]">
+                            <div id="${fullId}" class="digest-full-panel hidden p-4 md:p-6 bg-white">
+                                <div class="digest-notes-box border border-slate-300 p-4 md:p-5">
                                     <h4 class="font-black text-sm uppercase tracking-wide text-slate-950 mb-5">MY NOTES:</h4>
 
                                     ${labeled('1. DOCTRINE — CONTROLLING DOCTRINE FROM THE CASE', d.doctrine)}
@@ -7648,7 +7724,7 @@ await AppDB.add('digests', digestData);
                                     ${d.personalNotes ? labeled('PERSONAL / CLASS NOTES:', d.personalNotes) : ''}
                                 </div>
 
-                                <div class="border border-slate-300 p-4 md:p-5 mt-6 min-h-[320px]">
+                                <div class="digest-body-box border border-slate-300 p-4 md:p-5 mt-6">
                                     <h4 class="font-black text-sm uppercase tracking-wide text-slate-950 mb-5">DIGEST:</h4>
                                     ${labeled('FACTS:', d.facts, 'No facts recorded.')}
                                     ${labeled('ISSUE/S:', d.issue, 'No issue recorded.')}
@@ -7684,10 +7760,10 @@ await AppDB.add('digests', digestData);
 
                 wrap.innerHTML = `<div class="grid grid-cols-1 gap-2.5">${subjects.map(subject => {
                     const encoded = encodeURIComponent(subject);
-                    return `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter(decodeURIComponent('${encoded}'))" class="group w-full min-h-[58px] px-4 py-3 flex items-center gap-3 text-left bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 hover:bg-blue-50/60 hover:shadow transition" aria-label="Open ${Security.escapeHTML(subject)} case digests">
+                    return `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter(decodeURIComponent('${encoded}'))" class="digest-subject-button group w-full px-4 py-3.5 flex items-center gap-3 text-left bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 hover:bg-blue-50/60 hover:shadow transition" aria-label="Open ${Security.escapeHTML(subject)} case digests">
                         <span class="w-9 h-9 shrink-0 rounded-lg bg-slate-100 group-hover:bg-blue-100 text-slate-500 group-hover:text-blue-600 flex items-center justify-center transition"><i class="fas fa-folder"></i></span>
                         <span class="min-w-0 flex-1">
-                            <span class="block truncate text-xs md:text-sm font-black uppercase tracking-wide text-slate-800">${Security.escapeHTML(subject)}</span>
+                            <span class="digest-subject-name block text-sm md:text-base font-black uppercase tracking-wide text-slate-800">${Security.escapeHTML(subject)}</span>
                             <span class="block mt-0.5 text-[10px] text-slate-400">${counts.get(subject)} saved case${counts.get(subject) === 1 ? '' : 's'}</span>
                         </span>
                         <span class="w-8 h-8 shrink-0 rounded-full bg-slate-50 group-hover:bg-white border border-slate-200 text-slate-400 group-hover:text-blue-600 flex items-center justify-center transition"><i class="fas fa-chevron-right text-xs"></i></span>
@@ -7755,7 +7831,7 @@ await AppDB.add('digests', digestData);
                         </div>
                         <div class="mt-4 flex items-center gap-3 min-w-0">
                             <span class="w-10 h-10 shrink-0 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-folder-open"></i></span>
-                            <div class="min-w-0"><p class="text-[10px] font-black uppercase tracking-[.16em] text-slate-400">Currently Viewing</p><h4 class="mt-0.5 text-lg font-black text-slate-900 uppercase tracking-wide truncate">${Security.escapeHTML(activeSubject)}</h4></div>
+                            <div class="min-w-0"><p class="text-[10px] font-black uppercase tracking-[.16em] text-slate-400">Currently Viewing</p><h4 class="mt-0.5 text-lg font-black text-slate-900 uppercase tracking-wide break-words">${Security.escapeHTML(activeSubject)}</h4></div>
                         </div>
                     </div>`;
                 }
