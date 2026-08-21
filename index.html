@@ -626,6 +626,98 @@ const CloudStorage = {
         };
 
 
+        // ==========================
+        // CONSOLIDATED CASE DIGEST NORMALIZER
+        // Keeps AI-generated digest fields separate so the table never repeats content.
+        // Also reads older auto-generated digests that stored everything inside ruling/notes.
+        // ==========================
+        const DigestUtils = {
+            text(value = '') { return String(value ?? '').trim(); },
+            looksLegacyBundle(value = '') {
+                return /DOCTRINE:\s*|I\.\s*CODAL PROVISION|II\.\s*(?:TEXTBOOK\s*\/\s*)?LEGAL FRAMEWORK|III\.\s*RULING\s*&\s*RATIO/i.test(String(value || ''));
+            },
+            extractBetween(value, startPattern, endPattern = null) {
+                const text = String(value || '');
+                const start = text.search(startPattern);
+                if (start < 0) return '';
+                const startMatch = text.slice(start).match(startPattern);
+                if (!startMatch) return '';
+                const bodyStart = start + startMatch[0].length;
+                const rest = text.slice(bodyStart);
+                if (!endPattern) return rest.trim();
+                const end = rest.search(endPattern);
+                return (end >= 0 ? rest.slice(0, end) : rest).trim();
+            },
+            buildLegalFramework(record = {}) {
+                const sections = [
+                    ['General Rule', record.generalRule || record.general_rule],
+                    ['Elements / Requisites', record.elementsRequisites || record.elements_requisites],
+                    ['Exceptions, if any', record.exceptions],
+                    ['Exceptions to the Exceptions, if any', record.exceptionsToExceptions || record.exceptions_to_exceptions],
+                    ['How the Supreme Court Applied the Provision', record.supremeCourtApplication || record.supreme_court_application]
+                ];
+                return sections
+                    .filter(([, value]) => this.text(value))
+                    .map(([label, value]) => `${label}:\n${this.text(value)}`)
+                    .join('\n\n');
+            },
+            normalize(record = {}) {
+                const rawRuling = this.text(record.ruling);
+                const rawNotes = this.text(record.notes);
+                const legacyBundle = this.looksLegacyBundle(rawRuling) ? rawRuling : (this.looksLegacyBundle(rawNotes) ? rawNotes : '');
+
+                const legacyDoctrine = legacyBundle ? this.extractBetween(legacyBundle, /DOCTRINE:\s*/i, /\n\s*I\.\s*CODAL PROVISION/i) : '';
+                const legacyCodal = legacyBundle ? this.extractBetween(legacyBundle, /I\.\s*CODAL PROVISION\s*/i, /\n\s*II\.\s*(?:TEXTBOOK\s*\/\s*)?LEGAL FRAMEWORK/i) : '';
+                const legacyFramework = legacyBundle ? this.extractBetween(legacyBundle, /II\.\s*(?:TEXTBOOK\s*\/\s*)?LEGAL FRAMEWORK\s*/i, /\n\s*III\.\s*RULING\s*&\s*RATIO/i) : '';
+                const legacyRulingRatio = legacyBundle ? this.extractBetween(legacyBundle, /III\.\s*RULING\s*&\s*RATIO\s*/i, /\n\s*IV\./i) : '';
+                const legacyVerbatim = legacyBundle ? this.extractBetween(legacyBundle, /V\.\s*VERBATIM NOTES[^\n]*\n?/i) : '';
+
+                const generalRule = this.text(record.generalRule || record.general_rule);
+                const elementsRequisites = this.text(record.elementsRequisites || record.elements_requisites);
+                const exceptions = this.text(record.exceptions);
+                const exceptionsToExceptions = this.text(record.exceptionsToExceptions || record.exceptions_to_exceptions);
+                const supremeCourtApplication = this.text(record.supremeCourtApplication || record.supreme_court_application);
+                const structuredFramework = this.buildLegalFramework({ generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication });
+
+                return {
+                    ...record,
+                    facts: this.text(record.facts),
+                    issue: this.text(record.issue),
+                    rulingRatio: this.text(record.rulingRatio || record.ruling_ratio || legacyRulingRatio || (!this.looksLegacyBundle(rawRuling) ? rawRuling : '')),
+                    doctrine: this.text(record.doctrine || legacyDoctrine),
+                    codalProvision: this.text(record.codalProvision || record.codal_provision || legacyCodal),
+                    generalRule,
+                    elementsRequisites,
+                    exceptions,
+                    exceptionsToExceptions,
+                    supremeCourtApplication,
+                    legalFramework: this.text(record.legalFramework || record.legal_framework || structuredFramework || legacyFramework),
+                    verbatimNotes: this.text(record.verbatimNotes || record.verbatim_notes || legacyVerbatim),
+                    personalNotes: this.text(record.personalNotes || record.personal_notes || (!this.looksLegacyBundle(rawNotes) ? rawNotes : '')),
+                    gist: this.text(record.gist || record.recitation_gist)
+                };
+            },
+            myNotesText(record = {}) {
+                const d = this.normalize(record);
+                const parts = [];
+                if (d.doctrine) parts.push(`DOCTRINE\n${d.doctrine}`);
+                if (d.codalProvision) parts.push(`CODAL PROVISION\n${d.codalProvision}`);
+                if (d.legalFramework) parts.push(`LEGAL FRAMEWORK\n${d.legalFramework}`);
+                if (d.personalNotes) parts.push(`PERSONAL NOTES\n${d.personalNotes}`);
+                return parts.join('\n\n');
+            },
+            searchText(record = {}) {
+                const d = this.normalize(record);
+                return [d.title, d.subject, d.subjectName, d.topic, d.facts, d.issue, d.rulingRatio, d.doctrine, d.codalProvision, d.legalFramework, d.verbatimNotes, d.personalNotes, d.gist]
+                    .map(value => this.text(value).toLowerCase()).join(' ');
+            },
+            exportText(record = {}) {
+                const d = this.normalize(record);
+                return `CASE: ${d.title || 'Untitled Case'}\nSUBJECT: ${d.subject || d.subjectName || ''}\nTOPIC: ${d.topic || ''}\n\nFACTS\n${d.facts || '—'}\n\nISSUE\n${d.issue || '—'}\n\nRULING & RATIO\n${d.rulingRatio || '—'}\n\nMY NOTES\n${this.myNotesText(d) || '—'}\n\nVERBATIM NOTES FROM THE CASE\n${d.verbatimNotes || '—'}`;
+            }
+        };
+
+
         // Central Gemini client: discovers models available to the user's API key
         // instead of relying on a single hardcoded model name that may return 404.
         const GeminiService = {
@@ -2654,7 +2746,7 @@ async ocrPdf(file, onProgress = () => {}) {
                         <div class="p-4 border-b border-slate-100 bg-slate-50">
                             <div class="relative">
                                 <i class="fas fa-search absolute left-3 top-2.5 text-slate-400"></i>
-                                <input type="text" id="digest-search" placeholder="Search by Case Title, Subject, Facts, Issue, or Ruling..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterDigests()">
+                                <input type="text" id="digest-search" placeholder="Search case title, subject, facts, issue, ruling, doctrine, codal, framework, or verbatim notes..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterDigests()">
                             </div>
                         </div>
                         <div id="digest-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div>
@@ -6278,6 +6370,7 @@ getCurrentSubjectContext: () => ({
                 facts,
                 issue,
                 ruling,
+                rulingRatio: ruling,
                 subject: subject.name,
                 subjectName: subject.name,
                 primarySubjectId: subject.id,
@@ -6291,18 +6384,7 @@ getCurrentSubjectContext: () => ({
     });
 },
             editLinkedDigest: (id) => {
-                const digest = views.subject_notebook.digestsData.find(item => item.id === id);
-                if (!digest) return;
-                Modal.show({
-                    title: '<i class="fas fa-pen text-blue-600"></i> Edit Master Digest',
-                    content: `<div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 mb-4">Changes here also update Consolidated Case Digests and every linked subject.</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="linked-digest-title" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(digest.title || '')}"></div><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="linked-digest-citation" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(digest.citation || '')}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="linked-digest-topic" class="w-full p-2 border border-slate-300 rounded-lg" value="${Security.escapeHTML(digest.topic || '')}"></div></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="linked-digest-facts" rows="4" class="w-full p-2 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(digest.facts || '')}</textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="linked-digest-issue" rows="3" class="w-full p-2 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(digest.issue || '')}</textarea></div><div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="linked-digest-ruling" rows="4" class="w-full p-2 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(digest.ruling || '')}</textarea></div>`,
-                    submitText: 'Save Master Record',
-                    onSubmit: async () => {
-                        const title = document.getElementById('linked-digest-title').value.trim();
-                        if (!title) throw new Error('Case title is required.');
-                        await AppDB.update('digests', id, { title, citation: document.getElementById('linked-digest-citation').value.trim(), topic: document.getElementById('linked-digest-topic').value.trim(), facts: document.getElementById('linked-digest-facts').value.trim(), issue: document.getElementById('linked-digest-issue').value.trim(), ruling: document.getElementById('linked-digest-ruling').value.trim(), updated: serverTimestamp() });
-                    }
-                });
+                window.appHandlers.editDigestById(id);
             },
 
             openLinkedDigest: (id) => {
@@ -6316,7 +6398,8 @@ getCurrentSubjectContext: () => ({
   };
   const titleParts = (digest.title || 'Untitled Case').split(/\s+v\.?\s+/i);
   const titleDisplay = titleParts[1] ? `${esc(titleParts[0])} v. ${esc(titleParts[1])}` : esc(digest.title || 'Untitled Case');
-  const hasContent = digest.facts || digest.issue || digest.ruling || digest.notes;
+  const normalized = DigestUtils.normalize(digest);
+  const hasContent = normalized.facts || normalized.issue || normalized.rulingRatio || normalized.doctrine || normalized.codalProvision || normalized.legalFramework || normalized.verbatimNotes || normalized.personalNotes;
   Modal.show({
     title: `<i class="fas fa-book-open text-emerald-600"></i> ${titleDisplay}`,
     content: `
@@ -6327,11 +6410,11 @@ getCurrentSubjectContext: () => ({
         ${digest.topic ? `<span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${esc(digest.topic)}</span>` : ''}
       </div>
       ${digest.gist ? `<div class="mb-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 leading-relaxed"><span class="font-bold text-[10px] uppercase tracking-wider block mb-1 text-amber-700"><i class="fas fa-bolt mr-1"></i>Recitation Gist</span>${esc(digest.gist)}</div>` : ''}
-      ${block('fa-file-lines', 'Facts', digest.facts, 'bg-slate-50 border-slate-200 text-slate-700')}
-      ${block('fa-circle-question', 'Issue', digest.issue, 'bg-blue-50 border-blue-200 text-slate-800')}
-      ${block('fa-gavel', 'Ruling', digest.ruling, 'bg-slate-50 border-slate-200 text-slate-700')}
-      ${block('fa-quote-left', 'Verbatim Notes', digest.verbatimNotes, 'bg-emerald-50 border-emerald-200 text-slate-700')}
-      ${block('fa-sticky-note', 'My Notes', digest.notes, 'bg-amber-100/50 border-amber-200 text-amber-900')}
+      ${block('fa-file-lines', 'Facts', normalized.facts, 'bg-slate-50 border-slate-200 text-slate-700')}
+      ${block('fa-circle-question', 'Issue', normalized.issue, 'bg-blue-50 border-blue-200 text-slate-800')}
+      ${block('fa-gavel', 'Ruling & Ratio', normalized.rulingRatio, 'bg-slate-50 border-slate-200 text-slate-700')}
+      ${block('fa-sticky-note', 'My Notes', DigestUtils.myNotesText(normalized), 'bg-amber-100/50 border-amber-200 text-amber-900')}
+      ${block('fa-quote-left', 'Verbatim Notes from the Case', normalized.verbatimNotes, 'bg-emerald-50 border-emerald-200 text-slate-700')}
       ${hasContent ? '' : '<div class="text-center py-8 text-slate-400 text-sm"><i class="fas fa-file-circle-question text-4xl mb-3 opacity-40"></i><p class="font-bold">No full digest content yet.</p><p class="text-xs mt-1">Click "Edit Digest" below to add Facts, Issue, and Ruling.</p></div>'}
     `,
     submitText: 'Edit Digest',
@@ -6348,16 +6431,7 @@ getCurrentSubjectContext: () => ({
         console.warn('Digest not found for printing:', id);
         return;
     }
-    // Call your existing print function with the digest's data
-    window.appHandlers.printDigest(
-        digest.title || 'Untitled Case',
-        digest.subject || digest.subjectName || '',
-        digest.topic || '',
-        digest.facts || '',
-        digest.issue || '',
-        digest.ruling || '',
-        digest.notes || ''
-    );
+    window.appHandlers.printDigestById(id);
 },
   discussProvision: () => {
     Modal.show({
@@ -7117,9 +7191,10 @@ content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Case
 <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook</label><select id="dig-subj" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">${subjectOptions}</select></div>
 <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic/Article</label><input type="text" id="dig-topic" placeholder="e.g. Art 1156" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500"></div>
 </div>
-<div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="dig-facts" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-blue-500"></textarea></div>
-<div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="dig-issue" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-blue-500"></textarea></div>
-<div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="dig-ruling" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-blue-500"></textarea></div>`,
+<div class="mt-2"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist</label><textarea id="dig-gist" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-amber-500"></textarea></div>
+<div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="dig-facts" rows="3" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500"></textarea></div>
+<div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="dig-issue" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500"></textarea></div>
+<div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling & Ratio</label><textarea id="dig-ruling" rows="4" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500"></textarea></div>`,
 onSubmit: async () => {
 const title = document.getElementById('dig-title').value.trim();
 if (!title) return;
@@ -7135,6 +7210,7 @@ gist: document.getElementById('dig-gist').value.trim(),
 facts: document.getElementById('dig-facts').value,
 issue: document.getElementById('dig-issue').value,
 ruling: document.getElementById('dig-ruling').value,
+rulingRatio: document.getElementById('dig-ruling').value,
 created: serverTimestamp()
 };
 if (selectedSubjectId && selectedSubjectId !== '') {
@@ -7213,6 +7289,113 @@ await AppDB.add('digests', digestData);
         }
     });
 },
+            getDigestById: (id) => {
+                return views.digests?.digestsData?.find(d => d.id === id)
+                    || views.subject_notebook?.digestsData?.find(d => d.id === id)
+                    || null;
+            },
+            openDigestNotesById: (id) => {
+                const raw = window.appHandlers.getDigestById(id); if (!raw) return;
+                const d = DigestUtils.normalize(raw);
+                Modal.show({
+                    title: `<i class="fas fa-sticky-note text-amber-500"></i> Personal Notes: ${Security.escapeHTML(d.title || 'Digest')}`,
+                    content: `<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 mb-3">The AI-generated Doctrine, Codal Provision, and Legal Framework remain in their own fields. This box is only for your personal/class notes, so nothing is duplicated.</div><textarea id="digest-personal-notes-input" rows="10" class="w-full border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-amber-500 resize-y shadow-inner" placeholder="Add professor comments, mnemonics, or your own synthesis...">${Security.escapeHTML(d.personalNotes)}</textarea>`,
+                    submitText: 'Save Personal Notes',
+                    submitClass: 'px-5 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-bold',
+                    onSubmit: async () => {
+                        const personalNotes = document.getElementById('digest-personal-notes-input').value.trim();
+                        await AppDB.update('digests', id, { personalNotes, notes: personalNotes, updated: serverTimestamp() });
+                    }
+                });
+            },
+            editDigestById: async (id) => {
+                const raw = window.appHandlers.getDigestById(id); if (!raw) return;
+                const d = DigestUtils.normalize(raw);
+                let userSubjects = views.subjects.subjects || [];
+                if (!userSubjects.length) {
+                    const snapshot = await getDocs(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, 'subjects'));
+                    snapshot.forEach(docSnap => userSubjects.push({ id: docSnap.id, ...docSnap.data() }));
+                    userSubjects = userSubjects.filter(s => !s.archived);
+                    views.subjects.subjects = userSubjects;
+                }
+                const currentSubjectId = d.primarySubjectId || userSubjects.find(s => s.name === (d.subject || d.subjectName))?.id || '';
+                const subjectOptions = userSubjects.map(s => `<option value="${s.id}" data-name="${Security.escapeHTML(s.name)}" ${s.id === currentSubjectId ? 'selected' : ''}>${Security.escapeHTML(s.name)}</option>`).join('');
+                const field = (idName, label, value, rows = 3) => `<div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">${label}</label><textarea id="${idName}" rows="${rows}" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${Security.escapeHTML(value || '')}</textarea></div>`;
+                Modal.show({
+                    title: '<i class="fas fa-edit text-blue-600"></i> Edit Digest',
+                    content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input id="digest-edit-title" class="w-full border border-slate-300 rounded-lg p-2" value="${Security.escapeHTML(d.title || '')}"></div>
+                        <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Citation / G.R. No.</label><input id="digest-edit-citation" class="w-full border border-slate-300 rounded-lg p-2" value="${Security.escapeHTML(d.citation || '')}"></div>
+                        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook</label><select id="digest-edit-subject" class="w-full border border-slate-300 rounded-lg p-2 bg-white">${subjectOptions}</select></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="digest-edit-topic" class="w-full border border-slate-300 rounded-lg p-2" value="${Security.escapeHTML(d.topic || '')}"></div></div>
+                        ${field('digest-edit-gist', 'Recitation Gist', d.gist, 2)}
+                        ${field('digest-edit-facts', 'Facts', d.facts, 5)}
+                        ${field('digest-edit-issue', 'Issue', d.issue, 3)}
+                        ${field('digest-edit-ruling-ratio', 'Ruling & Ratio', d.rulingRatio, 6)}
+                        <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg"><p class="font-bold text-amber-900 text-sm">My Notes</p><p class="text-xs text-amber-700 mt-1">These fields are stored separately to prevent repetition in the consolidated table.</p></div>
+                        ${field('digest-edit-doctrine', 'Doctrine', d.doctrine, 3)}
+                        ${field('digest-edit-codal', 'Codal Provision', d.codalProvision, 4)}
+                        ${field('digest-edit-general-rule', 'Legal Framework — General Rule', d.generalRule, 3)}
+                        ${field('digest-edit-elements', 'Legal Framework — Elements / Requisites', d.elementsRequisites, 4)}
+                        ${field('digest-edit-exceptions', 'Legal Framework — Exceptions, if any', d.exceptions, 3)}
+                        ${field('digest-edit-counter-exceptions', 'Legal Framework — Exceptions to the Exceptions, if any', d.exceptionsToExceptions, 3)}
+                        ${field('digest-edit-sc-application', 'Legal Framework — How the Supreme Court Applied the Provision', d.supremeCourtApplication, 5)}
+                        ${field('digest-edit-verbatim', 'Verbatim Notes from the Case', d.verbatimNotes, 7)}
+                        ${field('digest-edit-personal-notes', 'Personal Notes', d.personalNotes, 5)}`,
+                    submitText: 'Save Changes',
+                    submitClass: 'px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-bold',
+                    onSubmit: async () => {
+                        const title = document.getElementById('digest-edit-title').value.trim();
+                        if (!title) throw new Error('Case title is required.');
+                        const selectEl = document.getElementById('digest-edit-subject');
+                        const selectedSubjectId = selectEl.value;
+                        const selectedSubjectName = selectEl.options[selectEl.selectedIndex]?.dataset.name || selectEl.options[selectEl.selectedIndex]?.text || '';
+                        const generalRule = document.getElementById('digest-edit-general-rule').value.trim();
+                        const elementsRequisites = document.getElementById('digest-edit-elements').value.trim();
+                        const exceptions = document.getElementById('digest-edit-exceptions').value.trim();
+                        const exceptionsToExceptions = document.getElementById('digest-edit-counter-exceptions').value.trim();
+                        const supremeCourtApplication = document.getElementById('digest-edit-sc-application').value.trim();
+                        const legalFramework = DigestUtils.buildLegalFramework({ generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication });
+                        const rulingRatio = document.getElementById('digest-edit-ruling-ratio').value.trim();
+                        const personalNotes = document.getElementById('digest-edit-personal-notes').value.trim();
+                        const updateData = {
+                            title, citation: document.getElementById('digest-edit-citation').value.trim(), subject: selectedSubjectName, subjectName: selectedSubjectName,
+                            topic: document.getElementById('digest-edit-topic').value.trim(),
+                            gist: document.getElementById('digest-edit-gist').value.trim(),
+                            facts: document.getElementById('digest-edit-facts').value.trim(),
+                            issue: document.getElementById('digest-edit-issue').value.trim(),
+                            rulingRatio, ruling: rulingRatio,
+                            doctrine: document.getElementById('digest-edit-doctrine').value.trim(),
+                            codalProvision: document.getElementById('digest-edit-codal').value.trim(),
+                            generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication, legalFramework,
+                            verbatimNotes: document.getElementById('digest-edit-verbatim').value.trim(),
+                            personalNotes, notes: personalNotes,
+                            schemaVersion: 2, updated: serverTimestamp()
+                        };
+                        if (selectedSubjectId) {
+                            updateData.primarySubjectId = selectedSubjectId;
+                            updateData.subjectIds = [selectedSubjectId];
+                            const subject = userSubjects.find(s => s.id === selectedSubjectId);
+                            updateData.semesterId = subject?.semesterId || null;
+                            updateData.semesterIds = subject?.semesterId ? [subject.semesterId] : [];
+                        }
+                        await AppDB.update('digests', id, updateData);
+                    }
+                });
+            },
+            printDigestById: (id) => {
+                const raw = window.appHandlers.getDigestById(id); if (!raw) return;
+                const d = DigestUtils.normalize(raw);
+                const esc = Security.escapeHTML;
+                const block = (label, value, bg = '#ffffff') => `<div style="margin:0 0 18px;padding:14px;background:${bg};border:1px solid #e2e8f0;border-radius:8px"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#475569;margin:0 0 8px">${label}</h3><div style="white-space:pre-wrap;line-height:1.65;color:#334155">${esc(value || '—')}</div></div>`;
+                const html = `<div style="font-family:Arial,sans-serif;max-width:1000px;margin:0 auto"><h1 style="font-family:Georgia,serif;margin-bottom:5px">${esc(d.title || 'Untitled Case')}</h1><p style="color:#64748b;margin-top:0">${esc(d.subject || d.subjectName || '')}${d.topic ? ` | ${esc(d.topic)}` : ''}</p>${block('Facts',d.facts)}${block('Issue',d.issue,'#eff6ff')}${block('Ruling & Ratio',d.rulingRatio)}${block('My Notes',DigestUtils.myNotesText(d),'#fffbeb')}${block('Verbatim Notes from the Case',d.verbatimNotes,'#ecfdf5')}</div>`;
+                window.appHandlers.printContent(`Digest - ${d.title || 'Case'}`, html);
+            },
+            downloadDigestTextById: (id) => {
+                const raw = window.appHandlers.getDigestById(id); if (!raw) return;
+                const d = DigestUtils.normalize(raw);
+                const safeName = String(d.title || 'Case').replace(/[\\/:*?"<>|]+/g, '_');
+                window.appHandlers.downloadText(`${safeName}_Digest.txt`, DigestUtils.exportText(d));
+            },
+
             deleteDigest: (id) => { Modal.show({ title: 'Delete Digest', content: 'Are you sure you want to delete this digest?', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('digests', id) }); },
            printDigest: (title, subject, topic, facts, issue, ruling, notes) => {
                 const html = `<div style="font-family: serif; max-width: 800px; margin: 0 auto; line-height: 1.6;">
@@ -7263,113 +7446,86 @@ await AppDB.add('digests', digestData);
       renderDigestRows: (data) => {
                 const list = document.getElementById('digest-list'); if (!list) return;
                 list.innerHTML = '';
-                if (data.length === 0) { list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests match your search.</p></div>`; return; }
+                if (!Array.isArray(data) || data.length === 0) {
+                    list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests match your search.</p></div>`;
+                    return;
+                }
 
-                // 1. Group the data by Subject Matter
                 const groupedDigests = {};
-                data.forEach(d => {
-                    const subj = (d.subject && d.subject.trim() !== '') ? d.subject : 'Uncategorized';
-                    if(!groupedDigests[subj]) groupedDigests[subj] = [];
+                data.forEach(raw => {
+                    const d = DigestUtils.normalize(raw);
+                    const subj = (d.subject && d.subject.trim()) || (d.subjectName && d.subjectName.trim()) || 'Uncategorized';
+                    if (!groupedDigests[subj]) groupedDigests[subj] = [];
                     groupedDigests[subj].push(d);
                 });
 
-                // 2. Sort subjects alphabetically
-                const subjects = Object.keys(groupedDigests).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+                const esc = Security.escapeHTML;
+                const cellText = (value, empty = '—') => `<div class="max-h-64 overflow-y-auto pr-1 whitespace-pre-wrap leading-relaxed text-sm text-slate-700">${esc(value || empty)}</div>`;
+                const notesCell = d => {
+                    const section = (label, value, cls = 'text-slate-700') => value ? `<div class="mb-3 last:mb-0"><p class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">${label}</p><div class="whitespace-pre-wrap leading-relaxed text-sm ${cls}">${esc(value)}</div></div>` : '';
+                    return `<div class="max-h-80 overflow-y-auto pr-1">
+                        ${section('Doctrine', d.doctrine, 'text-amber-900')}
+                        ${section('Codal Provision', d.codalProvision, 'text-blue-900')}
+                        ${section('Legal Framework', d.legalFramework)}
+                        ${section('Personal Notes', d.personalNotes, 'text-amber-900')}
+                        ${(!d.doctrine && !d.codalProvision && !d.legalFramework && !d.personalNotes) ? '<span class="text-slate-400 italic text-sm">No notes yet.</span>' : ''}
+                    </div>`;
+                };
 
-                // 3. Render each subject as a collapsible notebook folder
-                subjects.forEach(subj => {
-                    // Wrapper for the collapsible section
+                Object.keys(groupedDigests).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(subj => {
                     const detailsWrap = document.createElement('details');
-                    detailsWrap.className = "mb-4 bg-white border border-slate-200 rounded-xl shadow-sm group overflow-hidden";
-                    
-                    // The clickable header
+                    detailsWrap.className = 'mb-5 bg-white border border-slate-200 rounded-xl shadow-sm group overflow-hidden';
+                    detailsWrap.open = true;
                     const summary = document.createElement('summary');
-                    summary.className = "p-5 font-bold text-slate-800 uppercase tracking-widest cursor-pointer outline-none list-none flex justify-between items-center bg-slate-50 hover:bg-slate-100 transition border-b border-transparent group-open:border-slate-200";
-                    summary.innerHTML = `
-                        <div class="flex items-center gap-3">
-                            <i class="fas fa-folder text-blue-500 text-xl transition-transform duration-200 group-open:rotate-90"></i> 
-                            ${subj}
-                        </div> 
-                        <span class="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full shadow-sm">${groupedDigests[subj].length} Cases</span>
-                    `;
+                    summary.className = 'p-5 font-bold text-slate-800 uppercase tracking-widest cursor-pointer outline-none list-none flex justify-between items-center bg-slate-50 hover:bg-slate-100 transition border-b border-slate-200';
+                    summary.innerHTML = `<div class="flex items-center gap-3"><i class="fas fa-folder text-blue-500 text-xl"></i>${esc(subj)}</div><span class="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full">${groupedDigests[subj].length} Cases</span>`;
                     detailsWrap.appendChild(summary);
 
-                    // The container for the cases (hidden until clicked)
-                    const grid = document.createElement('div');
-                    grid.className = "p-5 space-y-4 bg-slate-50/50";
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'overflow-x-auto bg-white';
+                    const rows = groupedDigests[subj].map(d => `
+                        <tr class="align-top hover:bg-slate-50/70 border-b border-slate-100 last:border-b-0">
+                            <td class="p-3 min-w-[220px] w-[220px]">
+                                <p class="font-bold text-slate-900 serif-text leading-snug">${esc(d.title || 'Untitled Case')}</p>
+                                ${d.topic ? `<span class="inline-block mt-2 bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded text-[10px] font-bold uppercase">${esc(d.topic)}</span>` : ''}
+                                ${d.gist ? `<div class="mt-2 p-2 bg-amber-50 border-l-2 border-amber-500 text-xs text-amber-900 whitespace-pre-wrap">${esc(d.gist)}</div>` : ''}
+                            </td>
+                            <td class="p-3 min-w-[280px]">${cellText(d.facts)}</td>
+                            <td class="p-3 min-w-[260px]">${cellText(d.issue)}</td>
+                            <td class="p-3 min-w-[340px]">${cellText(d.rulingRatio, 'No ruling/ratio recorded.')}</td>
+                            <td class="p-3 min-w-[420px] bg-amber-50/30">${notesCell(d)}</td>
+                            <td class="p-3 min-w-[380px] bg-emerald-50/20">${cellText(d.verbatimNotes, 'No verbatim notes recorded.')}</td>
+                            <td class="p-3 min-w-[92px] sticky right-0 bg-white shadow-[-8px_0_12px_-12px_rgba(15,23,42,.35)]">
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    <button onclick="window.appHandlers.openDigestNotesById('${d.id}')" class="text-slate-400 hover:text-amber-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Personal Notes"><i class="fas fa-sticky-note"></i></button>
+                                    <button onclick="window.appHandlers.editDigestById('${d.id}')" class="text-slate-400 hover:text-blue-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
+                                    <button onclick="window.appHandlers.printDigestById('${d.id}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
+                                    <button onclick="window.appHandlers.downloadDigestTextById('${d.id}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Download Text"><i class="fas fa-download"></i></button>
+                                    <button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-400 hover:text-red-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm col-span-2" title="Delete"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </td>
+                        </tr>`).join('');
 
-                    groupedDigests[subj].forEach(d => {
-                        const row = document.createElement('div'); 
-                        row.className = "p-5 border border-slate-200 rounded-xl hover:border-blue-300 bg-white transition shadow-sm";
-                        
-                        const title = d.title || '';
-                        const subject = d.subject || '';
-                        const topic = d.topic || ''; 
-                        const facts = d.facts || '';
-                        const issue = d.issue || '';
-                        const ruling = d.ruling || '';
-                        const notes = d.notes || '';
-                        const gist = d.gist || ''; // ✅ ADDED
-                        
-                        const escapeStr = (str) => {
-                            return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n').replace(/\r/g, '');
-                        };
-                        
-                        const safeTitle = escapeStr(title);
-                        const safeSubject = escapeStr(subject);
-                        const safeTopic = escapeStr(topic); 
-                        const safeFacts = escapeStr(facts);
-                        const safeIssue = escapeStr(issue);
-                        const safeRuling = escapeStr(ruling);
-                        const safeNotes = escapeStr(notes);
-                        const safeGist = escapeStr(gist); 
-                        
-                        const safeDlText = escapeStr(`Title: ${title}\nSubject: ${subject}\nTopic: ${topic}\n\nFACTS:\n${facts}\n\nISSUE:\n${issue}\n\nRULING:\n${ruling}\n\nNOTES:\n${notes}`);
-                        
-                        // <--- THIS IS WHERE YOUR SNIPPET WAS INJECTED --->
-                        row.innerHTML = `
-                        <div class="flex justify-between items-start gap-4">
-                            <div class="flex-1">
-                                <h4 class="font-bold text-slate-800 serif-text text-lg leading-snug">${title}</h4>
-                                ${topic ? `<span class="inline-block mt-1.5 bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"><i class="fas fa-tag mr-1"></i>${topic}</span>` : ''}
-                                ${d.gist ? `<div class="mt-3 p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 flex gap-2 items-start"><i class="fas fa-bolt mt-1 text-amber-600"></i><div><span class="font-bold text-[10px] uppercase tracking-wider block mb-0.5 text-amber-700">Recitation Gist</span>${d.gist}</div></div>` : ''}
-                            </div>
-                            <div class="flex items-center gap-1.5 flex-wrap justify-end">
-                                <button onclick="window.appHandlers.openDigestNotes('${d.id}', '${safeTitle}', '${safeNotes}')" class="text-slate-400 hover:text-amber-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Personal Notes"><i class="fas fa-sticky-note"></i></button>
-                                <button onclick="window.appHandlers.editDigest('${d.id}', '${safeTitle}', '${safeSubject}', '${safeTopic}', '${safeFacts}', '${safeIssue}', '${safeRuling}', '${safeGist}')" class="text-slate-400 hover:text-blue-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
-                                <button onclick="window.appHandlers.printDigest('${safeTitle}', '${safeSubject}', '${safeTopic}', '${safeFacts}', '${safeIssue}', '${safeRuling}', '${safeNotes}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
-                                <button onclick="window.appHandlers.downloadText('${safeTitle}_Digest.txt', '${safeDlText}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Download Text"><i class="fas fa-download"></i></button>
-                                <button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-400 hover:text-red-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Delete"><i class="fas fa-trash"></i></button>
-                            </div>
-                        </div>
-                        <details class="mt-4 group/digest cursor-pointer outline-none">
-                            <summary class="font-bold text-sm text-blue-600 hover:text-blue-800 outline-none list-none flex items-center gap-2 select-none border-t border-slate-100 pt-3">
-                                <div class="flex items-center gap-2 flex-1"><i class="fas fa-chevron-right text-xs transition-transform group-open/digest:rotate-90"></i> Read Full Digest</div>
-                            </summary>
-                            <div class="mt-4 p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-5 shadow-inner cursor-text text-sm">
-                                ${notes ? `<div><h5 class="font-bold text-amber-600 text-xs uppercase tracking-widest mb-2 border-b border-amber-200 pb-1"><i class="fas fa-star mr-1"></i> My Notes</h5><p class="text-amber-900 leading-relaxed whitespace-pre-wrap bg-amber-100/50 p-3 rounded-lg border border-amber-200">${notes}</p></div>` : ''}
-                                ${facts ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Facts</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${facts}</p></div>` : ''}
-                                ${issue ? `<div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Issue</h5><p class="text-slate-800 font-semibold leading-relaxed whitespace-pre-wrap">${issue}</p></div>` : ''}
-                                <div><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Ruling</h5><p class="text-slate-700 leading-relaxed whitespace-pre-wrap">${ruling || 'No ruling extracted.'}</p></div>
-                            </div>
-                        </details>`; 
-                        grid.appendChild(row);
-                    });
-                    
-                    detailsWrap.appendChild(grid);
+                    wrapper.innerHTML = `<table class="w-full min-w-[2050px] text-left table-fixed">
+                        <thead class="bg-slate-900 text-white sticky top-0 z-10">
+                            <tr>
+                                <th class="p-3 text-[10px] uppercase tracking-widest w-[220px]">Case</th>
+                                <th class="p-3 text-[10px] uppercase tracking-widest w-[280px]">Facts</th>
+                                <th class="p-3 text-[10px] uppercase tracking-widest w-[260px]">Issue</th>
+                                <th class="p-3 text-[10px] uppercase tracking-widest w-[340px]">Ruling &amp; Ratio</th>
+                                <th class="p-3 text-[10px] uppercase tracking-widest w-[420px]">My Notes</th>
+                                <th class="p-3 text-[10px] uppercase tracking-widest w-[380px]">Verbatim Notes from the Case</th>
+                                <th class="p-3 text-[10px] uppercase tracking-widest w-[92px] sticky right-0 bg-slate-900">Actions</th>
+                            </tr>
+                        </thead><tbody>${rows}</tbody></table>`;
+                    detailsWrap.appendChild(wrapper);
                     list.appendChild(detailsWrap);
                 });
             },
             
             filterDigests: () => {
-                const term = document.getElementById('digest-search').value.toLowerCase();
-                const filtered = views.digests.digestsData.filter(d => 
-                    (d.title && d.title.toLowerCase().includes(term)) || 
-                    (d.subject && d.subject.toLowerCase().includes(term)) || 
-                    (d.facts && d.facts.toLowerCase().includes(term)) ||
-                    (d.issue && d.issue.toLowerCase().includes(term)) ||
-                    (d.ruling && d.ruling.toLowerCase().includes(term))
-                );
+                const term = (document.getElementById('digest-search')?.value || '').trim().toLowerCase();
+                const filtered = views.digests.digestsData.filter(d => !term || DigestUtils.searchText(d).includes(term));
                 window.appHandlers.renderDigestRows(filtered);
             },
 
@@ -7410,90 +7566,101 @@ await AppDB.add('digests', digestData);
     area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; 
     
     try { 
-        // FIX #2: Closed the template literal properly + restructured prompt 
-        // to return SEPARATE fields (facts/issue/ruling) instead of one blob
-        const promptText = `For CASE DIGEST: Act as a top-tier, diligent law student with expertise in ${selectedSubjectName}. Analyze and digest the case following strict legal methodology.
+        // Normalized Case Digester output: each table column receives one source field only.
+        const promptText = `For CASE DIGEST: Act as a diligent Philippine law student analyzing the TARGET CASE for the subject ${selectedSubjectName}.
 
-SYLLABUS: ${selectedSubjectName}
-TARGET CASE: ${textToDigest.substring(0, 40000)}
+SUBJECT: ${selectedSubjectName}
+TOPIC / ARTICLE: ${topicInput || 'Not specified'}
+TARGET CASE TEXT:
+${textToDigest.substring(0, 40000)}
 
-REQUIRED OUTPUT:
-I. CODAL PROVISION — Full text/excerpt of the applicable provision(s) relevant to ${selectedSubjectName}.
-II. TEXTBOOK / LEGAL FRAMEWORK — General Rule, Requisites/Elements/Tests, Exceptions, Conceptual Explanation.
-III. CASE DIGEST — Doctrine (1-2 sentences), Brief Facts (bulleted, essential only), Issue (framed for ${selectedSubjectName}), Ruling (Yes/No + disposition), Ratio Decidendi (step-by-step reasoning).
-IV. RECITATION TAKEAWAY — Memory Trigger keyword + 30-Second Recitation Pitch.
-V. VERBATIM NOTES — Exact word-for-word excerpts copied directly from the TARGET CASE text that are most relevant to ${selectedSubjectName}. Quote the case's exact words inside quotation marks (do NOT paraphrase or invent), and after each quote add one line starting with "Connection:" explaining how it relates to ${selectedSubjectName}. Include 3-6 quotes, prioritizing the ruling, doctrine, elements, and exceptions that match the subject.
-GUIDELINES:
-1. Academic precision, strict legal accuracy, formal law-school terminology.
-2. Focus strictly on ${selectedSubjectName} principles and connect every section to that subject.
-3. Lean, relevant factual background.
-4. VERBATIM NOTES must be literal copies of sentences from the TARGET CASE text, never rewritten.
+Prepare only the information needed for the Consolidated Case Digest table. Keep every category separate. DO NOT repeat the same doctrine, codal provision, legal framework, ruling, or verbatim quotation in another field.
 
-Return STRICTLY as a raw JSON object with these exact keys:
+FACTS: concise material facts only.
+ISSUE: the legal issue relevant to ${selectedSubjectName}.
+RULING & RATIO: combine the Supreme Court's answer/disposition and ratio decidendi in one field. Do not place doctrine/codal/legal framework/verbatim notes here.
+MY NOTES consists of these separate fields:
+1. Doctrine — concise controlling doctrine from the case.
+2. Codal Provision — applicable constitutional/statutory/rule provision. Quote only when reliably supported; do not invent exact wording.
+3. Legal Framework — separated into:
+   a. General Rule
+   b. Elements / Requisites
+   c. Exceptions, if any
+   d. Exceptions to the Exceptions, if any
+   e. How the Supreme Court applied the provision in THIS case
+VERBATIM NOTES: exact word-for-word excerpts copied only from TARGET CASE TEXT. Never paraphrase quotations. After each quotation, add a short "Connection:" line explaining relevance to ${selectedSubjectName}.
+RECITATION GIST: 1-2 sentences only for quick identification of the case.
+
+Accuracy rules:
+- Use Philippine law.
+- Do not invent case facts, holdings, statutes, elements, exceptions, or quotations.
+- If the case text does not support an item, write "Not specifically stated in the supplied case text." rather than guessing.
+- Do not duplicate content between JSON fields.
+
+Return STRICTLY one raw JSON object with these exact keys:
 {
+  "facts": "string",
+  "issue": "string",
+  "ruling_ratio": "string",
+  "doctrine": "string",
   "codal_provision": "string",
-  "legal_framework": "string",
-  "facts": "string (concise bulleted essential facts)",
-  "issue": "string (constitutional question)",
-  "ruling": "string (Yes/No answer + ratio decidendi + disposition)",
-  "doctrine": "string (1-2 sentence core doctrine)",
-  "recitation_summary": "string (memory trigger + 30-sec pitch)",
-  "recitation_gist": "string (1-2 sentence ultra-short summary for quick glance)",
-  "verbatim_notes": "string (3-6 exact word-for-word quotes from the case text. Format each as: "[exact quote]" followed by a new line "Connection: [how it relates to ${selectedSubjectName}]", separated by blank lines)"
+  "general_rule": "string",
+  "elements_requisites": "string",
+  "exceptions": "string",
+  "exceptions_to_exceptions": "string",
+  "supreme_court_application": "string",
+  "recitation_gist": "string",
+  "verbatim_notes": "string"
 }
+Do NOT use markdown fences and do NOT add text outside the JSON object.`;
 
-Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.`;
-
-        const data = await GeminiService.generate(apiKey, { 
-            contents: [{ role: "user", parts: [{ text: promptText }] }], 
-            generationConfig: { responseMimeType: "application/json" } 
-        }); 
-        
-        let jsonString = GeminiService.text(data); 
-        jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim(); 
-        
-        // FIX #3: Wrap JSON.parse in its own try/catch for clearer error messages
+        const data = await GeminiService.generate(apiKey, {
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.15 }
+        });
+        let jsonString = GeminiService.text(data).replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
         let parsedDigest;
-        try {
-            parsedDigest = JSON.parse(jsonString);
-        } catch (parseError) {
-            throw new Error("AI returned invalid JSON. Please try again or check your API key quota.");
-        }
-        
-        // FIX #4: Use the properly separated fields from the AI response
-        const codal = parsedDigest.codal_provision || "Not found.";
-        const framework = parsedDigest.legal_framework || "Not found.";
-        const facts = parsedDigest.facts || "Not found.";
-        const issue = parsedDigest.issue || "Not found.";
-        const ruling = parsedDigest.ruling || "Not found.";
-        const doctrine = parsedDigest.doctrine || "";
-        const recitation = parsedDigest.recitation_summary || "Not found.";
-        const gist = parsedDigest.recitation_gist || "";
-        const verbatimNotes = parsedDigest.verbatim_notes || "";
+        try { parsedDigest = JSON.parse(jsonString); }
+        catch (_) { throw new Error('AI returned invalid JSON. Please try again.'); }
 
-        const fullText = `DOCTRINE:\n${doctrine}\n\nI. CODAL PROVISION\n${codal}\n\nII. TEXTBOOK / LEGAL FRAMEWORK\n${framework}\n\nIII. RULING & RATIO\n${ruling}\n\nIV. RECITATION TAKEAWAY\n${recitation}\n\nV. VERBATIM NOTES (CONNECTED TO ${selectedSubjectName.toUpperCase()})\n${verbatimNotes || "No verbatim excerpts returned."}`;
-        const autoGeneratedNotes = `DOCTRINE:
-            ${doctrine}
-            I. CODAL PROVISION
-            ${codal}
-            II. TEXTBOOK / LEGAL FRAMEWORK
-            ${framework}
-            PITCH:
-            ${recitation}
-            VERBATIM NOTES FROM THE CASE:
-            ${verbatimNotes || "No verbatim excerpts returned."}`;
+        const facts = DigestUtils.text(parsedDigest.facts) || 'Not found.';
+        const issue = DigestUtils.text(parsedDigest.issue) || 'Not found.';
+        const rulingRatio = DigestUtils.text(parsedDigest.ruling_ratio) || 'Not found.';
+        const doctrine = DigestUtils.text(parsedDigest.doctrine);
+        const codalProvision = DigestUtils.text(parsedDigest.codal_provision);
+        const generalRule = DigestUtils.text(parsedDigest.general_rule);
+        const elementsRequisites = DigestUtils.text(parsedDigest.elements_requisites);
+        const exceptions = DigestUtils.text(parsedDigest.exceptions);
+        const exceptionsToExceptions = DigestUtils.text(parsedDigest.exceptions_to_exceptions);
+        const supremeCourtApplication = DigestUtils.text(parsedDigest.supreme_court_application);
+        const gist = DigestUtils.text(parsedDigest.recitation_gist);
+        const verbatimNotes = DigestUtils.text(parsedDigest.verbatim_notes);
+        const legalFramework = DigestUtils.buildLegalFramework({ generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication });
+
         const digestData = {
             title: titleInput,
             subject: selectedSubjectName,
             subjectName: selectedSubjectName,
             topic: topicInput,
-            gist: gist,
-            facts: facts,      // FIX #5: Now stores actual facts, not a substring
-           issue: issue,      // FIX #5: Now stores actual issue, not a duplicate
-            ruling: fullText,
-            verbatimNotes: verbatimNotes,
-            notes: autoGeneratedNotes,
-            created: serverTimestamp()
+            gist,
+            facts,
+            issue,
+            rulingRatio,
+            ruling: rulingRatio, // legacy compatibility: contains ONLY Ruling & Ratio now
+            doctrine,
+            codalProvision,
+            generalRule,
+            elementsRequisites,
+            exceptions,
+            exceptionsToExceptions,
+            supremeCourtApplication,
+            legalFramework,
+            verbatimNotes,
+            personalNotes: '',
+            notes: '', // reserved for the user's own notes; never duplicate AI fields here
+            schemaVersion: 2,
+            created: serverTimestamp(),
+            updated: serverTimestamp()
         };
 
         if (selectedSubjectId && selectedSubjectId !== '') {
@@ -7509,25 +7676,18 @@ Do NOT use markdown formatting like \`\`\`json. DO NOT add any other text.`;
 
         await AppDB.add('digests', digestData);
 
-        // FIX #6: Use Security.escapeHTML to prevent XSS from AI output
+        const myNotesPreview = DigestUtils.myNotesText(digestData);
         area.innerHTML = `<div class="space-y-4">
-            <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm animate-fade-in">
-                <i class="fas fa-check-circle text-3xl"></i>
-                <div class="flex-1">
-                    <p class="font-bold">Successfully Digested!</p>
-                    <p class="text-xs opacity-80">Saved to Cons. Digests & Linked Notebook.</p>
-                </div>
-                <button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View</button>
+            <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm">
+                <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to Consolidated Case Digests and linked to the selected notebook.</p></div>
+                <button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View Table</button>
             </div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Doctrine</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(doctrine)}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">I. Codal Provision</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(codal)}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">II. Legal Framework</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(framework)}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">III. Facts</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(facts)}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">IV. Issue</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(issue)}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">V. Ruling & Ratio</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(ruling)}</p></div>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">VI. Recitation Takeaway</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(recitation)}</p></div>
-            ${verbatimNotes ? `<div class="bg-white p-5 rounded-xl shadow-sm border border-emerald-200"><h4 class="font-bold text-emerald-700 text-xs tracking-wider uppercase mb-2"><i class="fas fa-quote-left mr-1"></i> VII. Verbatim Notes — Connected to ${Security.escapeHTML(selectedSubjectName)}</h4><p class="text-sm whitespace-pre-wrap text-slate-700">${Security.escapeHTML(verbatimNotes)}</p></div>` : ''}
-        </div>`; 
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-600 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(facts)}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-blue-200"><h4 class="font-bold text-blue-700 text-xs tracking-wider uppercase mb-2">Issue</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(issue)}</p></div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Ruling &amp; Ratio</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(rulingRatio)}</p></div>
+            <div class="bg-amber-50 p-5 rounded-xl shadow-sm border border-amber-200"><h4 class="font-bold text-amber-800 text-xs tracking-wider uppercase mb-2">My Notes</h4><p class="text-sm whitespace-pre-wrap text-amber-950">${Security.escapeHTML(myNotesPreview)}</p></div>
+            <div class="bg-emerald-50 p-5 rounded-xl shadow-sm border border-emerald-200"><h4 class="font-bold text-emerald-700 text-xs tracking-wider uppercase mb-2"><i class="fas fa-quote-left mr-1"></i>Verbatim Notes from the Case</h4><p class="text-sm whitespace-pre-wrap text-slate-700">${Security.escapeHTML(verbatimNotes || 'No verbatim notes returned.')}</p></div>
+        </div>`;
     } catch (error) { 
         // FIX #7: Escape error message to prevent XSS
         area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${Security.escapeHTML(error.message || 'Unknown error')}</div>`; 
