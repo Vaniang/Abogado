@@ -6362,101 +6362,209 @@ getCurrentSubjectContext: () => ({
   discussProvision: () => {
     Modal.show({
         title: 'Discuss Legal Provision',
-       content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label><textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: Whoever by act or omission causes damage to another..."></textarea></div>`,
+        content: `<div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Provision / Article / Topic</label>
+                <textarea id="discuss-provision-text" rows="6" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., Article 2176 of the Civil Code: Whoever by act or omission causes damage to another..."></textarea>
+            </div>
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                <i class="fas fa-search mr-1"></i>
+                Lex will search the uploaded Study Materials for this subject first, then integrate the most relevant passages into the legal discussion.
+            </div>
+        </div>`,
         submitText: 'Analyze Provision',
         submitClass: 'px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-bold',
         onSubmit: async () => {
             const provisionText = document.getElementById('discuss-provision-text').value.trim();
             if (!provisionText) throw new Error('Please enter a provision to analyze.');
-            // NEW: Ground the discussion in the subject's uploaded Study Materials
-            const readyMaterials = (views.subject_notebook.materialsData || [])
-            .filter(m => (m.extractionStatus || m.status) === 'ready')
-            .slice(0, 5);
-            let materialContext = '';
-            const usedSources = [];
-            let contextBudget = 24000;
-            for (const material of readyMaterials) {
-            if (contextBudget <= 0) break;
-            try {
-            const chunks = await MaterialUtils.getChunks(material.id);
-            if (!chunks.length) continue;
-            const relevant = MaterialUtils.relevantChunks(chunks, provisionText, 4, contextBudget);
-            if (relevant.length) {
-            const ctx = MaterialUtils.context(material, relevant);
-            materialContext += `${ctx}\n---\n`;
-            contextBudget -= ctx.length;
-            usedSources.push({ title: material.title || material.filename || 'Material', pages: MaterialUtils.sourcePages(relevant) });
-            }
-            } catch (e) { console.warn('Material grounding skipped:', material.title, e); }
-            }
+
             const apiKey = localStorage.getItem('gemini_api_key');
             if (!apiKey) throw new Error('Please enter your Gemini API Key in the AI Search tab first.');
-            
-           // DE LEON–ANCHORED PROMPT (6-part blueprint, clean HTML output)
-                const promptText = `Act as a distinguished Law Professor, Legal Scholar, and Bar Examiner whose teaching methodology is strictly anchored in the commentaries and textbooks of HECTOR S. DE LEON. Your task is to analyze the legal provision specified below and output a comprehensive, exam-ready review module.
-                You MUST follow the exact 6-part structural blueprint and formatting style provided below, explicitly integrating Hector S. De Leon's commentary, illustrations, legal distinctions, statutory exceptions, counter-exceptions, and jurisprudence.
-               PROVISION TO ANALYZE:
-                ${provisionText}
-                PREFERRED TEXTBOOK: Hector S. De Leon (Comments and Cases)
-                UPLOADED SUBJECT MATERIALS (PRIMARY GROUNDING):
-                ${materialContext || '(No uploaded material excerpts matched this provision. Rely on the preferred textbook and general Philippine law sources.)'}
-                GROUNDING RULES:
-                1. When uploaded material excerpts are provided, prioritize them: integrate their commentary, definitions, elements, illustrations, exceptions, and doctrines.
-                2. Cite the uploaded material and page in square brackets after key statements, e.g., [De Leon Comments & Cases, p. 322].
-                3. Do not invent page citations; use only the SOURCE/page labels given in the excerpts.
-                OUTPUT FORMAT REQUIREMENT:
-                Article [Insert Provision Number and Code Name]
-                1. Codal Provision & Context
-                [Exact text or statutory extract of the provision]
-                Legal Classification:
-                [Substantive/Procedural Law; Branch of Law; Specific legal category or title]
-                2. General Rule
-                [1-2 direct, categorical sentences stating the main legal principle]
-                3. Requisites / Elements
-                - [Element 1]
-                - [Element 2]
-                - [Element 3]
-                Most Heavily Tested Element in Recitations/Exams:
-                [Identify the specific requisite or condition most frequently queried by professors and bar examiners, with a brief explanation of why]
-                4. Exceptions & Counter-Exceptions
-                Exceptions (Where the provision does not control):
-                - [Exception 1]
-                - [Exception 2]
-                Exceptions to the Exceptions (Counter-Exceptions):
-                - [Counter-exception 1, citing cross-referenced articles if applicable]
-                5. Discussion & Exam Notes & COMMENTARIES
-                Ratio Legis: [Legal rationale and policy underlying the rule]
-                Plain-English Explanation & De Leon Commentary: [Detailed breakdown incorporating the commentary, practical illustrations, cross-code links, and real-world mechanics explicitly taught by HECTOR S. DE LEON in his textbook]
-                Common Exam Traps & De Leon Distinctions:
-                - [Trap/Distinction 1]: [Explanation of subtle distinctions or trick scenarios highlighted by De Leon]
-                - [Trap/Distinction 2]: [Explanation of mismatched application or common student misconceptions]
-                6. Landmark Cases, Doctrines & Definitions
-                [Case Name, G.R. No., Date]: [Key factual nexus and Supreme Court ruling interpreting the provision]
-                [Case Name, G.R. No., Date]: [Key ruling or doctrine established]
-                Key Legal Doctrines & Definitions:
-                - [Doctrine/Term 1]: [Precise judicial or statutory definition as emphasized in De Leon's text]
-                - [Doctrine/Term 2]: [Precise judicial or statutory definition as emphasized in De Leon's text]
-                STRICT HTML FORMATTING RULES:
-                1. Return the output as CLEAN HTML using only <h1>, <h2>, <h3>, <p>, <ul>, <ol>, and <li> tags.
-                2. DO NOT use emojis, icons, markdown asterisks, or markdown code blocks like \`\`\`html.
-                3. ALL section titles and sub-titles MUST be wrapped in <b> tags (e.g., <h2><b>1. Codal Provision & Context</b></h2>).
-                4. Use <ol> or <ul> with <li> for elements, exceptions, counter-exceptions, exam traps, cases, and definitions; use <p> for explanations.
-                5. Strictly follow the exact 6-part numbering and headings above.
-                Return ONLY the raw HTML.`;
-            
+
+            const subjectName = views.subject_notebook.subjectName || 'Current Subject';
+
+            // ================================================================
+            // SUBJECT-MATERIAL SEARCH
+            // Search ALL ready materials for the open subject. We first create
+            // a lexical + distributed candidate pool, then Gemini reranks the
+            // candidates for legal relevance to the requested provision.
+            // ================================================================
+            const readyMaterials = (views.subject_notebook.materialsData || [])
+                .filter(m => (m.extractionStatus || m.status) === 'ready');
+
+            const candidatePool = [];
+            const candidateKeys = new Set();
+
+            for (const material of readyMaterials) {
+                try {
+                    const chunks = await MaterialUtils.getChunks(material.id);
+                    if (!chunks.length) continue;
+
+                    // Strong lexical matches for the specific provision/topic.
+                    const lexical = MaterialUtils.relevantChunks(chunks, provisionText, 7, 44000);
+                    // Add a few distributed chunks so AI can still catch synonyms,
+                    // commentary headings, or related doctrines with different wording.
+                    const distributed = MaterialUtils.relevantChunks(chunks, '', 3, 22000);
+
+                    [...lexical, ...distributed].forEach(chunk => {
+                        const key = `${material.id}:${chunk.id || chunk.order || chunk.pageStart}`;
+                        if (candidateKeys.has(key)) return;
+                        candidateKeys.add(key);
+                        candidatePool.push({ material, chunk });
+                    });
+                } catch (error) {
+                    console.warn('Material search skipped:', material.title || material.filename, error);
+                }
+            }
+
+            let selectedCandidates = [...candidatePool];
+
+            // AI reranking is the semantic step. It does not invent source text;
+            // it only chooses which already-extracted passages are most relevant.
+            if (candidatePool.length > 1) {
+                try {
+                    const rankingCandidates = candidatePool.slice(0, 100);
+                    const candidateCatalog = rankingCandidates.map((item, index) => {
+                        const title = item.material.title || item.material.filename || 'Uploaded Material';
+                        const page = MaterialUtils.pageLabel(item.chunk);
+                        const excerpt = Utils.excerpt(item.chunk.text || '', 1800);
+                        return `CANDIDATE ${index + 1}
+SOURCE: ${title} (${page})
+${excerpt}`;
+                    }).join('\n\n---\n\n');
+
+                    const rankingPrompt = `You are searching a law student's uploaded subject materials for passages relevant to a specific Philippine legal provision or legal topic.
+
+SUBJECT: ${subjectName}
+PROVISION OR TOPIC: ${provisionText}
+
+TASK:
+1. Review every candidate excerpt below.
+2. Select only the excerpts that are materially relevant to explaining the provision, including its exact text, general rule, requisites/elements, exceptions, exceptions to exceptions, annotations/commentary, illustrations, and Supreme Court cases or doctrines.
+3. Prefer direct discussion of the provision, but also include genuinely relevant cross-references and jurisprudence.
+4. Do not add facts or authorities. You are ONLY ranking the supplied candidates.
+5. Return JSON only in this exact shape: {"selected":[1,2,3]}. Select at most 14 candidate numbers, ordered from most relevant to least relevant.
+
+CANDIDATES:
+${candidateCatalog}`;
+
+                    const rankingData = await GeminiService.generate(apiKey, {
+                        contents: [{ role: 'user', parts: [{ text: rankingPrompt }] }],
+                        generationConfig: { responseMimeType: 'application/json', temperature: 0.1 }
+                    });
+
+                    const rankingText = (GeminiService.text(rankingData) || '')
+                        .replace(/^```json\s*/i, '')
+                        .replace(/```\s*$/i, '')
+                        .trim();
+                    const ranking = JSON.parse(rankingText);
+                    const ids = Array.isArray(ranking?.selected)
+                        ? ranking.selected.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= rankingCandidates.length)
+                        : [];
+
+                    if (ids.length) {
+                        selectedCandidates = [...new Set(ids)].map(id => rankingCandidates[id - 1]);
+                    } else {
+                        selectedCandidates = rankingCandidates.slice(0, 14);
+                    }
+                } catch (error) {
+                    console.warn('AI material reranking failed; using local relevance ranking instead.', error);
+                    selectedCandidates = candidatePool.slice(0, 14);
+                }
+            }
+
+            // Build a bounded source context and page/source summary.
+            let materialContext = '';
+            let contextBudget = 56000;
+            const sourceMap = new Map();
+
+            for (const item of selectedCandidates.slice(0, 14)) {
+                if (contextBudget <= 1200) break;
+                const title = item.material.title || item.material.filename || 'Uploaded Material';
+                const pageLabel = MaterialUtils.pageLabel(item.chunk);
+                const rawText = String(item.chunk.text || '').trim();
+                if (!rawText) continue;
+
+                const sourceHeader = `SOURCE: ${title} (${pageLabel})
+`;
+                const available = Math.max(0, contextBudget - sourceHeader.length - 10);
+                const excerpt = rawText.slice(0, available);
+                if (!excerpt) break;
+
+                materialContext += `${sourceHeader}${excerpt}
+
+---
+
+`;
+                contextBudget -= sourceHeader.length + excerpt.length + 7;
+
+                const sourceKey = item.material.id || title;
+                if (!sourceMap.has(sourceKey)) sourceMap.set(sourceKey, { title, pages: new Set() });
+                MaterialUtils.sourcePages([item.chunk]).forEach(page => sourceMap.get(sourceKey).pages.add(page));
+            }
+
+            const usedSources = [...sourceMap.values()].map(source => ({
+                title: source.title,
+                pages: [...source.pages].sort((a, b) => a - b)
+            }));
+
+            // User-supplied Discuss Provision blueprint.
+            const legalPromptBlueprint = "You are an expert Philippine legal researcher, law professor, and bar review lecturer.\n\nAnalyze and discuss the legal provision provided by the user using **Philippine law and Philippine Supreme Court jurisprudence**. Your objective is to produce a comprehensive but understandable annotated discussion suitable for law students, legal researchers, and bar review.\n\nDo not merely paraphrase the provision. Explain its meaning, legal effect, requisites, limitations, exceptions, jurisprudential application, and practical significance.\n\nUse the following REQUIRED structure and headings exactly:\n\n# I. SPECIFIC PROVISION\n\nIdentify the exact **Article, Section, Rule, or statutory provision** being discussed.\n\nQuote or reproduce the relevant provision accurately when available.\n\nInclude:\n\n- Name of the law, code, rule, or constitutional provision\n- Article/Section/Rule number\n- Exact or relevant text of the provision\n- Related provisions, if necessary for proper understanding\n\nIf the user's question refers only to a legal concept and does not specify the provision, identify the most directly applicable Philippine legal provision.\n\n---\n\n# II. GENERAL RULE\n\nState the **general legal rule or controlling principle** established by the provision.\n\nBegin with a clear statement such as:\n\n**General Rule:** [State the rule.]\n\nThen explain:\n\n- What the provision generally requires, prohibits, permits, or recognizes\n- Who is covered by the rule\n- When the rule applies\n- Its legal purpose or rationale\n- The legal consequence of compliance or violation, when relevant\n\nDistinguish the actual rule from mere commentary or jurisprudential interpretation.\n\n---\n\n# III. ELEMENTS / REQUISITES\n\nEnumerate all the **elements, requisites, conditions, or requirements** that must be established for the provision to apply.\n\nUse numbered elements:\n\n1. First element\n2. Second element\n3. Third element\n\nAfter every element, briefly explain:\n\n- What the element means\n- What must be proven or established\n- Relevant jurisprudential interpretation, if any\n\nIf the law does not technically prescribe \"elements,\" identify the applicable **requisites, conditions, requirements, or tests** instead.\n\nDo not invent elements that are not supported by law or jurisprudence.\n\n---\n\n# IV. EXCEPTIONS, IF ANY\n\nIdentify all recognized exceptions to the general rule.\n\nFor each exception, explain:\n\n1. The exception\n2. Its legal basis\n3. The circumstances in which it applies\n4. The reason or policy behind the exception\n5. Relevant Supreme Court authority, if available\n\nClearly distinguish:\n\n**General Rule:** [rule]\n\n**Exception:** [exception]\n\nIf there are no recognized exceptions, expressly state:\n\n**No specific exception is expressly provided by the law or clearly recognized by controlling jurisprudence.**\n\nDo not fabricate exceptions.\n\n---\n\n# V. EXCEPTIONS TO THE EXCEPTIONS, IF ANY\n\nDetermine whether Philippine law or Supreme Court jurisprudence recognizes circumstances where an identified exception will itself **not apply**, thereby restoring the operation of the general rule or creating another qualification.\n\nPresent it as:\n\n**General Rule → Exception → Exception to the Exception**\n\nExplain the legal reasoning behind the hierarchy.\n\nIf none exists, expressly state:\n\n**No recognized exception to the exception was found or is ordinarily applicable to this provision.**\n\nDo not manufacture an exception to an exception merely to complete this section.\n\n---\n\n# VI. SUPREME COURT APPLICATION — LANDMARK CASE\n\nExplain how the **Supreme Court of the Philippines** has interpreted and applied the provision.\n\nSelect the **most authoritative, landmark, leading, or doctrinally significant Supreme Court case** directly relevant to the provision.\n\nProvide:\n\n**Case:** [Full case title]\n**G.R. No.:** [G.R. number]\n**Date:** [Date of decision]\n**Ponente:** [Justice who wrote the decision, if reliably known]\n\nThen discuss:\n\n### A. Relevant Facts\n\nSummarize only the facts necessary to understand the application of the provision.\n\n### B. Legal Issue\n\nState the issue related specifically to the provision being discussed.\n\n### C. Supreme Court Ruling\n\nExplain how the Supreme Court resolved the issue.\n\n### D. Doctrine\n\nState the important legal doctrine established or reiterated by the Court.\n\n### E. Application of the Provision\n\nExplain step-by-step how the Court applied:\n\n**Provision → Rule → Elements/Requisites → Facts → Conclusion**\n\nIdentify which elements were present or absent and why the Court reached its conclusion.\n\n### F. Significance of the Case\n\nExplain why the case is important in understanding the provision and whether subsequent jurisprudence has clarified, modified, distinguished, or reiterated the doctrine.\n\nWhen appropriate, mention additional Supreme Court cases that demonstrate a different factual application of the same provision.\n\nNever invent case names, G.R. numbers, dates, quotations, doctrines, or holdings.\n\nIf the exact citation cannot be reliably determined, state that the citation requires verification rather than fabricating information.\n\n---\n\n# VII. ANNOTATED DISCUSSION\n\nProvide a deeper, provision-by-provision or concept-by-concept legal commentary similar to an **annotated law book or bar reviewer**.\n\nDiscuss, when applicable:\n\n### A. Nature and Purpose\n\nExplain why the provision exists and what legal interest or policy it protects.\n\n### B. Scope and Coverage\n\nExplain:\n\n- Persons covered\n- Acts or circumstances covered\n- When the provision applies\n- When it does not apply\n\n### C. Important Terms\n\nDefine technical legal terms appearing in the provision.\n\n### D. Relationship With Other Provisions\n\nIdentify related provisions of:\n\n- The Constitution\n- Civil Code\n- Revised Penal Code\n- Rules of Court\n- Special laws\n- Administrative regulations\n\nonly when genuinely relevant.\n\n### E. Jurisprudential Interpretation\n\nExplain important doctrines developed by the Supreme Court concerning the provision.\n\nWhere jurisprudence has established a legal test, enumerate and explain that test.\n\n### F. Common Legal Issues\n\nDiscuss common controversies, misunderstandings, or interpretative questions involving the provision.\n\n### G. Bar Examination Perspective\n\nWhen appropriate, explain how the provision may appear in a law school or Philippine Bar Examination problem.\n\nIdentify key phrases or factual circumstances that should alert a student that the provision is applicable.\n\n---\n\n# VIII. ADDITIONAL INFORMATION\n\nMake the provision easier to understand and apply.\n\n## A. Layman's Explanation\n\nExplain the provision in **simple, everyday language** as though explaining it to a person with no legal background.\n\nAvoid unnecessary legal jargon.\n\nStart with:\n\n**In simple terms:**\n\nUse an analogy where helpful.\n\n---\n\n## B. Practical Illustration\n\nCreate a short hypothetical example using fictional persons.\n\nFormat:\n\n**Example:**\n\n[Scenario]\n\n**Application:**\n\nExplain:\n\n1. What legal rule applies\n2. Which elements/requisites are satisfied\n3. Whether an exception applies\n4. What the likely legal consequence is\n\n---\n\n## C. Contrary Illustration\n\nWhen useful, provide a second hypothetical where one important element is missing or an exception applies.\n\nExplain why the legal result changes.\n\n---\n\n## D. Quick Memory Aid\n\nProvide a short mnemonic, formula, checklist, or memory technique when the provision contains several elements or requisites.\n\nExample:\n\n**Remember:** A + B + C = Application of the Rule\n\nDo not force a mnemonic if doing so would distort the law.\n\n---\n\n## E. Key Takeaways\n\nEnd the discussion with **3–7 concise points** containing the most important things a law student or practitioner should remember about the provision.\n\n---\n\n# LEGAL RESEARCH AND ACCURACY RULES\n\nFollow these rules strictly:\n\n1. Apply **Philippine law** unless another jurisdiction is expressly requested.\n2. Give preference to primary legal authorities in this order:\n\n   **Constitution → Statute/Code → Rules of Court → Supreme Court jurisprudence → Administrative rules/regulations → Secondary authorities**\n3. Supreme Court decisions must be treated according to their actual holdings. Do not attribute a doctrine to a case merely because the case mentions the subject.\n4. Distinguish between:\n   - Express statutory rules\n   - Judicial interpretations\n   - Exceptions created by jurisprudence\n   - Scholarly commentary\n5. Never fabricate:\n   - Laws\n   - Article or section numbers\n   - Cases\n   - G.R. numbers\n   - Decision dates\n   - Ponentes\n   - Doctrines\n   - Quotations\n6. When uncertain about a citation or proposition, expressly state:\n\n   **“This citation or proposition should be verified against the official Supreme Court E-Library, Official Gazette, or controlling legal text.”**\n7. Prefer Supreme Court decisions that are:\n   - En Banc, when doctrinally controlling;\n   - Landmark or leading cases;\n   - Frequently cited in later decisions;\n   - Directly interpreting the particular provision; or\n   - More recent cases that clarify an older doctrine.\n8. If an older landmark case has been modified, abandoned, reversed, or qualified by later jurisprudence, clearly explain the current doctrine.\n9. Distinguish **ratio decidendi** from obiter dicta whenever the distinction is material.\n10. Do not state that something is an \"exception\" unless there is a legitimate statutory or jurisprudential basis for treating it as such.\n11. Use direct quotations from cases sparingly. Prefer accurate explanation of the Court's reasoning.\n12. The discussion must be comprehensive but organized. Avoid repetitive explanations.\n13. Use **bold formatting** for:\n\n- General Rule\n- Exceptions\n- Elements/Requisites\n- Important doctrines\n- Key legal terms\n- Supreme Court holdings\n\n14. Whenever possible, explain the logical relationship:\n\n**Provision → General Rule → Elements → Exception → Jurisprudence → Application**\n\n15. The final discussion should be useful both as:\n\n- An annotated legal reference; and\n- A study/reviewer material for Philippine law students.\n\n---\n\n# FINAL SUMMARY FORMAT\n\nAt the very end, provide this compact reviewer:\n\n**PROVISION:** [Article/Section/Rule]\n\n**GENERAL RULE:**\n[One-to-three sentence rule]\n\n**ELEMENTS/REQUISITES:**\n\n1. [...]\n2. [...]\n3. [...]\n\n**EXCEPTION:**\n[Exception or “None specifically recognized”]\n\n**EXCEPTION TO THE EXCEPTION:**\n[If applicable]\n\n**LANDMARK CASE:**\n[Case name, G.R. No., date]\n\n**CORE DOCTRINE:**\n[One concise statement]\n\n**LAYMAN'S VERSION:**\n[One-to-three sentences]\n\n**MEMORY KEY:**\n[Short mnemonic/formula if appropriate]";
+
+            const promptText = `${legalPromptBlueprint}
+
+============================================================
+LEX APPLICATION CONTEXT — FOLLOW THESE ADDITIONAL RULES
+============================================================
+
+SUBJECT:
+${subjectName}
+
+PROVISION / ARTICLE / TOPIC TO ANALYZE:
+${provisionText}
+
+UPLOADED SUBJECT MATERIAL EXCERPTS:
+${materialContext || '(The uploaded materials were searched, but no sufficiently relevant searchable excerpt was selected for this provision.)'}
+
+MANDATORY SOURCE-GROUNDING RULES:
+1. Treat the uploaded excerpts as subject-specific study sources that must be examined and integrated whenever they actually discuss the requested provision or a directly related doctrine.
+2. Do not say that an uploaded source contains a proposition unless the supplied excerpt supports it.
+3. When relying on an uploaded excerpt, cite it immediately in square brackets using the supplied SOURCE title and page label, for example: [Obligations and Contracts Reviewer, p. 42].
+4. Never invent an uploaded-material page number. Use only page numbers appearing in the SOURCE labels above.
+5. Uploaded materials do not override controlling Philippine law or Supreme Court jurisprudence. If an excerpt is incomplete, outdated, inconsistent, or merely commentary, distinguish it from the controlling authority.
+6. If the materials do not discuss a required point, do not fabricate a source-based answer. Continue the legal analysis under the research-and-accuracy rules in the user's blueprint and clearly preserve any uncertainty.
+7. For the landmark-case section, prefer a case directly interpreting or applying the specific provision. Do not invent the case citation, G.R. number, date, ponente, doctrine, or holding.
+
+LEX HTML OUTPUT RULES:
+1. Return ONLY clean raw HTML; do not use Markdown fences or Markdown heading syntax.
+2. Preserve the REQUIRED eight-part structure and heading wording from the blueprint. Render major sections as <h1>, subsections as <h2> or <h3>, ordinary explanations as <p>, and enumerations as <ol>/<ul> with <li>.
+3. Convert requested bold labels such as General Rule, Exception, Case, G.R. No., Date, Ponente, In simple terms, Example, Application, Remember, and the FINAL SUMMARY labels into <b> or <strong>.
+4. Allowed tags: <h1>, <h2>, <h3>, <p>, <ol>, <ul>, <li>, <b>, <strong>, <i>, <em>, <blockquote>, <table>, <thead>, <tbody>, <tr>, <th>, <td>.
+5. Do not use emojis, scripts, style tags, external links, or event-handler attributes.
+6. At the very end, include the compact FINAL SUMMARY FORMAT required by the blueprint.
+
+Begin the legal discussion now.`;
+
             const resultModal = document.createElement('div');
             resultModal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
-            
+
             const provisionTitle = provisionText.split(':')[0].split('-')[0].trim();
             const safeTitleForSave = `Codal Analysis: ${provisionTitle}`;
-            
-            resultModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+
+            resultModal.innerHTML = `<div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
                 <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0">
-                    <h3 class="font-bold text-slate-800 text-lg">Provision Analysis</h3>
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-lg">Provision Analysis</h3>
+                        <p class="text-xs text-slate-500 mt-1">Subject: ${Security.escapeHTML(subjectName)} · ${usedSources.length ? `${usedSources.length} uploaded source${usedSources.length === 1 ? '' : 's'} selected` : 'uploaded materials searched; no matching excerpt selected'}</p>
+                    </div>
                     <button onclick="this.closest('.fixed').remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="p-6 overflow-y-auto flex-1" id="provision-analysis-content">
-                    <div class="loader mx-auto"></div>
+                    <div class="flex flex-col items-center justify-center py-12 text-slate-500">
+                        <div class="loader mb-4"></div>
+                        <p class="font-medium">Preparing the annotated legal discussion...</p>
+                        <p class="text-xs mt-1">Integrating the most relevant uploaded material passages.</p>
+                    </div>
                 </div>
                 <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
                     <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium transition">Close</button>
@@ -6465,34 +6573,41 @@ getCurrentSubjectContext: () => ({
                     </button>
                 </div>
             </div>`;
-            
+
             document.body.appendChild(resultModal);
-            
+
             try {
-                const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] });
-                let resultHtml = GeminiService.text(data);
-                
-                // Clean up any accidental markdown blocks from the AI
-                resultHtml = resultHtml.replace(/^```html\s*/i, '').replace(/```\s*$/i, '').trim();
-                
-                // Store the result for saving (with material sources)
+                const data = await GeminiService.generate(apiKey, {
+                    contents: [{ role: 'user', parts: [{ text: promptText }] }],
+                    generationConfig: { temperature: 0.2 }
+                });
+
+                let resultHtml = GeminiService.text(data) || '';
+                resultHtml = resultHtml
+                    .replace(/^```html\s*/i, '')
+                    .replace(/^```\s*/i, '')
+                    .replace(/```\s*$/i, '')
+                    .trim();
+                resultHtml = Security.sanitizeAI(resultHtml);
+
                 const sourcesHtml = usedSources.length
-                ? `<div class="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900"><b><i class="fas fa-book-open mr-1"></i>Grounded in your uploaded materials:</b> ${usedSources.map(s => `${Security.escapeHTML(s.title)}${s.pages.length ? ` (pp. ${s.pages.join(', ')})` : ''}`).join(' • ')}</div>`
-                : '';
+                    ? `<div class="mb-5 p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900"><b><i class="fas fa-book-open mr-1"></i>Uploaded materials used:</b> ${usedSources.map(s => `${Security.escapeHTML(s.title)}${s.pages.length ? ` (pp. ${s.pages.join(', ')})` : ''}`).join(' • ')}</div>`
+                    : `<div class="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900"><b><i class="fas fa-search mr-1"></i>Material search:</b> The uploaded materials for this subject were searched, but no sufficiently relevant searchable excerpt was selected. The discussion therefore relies on the legal-analysis rules in your prompt.</div>`;
+
                 const sourcesNoteBlock = usedSources.length
-                ? `<h2>Source Materials Used</h2><ul>${usedSources.map(s => `<li>${Security.escapeHTML(s.title)}${s.pages.length ? ` — pp. ${s.pages.join(', ')}` : ''}</li>`).join('')}</ul>`
-                : '';
+                    ? `<h2>Source Materials Used</h2><ul>${usedSources.map(s => `<li>${Security.escapeHTML(s.title)}${s.pages.length ? ` — pp. ${s.pages.join(', ')}` : ''}</li>`).join('')}</ul>`
+                    : `<h2>Source Materials Search</h2><p>The uploaded materials for this subject were searched, but no sufficiently relevant searchable excerpt was selected for this provision.</p>`;
+
                 window.appHandlers.currentProvisionAnalysis = {
-                title: safeTitleForSave,
-                content: `<div class="note-template-block">${resultHtml}${sourcesNoteBlock}</div>`,
-                provision: provisionText,
-                sources: usedSources
+                    title: safeTitleForSave,
+                    content: `<div class="note-template-block">${resultHtml}${sourcesNoteBlock}</div>`,
+                    provision: provisionText,
+                    sources: usedSources
                 };
-                // Display the result
+
                 const contentDiv = document.getElementById('provision-analysis-content');
-                contentDiv.innerHTML = `${sourcesHtml}<div class="prose max-w-none text-sm leading-relaxed text-slate-700">${resultHtml}</div>`;
-                                
-                // Add save button event listener
+                contentDiv.innerHTML = `${sourcesHtml}<div class="material-generated-content prose max-w-none text-sm leading-relaxed text-slate-700">${resultHtml}</div>`;
+
                 const saveBtn = document.getElementById('save-provision-analysis');
                 saveBtn.onclick = async () => {
                     const subject = window.appHandlers.getCurrentSubjectContext();
@@ -6500,7 +6615,7 @@ getCurrentSubjectContext: () => ({
                         alert('Please open a subject notebook first before saving.');
                         return;
                     }
-                    
+
                     try {
                         await AppDB.add('notes', {
                             semesterId: subject.semesterId,
@@ -6510,13 +6625,14 @@ getCurrentSubjectContext: () => ({
                             title: window.appHandlers.currentProvisionAnalysis.title,
                             content: window.appHandlers.currentProvisionAnalysis.content,
                             linkedProvision: provisionText,
+                            sourceMaterials: usedSources,
                             created: serverTimestamp(),
                             updated: serverTimestamp()
                         });
-                        
+
                         alert('Successfully saved to Codal Provisions section!');
                         resultModal.remove();
-                        
+
                         if (currentView === 'subject_notebook' && views.subject_notebook.subjectId === subject.id) {
                             views.subject_notebook.showOverview();
                         }
@@ -6525,10 +6641,9 @@ getCurrentSubjectContext: () => ({
                         alert('Failed to save. Please try again.');
                     }
                 };
-                
             } catch (error) {
                 const contentDiv = document.getElementById('provision-analysis-content');
-                contentDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg">${error.message}</div>`;
+                contentDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg">${Security.escapeHTML(error.message)}</div>`;
             }
         }
     });
