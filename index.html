@@ -2748,7 +2748,7 @@ async ocrPdf(file, onProgress = () => {}) {
         }
 
         class DigestsView {
-            constructor() { this.unsubscribe = null; this.digestsData = []; this.activeSubject = '__none__'; }
+            constructor() { this.unsubscribe = null; this.digestsData = []; this.activeSubject = '__none__'; this.activeDigestId = null; }
             render() { 
                 return `
                 <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
@@ -2760,14 +2760,17 @@ async ocrPdf(file, onProgress = () => {}) {
                         <button onclick="window.appHandlers.addDigest()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>Manual Digest</button>
                     </div>
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
-                        <div class="p-4 border-b border-slate-200 bg-slate-50">
-                            <div class="mb-4">
-                                <p class="text-[10px] uppercase tracking-[.16em] font-black text-slate-500 mb-3">Subject Matter</p>
-                                <div id="digest-subject-filter" class="w-full max-w-2xl mx-auto"></div>
+                        <div class="p-4 md:p-5 border-b border-slate-200 bg-slate-50">
+                            <div id="digest-subject-menu">
+                                <div class="mb-4 text-center">
+                                    <p class="text-[10px] uppercase tracking-[.18em] font-black text-slate-500">Choose Subject Matter</p>
+                                    <p class="text-xs text-slate-400 mt-1">Open a subject to view only its consolidated case digests.</p>
+                                </div>
+                                <div id="digest-subject-filter" class="w-full max-w-3xl mx-auto"></div>
                             </div>
-                            <div id="digest-search-wrap" class="relative hidden">
-                                <i class="fas fa-search absolute left-3 top-2.5 text-slate-400"></i>
-                                <input type="text" id="digest-search" placeholder="Search cases in the selected subject..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterDigests()">
+                            <div id="digest-search-wrap" class="relative hidden max-w-3xl mx-auto">
+                                <i class="fas fa-search absolute left-3.5 top-3 text-slate-400"></i>
+                                <input type="text" id="digest-search" placeholder="Search cases in the selected subject..." class="w-full pl-10 pr-4 py-2.5 border border-slate-300 bg-white rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" onkeyup="window.appHandlers.filterDigests()">
                             </div>
                         </div>
                         <div id="digest-active-subject" class="hidden px-6 pt-5"></div>
@@ -2777,7 +2780,8 @@ async ocrPdf(file, onProgress = () => {}) {
             }
             init() {
                 this.unsubscribe = AppDB.subscribe('digests', (snapshot) => {
-                    const list = document.getElementById('digest-list'); if (!list) return; list.innerHTML = '';
+                    const list = document.getElementById('digest-list');
+                const subjectMenu = document.getElementById('digest-subject-menu'); if (!list) return; list.innerHTML = '';
                     this.digestsData = [];
                     if(snapshot.empty) {
                         const filters = document.getElementById('digest-subject-filter');
@@ -7479,14 +7483,46 @@ await AppDB.add('digests', digestData);
             
       toggleDigestFull: (id, button = null) => {
                 const panel = document.getElementById(`digest-full-${id}`);
-                if (!panel) return;
+                const card = document.getElementById(`digest-card-${id}`);
+                if (!panel || !card) return;
+
                 const opening = panel.classList.contains('hidden');
-                panel.classList.toggle('hidden', !opening);
-                if (button) {
-                    button.setAttribute('aria-expanded', opening ? 'true' : 'false');
-                    button.innerHTML = opening
-                        ? '<i class="fas fa-chevron-up mr-2"></i>HIDE FULL DIGEST'
-                        : '<i class="fas fa-book-open mr-2"></i>READ FULL DIGEST';
+                const list = document.getElementById('digest-list');
+                const searchWrap = document.getElementById('digest-search-wrap');
+                const cards = list ? [...list.querySelectorAll('[data-digest-card]')] : [];
+
+                if (opening) {
+                    // Focus on one digest at a time.
+                    cards.forEach(other => {
+                        const isCurrent = other.id === `digest-card-${id}`;
+                        other.classList.toggle('hidden', !isCurrent);
+                        const otherPanel = other.querySelector('[id^="digest-full-"]');
+                        const otherToggle = other.querySelector('[data-digest-toggle]');
+                        if (!isCurrent && otherPanel) otherPanel.classList.add('hidden');
+                        if (!isCurrent && otherToggle) {
+                            otherToggle.setAttribute('aria-expanded', 'false');
+                            otherToggle.innerHTML = '<i class="fas fa-book-open mr-2"></i>READ FULL DIGEST';
+                        }
+                    });
+                    panel.classList.remove('hidden');
+                    if (searchWrap) searchWrap.classList.add('hidden');
+                    if (views.digests) views.digests.activeDigestId = id;
+                    if (button) {
+                        button.setAttribute('aria-expanded', 'true');
+                        button.innerHTML = '<i class="fas fa-arrow-left mr-2"></i>BACK TO CASES';
+                        button.className = 'px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black tracking-wide transition shadow-sm';
+                    }
+                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else {
+                    panel.classList.add('hidden');
+                    cards.forEach(other => other.classList.remove('hidden'));
+                    if (searchWrap) searchWrap.classList.remove('hidden');
+                    if (views.digests) views.digests.activeDigestId = null;
+                    if (button) {
+                        button.setAttribute('aria-expanded', 'false');
+                        button.innerHTML = '<i class="fas fa-book-open mr-2"></i>READ FULL DIGEST';
+                        button.className = 'px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black tracking-wide transition shadow-sm';
+                    }
                 }
             },
 
@@ -7559,7 +7595,9 @@ await AppDB.add('digests', digestData);
 
                     groupedDigests[subj].forEach(d => {
                         const article = document.createElement('article');
-                        article.className = 'bg-white border border-slate-300 rounded-xl shadow-sm overflow-hidden';
+                        article.id = `digest-card-${d.id}`;
+                        article.dataset.digestCard = 'true';
+                        article.className = 'bg-white border border-slate-300 rounded-2xl shadow-sm overflow-hidden transition';
                         const citation = clean(d.citation || d.grNo) || 'G.R. No. not recorded';
                         const title = clean(d.title) || 'Untitled Case';
                         const gist = clean(d.gist) || 'No gist recorded.';
@@ -7582,7 +7620,7 @@ await AppDB.add('digests', digestData);
                             </div>
 
                             <div class="px-4 py-3 bg-slate-50 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
-                                <button onclick="window.appHandlers.toggleDigestFull('${d.id}', this)" aria-controls="${fullId}" aria-expanded="false" class="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-black tracking-wide transition shadow-sm">
+                                <button data-digest-toggle onclick="window.appHandlers.toggleDigestFull('${d.id}', this)" aria-controls="${fullId}" aria-expanded="false" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black tracking-wide transition shadow-sm">
                                     <i class="fas fa-book-open mr-2"></i>READ FULL DIGEST
                                 </button>
                                 <div class="flex items-center gap-1.5 flex-wrap" aria-label="Digest actions">
@@ -7644,12 +7682,15 @@ await AppDB.add('digests', digestData);
                     return;
                 }
 
-                wrap.innerHTML = `<div class="border border-slate-400 bg-white divide-y divide-slate-300">${subjects.map(subject => {
+                wrap.innerHTML = `<div class="grid grid-cols-1 gap-2.5">${subjects.map(subject => {
                     const encoded = encodeURIComponent(subject);
-                    const selected = active === subject;
-                    return `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter(decodeURIComponent('${encoded}'))" class="w-full min-h-[38px] px-3 py-2 flex items-center justify-between gap-3 text-left text-xs md:text-sm font-medium uppercase tracking-normal transition ${selected ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 hover:bg-slate-100'}" aria-pressed="${selected ? 'true' : 'false'}">
-                        <span class="truncate">${Security.escapeHTML(subject)}</span>
-                        <span class="shrink-0 text-[10px] ${selected ? 'text-slate-300' : 'text-slate-500'}">${counts.get(subject)} CASE${counts.get(subject) === 1 ? '' : 'S'}</span>
+                    return `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter(decodeURIComponent('${encoded}'))" class="group w-full min-h-[58px] px-4 py-3 flex items-center gap-3 text-left bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 hover:bg-blue-50/60 hover:shadow transition" aria-label="Open ${Security.escapeHTML(subject)} case digests">
+                        <span class="w-9 h-9 shrink-0 rounded-lg bg-slate-100 group-hover:bg-blue-100 text-slate-500 group-hover:text-blue-600 flex items-center justify-center transition"><i class="fas fa-folder"></i></span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate text-xs md:text-sm font-black uppercase tracking-wide text-slate-800">${Security.escapeHTML(subject)}</span>
+                            <span class="block mt-0.5 text-[10px] text-slate-400">${counts.get(subject)} saved case${counts.get(subject) === 1 ? '' : 's'}</span>
+                        </span>
+                        <span class="w-8 h-8 shrink-0 rounded-full bg-slate-50 group-hover:bg-white border border-slate-200 text-slate-400 group-hover:text-blue-600 flex items-center justify-center transition"><i class="fas fa-chevron-right text-xs"></i></span>
                     </button>`;
                 }).join('')}</div>`;
             },
@@ -7657,10 +7698,23 @@ await AppDB.add('digests', digestData);
             setDigestSubjectFilter: (subject) => {
                 if (!views.digests) return;
                 views.digests.activeSubject = subject || '__none__';
+                views.digests.activeDigestId = null;
                 const search = document.getElementById('digest-search');
                 if (search) search.value = '';
                 window.appHandlers.renderDigestSubjectFilters();
                 window.appHandlers.filterDigests();
+            },
+
+            backToDigestSubjects: () => {
+                if (!views.digests) return;
+                views.digests.activeSubject = '__none__';
+                views.digests.activeDigestId = null;
+                const search = document.getElementById('digest-search');
+                if (search) search.value = '';
+                window.appHandlers.renderDigestSubjectFilters();
+                window.appHandlers.filterDigests();
+                const menu = document.getElementById('digest-subject-menu');
+                if (menu) menu.scrollIntoView({ behavior: 'smooth', block: 'start' });
             },
 
             filterDigests: () => {
@@ -7669,8 +7723,10 @@ await AppDB.add('digests', digestData);
                 const heading = document.getElementById('digest-active-subject');
                 const searchWrap = document.getElementById('digest-search-wrap');
                 const list = document.getElementById('digest-list');
+                const subjectMenu = document.getElementById('digest-subject-menu');
 
                 if (activeSubject === '__none__') {
+                    if (subjectMenu) subjectMenu.classList.remove('hidden');
                     if (searchWrap) searchWrap.classList.add('hidden');
                     if (heading) heading.classList.add('hidden');
                     if (list) {
@@ -7679,6 +7735,7 @@ await AppDB.add('digests', digestData);
                     return;
                 }
 
+                if (subjectMenu) subjectMenu.classList.add('hidden');
                 if (searchWrap) searchWrap.classList.remove('hidden');
 
                 const filtered = (views.digests?.digestsData || []).filter(raw => {
@@ -7691,7 +7748,16 @@ await AppDB.add('digests', digestData);
 
                 if (heading) {
                     heading.classList.remove('hidden');
-                    heading.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4"><div><p class="text-[10px] font-black uppercase tracking-[.16em] text-blue-600">Currently Viewing</p><h4 class="mt-1 text-lg font-black text-slate-900 uppercase tracking-wide">${Security.escapeHTML(activeSubject)}</h4></div><span class="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-full">${filtered.length} CASE${filtered.length === 1 ? '' : 'S'}</span></div>`;
+                    heading.innerHTML = `<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <button type="button" onclick="window.appHandlers.backToDigestSubjects()" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black transition" title="Back to subject matter list"><i class="fas fa-arrow-left"></i> BACK TO SUBJECTS</button>
+                            <span class="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-full">${filtered.length} CASE${filtered.length === 1 ? '' : 'S'}</span>
+                        </div>
+                        <div class="mt-4 flex items-center gap-3 min-w-0">
+                            <span class="w-10 h-10 shrink-0 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-folder-open"></i></span>
+                            <div class="min-w-0"><p class="text-[10px] font-black uppercase tracking-[.16em] text-slate-400">Currently Viewing</p><h4 class="mt-0.5 text-lg font-black text-slate-900 uppercase tracking-wide truncate">${Security.escapeHTML(activeSubject)}</h4></div>
+                        </div>
+                    </div>`;
                 }
                 window.appHandlers.renderDigestRows(filtered, activeSubject);
             },
