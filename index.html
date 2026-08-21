@@ -7529,27 +7529,82 @@ await AppDB.add('digests', digestData);
                     </div>
                 </div>`;
             },
-            createDigestPdfSource: (id) => {
+            createDigestPdfSource: (id, message = 'Preparing case digest PDF…') => {
                 const raw = window.appHandlers.getDigestById(id);
                 if (!raw) throw new Error('Digest not found.');
                 const d = DigestUtils.normalize(raw);
+
+                // Keep the capture source inside the viewport. The Lex shell uses
+                // overflow:hidden on <body>, so a source placed extremely far off-screen
+                // can be clipped by html2canvas and become a blank PDF.
                 const host = document.createElement('div');
-                host.style.position = 'absolute';
-                host.style.left = '-100000px';
-                host.style.top = '0';
-                host.style.width = '190mm';
-                host.style.background = '#ffffff';
-                host.style.padding = '10mm';
-                host.style.boxSizing = 'border-box';
+                host.setAttribute('data-lex-pdf-source', 'true');
+                Object.assign(host.style, {
+                    position: 'fixed',
+                    left: '0',
+                    top: '0',
+                    width: '210mm',
+                    minHeight: '297mm',
+                    padding: '10mm',
+                    margin: '0',
+                    boxSizing: 'border-box',
+                    background: '#ffffff',
+                    color: '#0f172a',
+                    overflow: 'visible',
+                    zIndex: '2147483000',
+                    pointerEvents: 'none'
+                });
                 host.innerHTML = window.appHandlers.digestPdfMarkup(d);
+
+                // Cover the temporary render sheet while html2canvas captures only `host`.
+                const cover = document.createElement('div');
+                cover.setAttribute('data-lex-pdf-cover', 'true');
+                Object.assign(cover.style, {
+                    position: 'fixed',
+                    inset: '0',
+                    zIndex: '2147483001',
+                    background: 'rgba(248,250,252,.98)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '24px',
+                    fontFamily: 'Inter, Arial, sans-serif',
+                    color: '#334155'
+                });
+                cover.innerHTML = `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 22px;box-shadow:0 12px 30px rgba(15,23,42,.12);display:flex;align-items:center;gap:12px"><span class="loader" style="display:inline-block;flex:none"></span><strong>${Security.escapeHTML(message)}</strong></div>`;
+
                 document.body.appendChild(host);
-                return { host, digest: d };
+                document.body.appendChild(cover);
+                return { host, cover, digest: d };
             },
-            digestPdfOptions: (filename) => ({
+            waitForDigestPdfLayout: async (source) => {
+                if (!source?.host) throw new Error('PDF source was not created.');
+                try { if (document.fonts?.ready) await document.fonts.ready; } catch (_) {}
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                const textLength = (source.host.innerText || '').trim().length;
+                const rect = source.host.getBoundingClientRect();
+                if (textLength < 10 || rect.width < 100 || source.host.scrollHeight < 100) {
+                    throw new Error('The digest content could not be laid out for PDF generation.');
+                }
+            },
+            cleanupDigestPdfSource: (source) => {
+                source?.cover?.remove();
+                source?.host?.remove();
+            },
+            digestPdfOptions: (filename, host = null) => ({
                 margin: [10, 10, 10, 10],
                 filename,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, logging: false },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                    scrollX: 0,
+                    scrollY: 0,
+                    windowWidth: Math.max(794, Math.ceil(host?.scrollWidth || 794)),
+                    windowHeight: Math.max(1123, Math.ceil(host?.scrollHeight || 1123))
+                },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                 pagebreak: { mode: ['css', 'legacy'] }
             }),
@@ -7562,31 +7617,42 @@ await AppDB.add('digests', digestData);
                 preview.document.write('<!doctype html><title>Preparing PDF...</title><body style="font-family:Arial,sans-serif;padding:24px">Preparing your case digest PDF...</body>');
                 let source = null;
                 try {
-                    source = window.appHandlers.createDigestPdfSource(id);
+                    source = window.appHandlers.createDigestPdfSource(id, 'Preparing PDF preview…');
+                    await window.appHandlers.waitForDigestPdfLayout(source);
                     const safeName = String(source.digest.title || 'Case').replace(/[\\/:*?"<>|]+/g, '_');
-                    const blob = await html2pdf().set(window.appHandlers.digestPdfOptions(`${safeName}_Digest.pdf`)).from(source.host).outputPdf('blob');
+                    const worker = html2pdf()
+                        .set(window.appHandlers.digestPdfOptions(`${safeName}_Digest.pdf`, source.host))
+                        .from(source.host)
+                        .toPdf();
+                    const blob = await worker.outputPdf('blob');
+                    if (!blob || blob.size < 1000) throw new Error('The generated PDF was unexpectedly empty.');
                     const url = URL.createObjectURL(blob);
                     preview.location.replace(url);
-                    setTimeout(() => URL.revokeObjectURL(url), 120000);
+                    setTimeout(() => URL.revokeObjectURL(url), 300000);
                 } catch (error) {
                     console.error('PDF preview failed:', error);
                     preview.close();
                     alert(`Unable to create PDF preview: ${error.message}`);
                 } finally {
-                    source?.host?.remove();
+                    window.appHandlers.cleanupDigestPdfSource(source);
                 }
             },
             downloadDigestPdfById: async (id) => {
                 let source = null;
                 try {
-                    source = window.appHandlers.createDigestPdfSource(id);
+                    source = window.appHandlers.createDigestPdfSource(id, 'Preparing PDF download…');
+                    await window.appHandlers.waitForDigestPdfLayout(source);
                     const safeName = String(source.digest.title || 'Case').replace(/[\\/:*?"<>|]+/g, '_');
-                    await html2pdf().set(window.appHandlers.digestPdfOptions(`${safeName}_Digest.pdf`)).from(source.host).save();
+                    await html2pdf()
+                        .set(window.appHandlers.digestPdfOptions(`${safeName}_Digest.pdf`, source.host))
+                        .from(source.host)
+                        .toPdf()
+                        .save();
                 } catch (error) {
                     console.error('PDF download failed:', error);
                     alert(`Unable to download PDF: ${error.message}`);
                 } finally {
-                    source?.host?.remove();
+                    window.appHandlers.cleanupDigestPdfSource(source);
                 }
             },
             // Backward-compatible alias for any older internal call.
