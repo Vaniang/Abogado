@@ -693,7 +693,9 @@ const CloudStorage = {
                     exceptions,
                     exceptionsToExceptions,
                     supremeCourtApplication,
-                    legalFramework: this.text(record.legalFramework || record.legal_framework || structuredFramework || legacyFramework),
+                    // Canonical display uses the five separate framework fields. The combined
+                    // legalFramework value is only a fallback for older records.
+                    legalFramework: this.text(structuredFramework || record.legalFramework || record.legal_framework || legacyFramework),
                     verbatimNotes: this.text(record.verbatimNotes || record.verbatim_notes || legacyVerbatim),
                     personalNotes: this.text(record.personalNotes || record.personal_notes || (!this.looksLegacyBundle(rawNotes) ? rawNotes : '')),
                     gist: this.text(record.gist || record.recitation_gist)
@@ -702,10 +704,20 @@ const CloudStorage = {
             myNotesText(record = {}) {
                 const d = this.normalize(record);
                 const parts = [];
-                if (d.doctrine) parts.push(`DOCTRINE\n${d.doctrine}`);
-                if (d.codalProvision) parts.push(`CODAL PROVISION\n${d.codalProvision}`);
-                if (d.legalFramework) parts.push(`LEGAL FRAMEWORK\n${d.legalFramework}`);
-                if (d.personalNotes) parts.push(`PERSONAL NOTES\n${d.personalNotes}`);
+                if (d.doctrine) parts.push(`1. DOCTRINE\n${d.doctrine}`);
+                if (d.codalProvision) parts.push(`2. CODAL PROVISION\n${d.codalProvision}`);
+
+                const framework = [];
+                if (d.generalRule) framework.push(`a. General Rule\n${d.generalRule}`);
+                if (d.elementsRequisites) framework.push(`b. Elements / Requisites\n${d.elementsRequisites}`);
+                if (d.exceptions) framework.push(`c. Exceptions, if any\n${d.exceptions}`);
+                if (d.exceptionsToExceptions) framework.push(`d. Exceptions to the Exceptions, if any\n${d.exceptionsToExceptions}`);
+                if (d.supremeCourtApplication) framework.push(`e. How the Supreme Court Applied the Provision in This Case\n${d.supremeCourtApplication}`);
+                if (!framework.length && d.legalFramework) framework.push(d.legalFramework);
+                if (framework.length) parts.push(`3. LEGAL FRAMEWORK\n${framework.join('\n\n')}`);
+
+                if (d.verbatimNotes) parts.push(`4. VERBATIM NOTES\n${d.verbatimNotes}`);
+                if (d.personalNotes) parts.push(`PERSONAL / CLASS NOTES\n${d.personalNotes}`);
                 return parts.join('\n\n');
             },
             searchText(record = {}) {
@@ -715,7 +727,7 @@ const CloudStorage = {
             },
             exportText(record = {}) {
                 const d = this.normalize(record);
-                return `CASE: ${d.title || 'Untitled Case'}\nSUBJECT: ${d.subject || d.subjectName || ''}\nTOPIC: ${d.topic || ''}\n\nFACTS\n${d.facts || '—'}\n\nISSUE\n${d.issue || '—'}\n\nRULING & RATIO\n${d.rulingRatio || '—'}\n\nMY NOTES\n${this.myNotesText(d) || '—'}\n\nVERBATIM NOTES FROM THE CASE\n${d.verbatimNotes || '—'}`;
+                return `CASE: ${d.title || 'Untitled Case'}\nG.R. NO. / CITATION: ${d.citation || d.grNo || '—'}\nSUBJECT: ${d.subject || d.subjectName || ''}\nTOPIC: ${d.topic || ''}\nRECITATION GIST: ${d.gist || '—'}\n\nFACTS\n${d.facts || '—'}\n\nISSUE\n${d.issue || '—'}\n\nRULING & RATIO\n${d.rulingRatio || '—'}\n\nMY NOTES\n${this.myNotesText(d) || '—'}`;
             }
         };
 
@@ -7357,7 +7369,6 @@ await AppDB.add('digests', digestData);
                         const exceptions = document.getElementById('digest-edit-exceptions').value.trim();
                         const exceptionsToExceptions = document.getElementById('digest-edit-counter-exceptions').value.trim();
                         const supremeCourtApplication = document.getElementById('digest-edit-sc-application').value.trim();
-                        const legalFramework = DigestUtils.buildLegalFramework({ generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication });
                         const rulingRatio = document.getElementById('digest-edit-ruling-ratio').value.trim();
                         const personalNotes = document.getElementById('digest-edit-personal-notes').value.trim();
                         const updateData = {
@@ -7369,10 +7380,10 @@ await AppDB.add('digests', digestData);
                             rulingRatio, ruling: rulingRatio,
                             doctrine: document.getElementById('digest-edit-doctrine').value.trim(),
                             codalProvision: document.getElementById('digest-edit-codal').value.trim(),
-                            generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication, legalFramework,
+                            generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication,
                             verbatimNotes: document.getElementById('digest-edit-verbatim').value.trim(),
                             personalNotes, notes: personalNotes,
-                            schemaVersion: 2, updated: serverTimestamp()
+                            schemaVersion: 3, updated: serverTimestamp()
                         };
                         if (selectedSubjectId) {
                             updateData.primarySubjectId = selectedSubjectId;
@@ -7390,7 +7401,7 @@ await AppDB.add('digests', digestData);
                 const d = DigestUtils.normalize(raw);
                 const esc = Security.escapeHTML;
                 const block = (label, value, bg = '#ffffff') => `<div style="margin:0 0 18px;padding:14px;background:${bg};border:1px solid #e2e8f0;border-radius:8px"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#475569;margin:0 0 8px">${label}</h3><div style="white-space:pre-wrap;line-height:1.65;color:#334155">${esc(value || '—')}</div></div>`;
-                const html = `<div style="font-family:Arial,sans-serif;max-width:1000px;margin:0 auto"><h1 style="font-family:Georgia,serif;margin-bottom:5px">${esc(d.title || 'Untitled Case')}</h1><p style="color:#64748b;margin-top:0">${esc(d.subject || d.subjectName || '')}${d.topic ? ` | ${esc(d.topic)}` : ''}</p>${block('Facts',d.facts)}${block('Issue',d.issue,'#eff6ff')}${block('Ruling & Ratio',d.rulingRatio)}${block('My Notes',DigestUtils.myNotesText(d),'#fffbeb')}${block('Verbatim Notes from the Case',d.verbatimNotes,'#ecfdf5')}</div>`;
+                const html = `<div style="font-family:Arial,sans-serif;max-width:1000px;margin:0 auto"><h1 style="font-family:Georgia,serif;margin-bottom:5px">${esc(d.title || 'Untitled Case')}</h1><p style="color:#64748b;margin-top:0">${esc(d.subject || d.subjectName || '')}${d.topic ? ` | ${esc(d.topic)}` : ''}</p>${block('Recitation Gist',d.gist,'#fffbeb')}${block('Facts',d.facts)}${block('Issue',d.issue,'#eff6ff')}${block('Ruling & Ratio',d.rulingRatio)}${block('My Notes',DigestUtils.myNotesText(d),'#fffbeb')}</div>`;
                 window.appHandlers.printContent(`Digest - ${d.title || 'Case'}`, html);
             },
             downloadDigestTextById: (id) => {
@@ -7485,16 +7496,24 @@ await AppDB.add('digests', digestData);
                         <div class="text-sm leading-6 text-slate-800 whitespace-pre-wrap">${esc(clean(value) || fallback)}</div>
                     </div>`;
 
-                const applicableFramework = d => {
-                    const parts = [];
-                    if (d.codalProvision) parts.push(`<div><span class="font-bold">Provision:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.codalProvision)}</div></div>`);
-                    if (d.generalRule) parts.push(`<div><span class="font-bold">General Rule:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.generalRule)}</div></div>`);
-                    if (d.elementsRequisites) parts.push(`<div><span class="font-bold">Elements / Requisites:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.elementsRequisites)}</div></div>`);
-                    if (d.exceptions) parts.push(`<div><span class="font-bold">Exceptions, if any:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.exceptions)}</div></div>`);
-                    if (d.exceptionsToExceptions) parts.push(`<div><span class="font-bold">Exceptions to the Exceptions, if any:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.exceptionsToExceptions)}</div></div>`);
-                    if (d.supremeCourtApplication) parts.push(`<div><span class="font-bold">How the Supreme Court Applied the Provision:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.supremeCourtApplication)}</div></div>`);
-                    if (!parts.length && d.legalFramework) parts.push(`<div class="whitespace-pre-wrap">${esc(d.legalFramework)}</div>`);
-                    return parts.length ? parts.join('<div class="h-3"></div>') : '<span class="text-slate-400 italic">No applicable provision/framework recorded.</span>';
+                const frameworkField = (letter, label, value, fallback = 'Not specifically stated in the supplied case text.') => `
+                    <div class="border-l-2 border-slate-200 pl-3 py-1">
+                        <p class="font-black text-[11px] text-slate-700 mb-1">${letter}. ${label}</p>
+                        <div class="text-sm leading-6 text-slate-800 whitespace-pre-wrap">${esc(clean(value) || fallback)}</div>
+                    </div>`;
+
+                const legalFrameworkFields = d => {
+                    const hasStructured = Boolean(d.generalRule || d.elementsRequisites || d.exceptions || d.exceptionsToExceptions || d.supremeCourtApplication);
+                    if (!hasStructured && d.legalFramework) {
+                        return `<div class="text-sm leading-6 text-slate-800 whitespace-pre-wrap">${esc(d.legalFramework)}</div>`;
+                    }
+                    return [
+                        frameworkField('a', 'General Rule', d.generalRule),
+                        frameworkField('b', 'Elements / Requisites', d.elementsRequisites),
+                        frameworkField('c', 'Exceptions, if any', d.exceptions),
+                        frameworkField('d', 'Exceptions to the Exceptions, if any', d.exceptionsToExceptions),
+                        frameworkField('e', 'How the Supreme Court Applied the Provision in THIS Case', d.supremeCourtApplication)
+                    ].join('<div class="h-3"></div>');
                 };
 
                 const summaryApplication = d => {
@@ -7557,13 +7576,17 @@ await AppDB.add('digests', digestData);
                             <div id="${fullId}" class="hidden p-4 md:p-6 bg-white">
                                 <div class="border border-slate-300 p-4 md:p-5 min-h-[220px]">
                                     <h4 class="font-black text-sm uppercase tracking-wide text-slate-950 mb-5">MY NOTES:</h4>
-                                    ${labeled('DOCTRINE/S: (USED TO SOLVE THE CASE)', d.doctrine)}
-                                    <div class="mb-4">
-                                        <p class="font-black text-[11px] uppercase tracking-wide text-slate-900 mb-1">APPLICABLE PROVISION/S: <span class="normal-case font-medium">(How does the Supreme Court apply the provision)</span></p>
-                                        <div class="text-sm leading-6 text-slate-800">${applicableFramework(d)}</div>
+
+                                    ${labeled('1. DOCTRINE — CONTROLLING DOCTRINE FROM THE CASE', d.doctrine)}
+                                    ${labeled('2. CODAL PROVISION — APPLICABLE CONSTITUTIONAL / STATUTORY / RULE PROVISION', d.codalProvision)}
+
+                                    <div class="mb-5">
+                                        <p class="font-black text-[11px] uppercase tracking-wide text-slate-900 mb-3">3. LEGAL FRAMEWORK</p>
+                                        <div class="rounded-lg bg-slate-50 border border-slate-200 p-3 md:p-4">${legalFrameworkFields(d)}</div>
                                     </div>
-                                    ${labeled('VERBATIM NOTES: (FROM THE PROVIDED CASE, IMPORTANT, APPLICABLE NOTES)', d.verbatimNotes, 'No verbatim notes recorded.')}
-                                    ${d.personalNotes ? labeled('PERSONAL NOTES:', d.personalNotes) : ''}
+
+                                    ${labeled('4. VERBATIM NOTES — EXACT EXCERPTS FROM THE TARGET CASE TEXT WITH CONNECTION', d.verbatimNotes, 'No verbatim notes recorded.')}
+                                    ${d.personalNotes ? labeled('PERSONAL / CLASS NOTES:', d.personalNotes) : ''}
                                 </div>
 
                                 <div class="border border-slate-300 p-4 md:p-5 mt-6 min-h-[320px]">
@@ -7632,7 +7655,7 @@ TOPIC / ARTICLE: ${topicInput || 'Not specified'}
 TARGET CASE TEXT:
 ${textToDigest.substring(0, 40000)}
 
-Prepare only the information needed for the Consolidated Case Digest table. Keep every category separate. DO NOT repeat the same doctrine, codal provision, legal framework, ruling, or verbatim quotation in another field.
+Prepare only the information needed for the Consolidated Case Digest table. The JSON fields below map DIRECTLY to one destination in the Cons. Digest card. Keep every category separate. DO NOT repeat the same doctrine, codal provision, legal framework, ruling, or verbatim quotation in another field. Never place one field\'s content under another field\'s heading.
 
 FACTS: concise material facts only.
 ISSUE: the legal issue relevant to ${selectedSubjectName}.
@@ -7653,8 +7676,11 @@ RECITATION GIST: 1-2 sentences only for quick identification of the case.
 Accuracy rules:
 - Use Philippine law.
 - Do not invent case facts, holdings, statutes, elements, exceptions, or quotations.
-- If the case text does not support an item, write "Not specifically stated in the supplied case text." rather than guessing.
+- For "gr_no": if no G.R. number/citation is stated in the TARGET CASE TEXT, return an empty string exactly as instructed above.
+- For any other unsupported item, write "Not specifically stated in the supplied case text." rather than guessing.
 - Do not duplicate content between JSON fields.
+- The "ruling_ratio" field must never contain the Doctrine, Codal Provision, Legal Framework, or Verbatim Notes.
+- The "supreme_court_application" field should explain the Court\'s application of the applicable provision/requisites to the facts of THIS case, not repeat the general ruling.
 
 Return STRICTLY one raw JSON object with these exact keys:
 {
@@ -7696,7 +7722,6 @@ Do NOT use markdown fences and do NOT add text outside the JSON object.`;
         const supremeCourtApplication = DigestUtils.text(parsedDigest.supreme_court_application);
         const gist = DigestUtils.text(parsedDigest.recitation_gist);
         const verbatimNotes = DigestUtils.text(parsedDigest.verbatim_notes);
-        const legalFramework = DigestUtils.buildLegalFramework({ generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication });
 
         const digestData = {
             title: titleInput,
@@ -7717,11 +7742,12 @@ Do NOT use markdown fences and do NOT add text outside the JSON object.`;
             exceptions,
             exceptionsToExceptions,
             supremeCourtApplication,
-            legalFramework,
+            // Canonical schema stores the five Legal Framework components separately.
+            // Do not save another combined copy; DigestUtils can build it when needed.
             verbatimNotes,
             personalNotes: '',
             notes: '', // reserved for the user's own notes; never duplicate AI fields here
-            schemaVersion: 2,
+            schemaVersion: 3,
             created: serverTimestamp(),
             updated: serverTimestamp()
         };
