@@ -2748,22 +2748,30 @@ async ocrPdf(file, onProgress = () => {}) {
         }
 
         class DigestsView {
-            constructor() { this.unsubscribe = null; this.digestsData = []; }
+            constructor() { this.unsubscribe = null; this.digestsData = []; this.activeSubject = '__all__'; }
             render() { 
                 return `
                 <div class="max-w-5xl mx-auto h-full flex flex-col pb-24">
                     <div class="flex justify-between items-center mb-6 flex-shrink-0">
-                        <div><h3 class="text-xl font-bold text-slate-700">Consolidated Case Digests</h3></div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-700">Consolidated Case Digests</h3>
+                            <p class="text-xs text-slate-500 mt-1">Choose a subject first to view only the cases filed under that subject matter.</p>
+                        </div>
                         <button onclick="window.appHandlers.addDigest()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>Manual Digest</button>
                     </div>
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden flex flex-col">
-                        <div class="p-4 border-b border-slate-100 bg-slate-50">
+                        <div class="p-4 border-b border-slate-200 bg-slate-50">
+                            <div class="mb-4">
+                                <p class="text-[10px] uppercase tracking-[.16em] font-black text-slate-500 mb-2">Subject Matter</p>
+                                <div id="digest-subject-filter" class="flex gap-2 overflow-x-auto pb-1"></div>
+                            </div>
                             <div class="relative">
                                 <i class="fas fa-search absolute left-3 top-2.5 text-slate-400"></i>
-                                <input type="text" id="digest-search" placeholder="Search case title, subject, facts, issue, ruling, doctrine, codal, framework, or verbatim notes..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterDigests()">
+                                <input type="text" id="digest-search" placeholder="Search within the selected subject..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterDigests()">
                             </div>
                         </div>
-                        <div id="digest-list" class="overflow-y-auto flex-1 p-6 space-y-4"></div>
+                        <div id="digest-active-subject" class="hidden px-6 pt-5"></div>
+                        <div id="digest-list" class="overflow-y-auto flex-1 p-6 pt-4 space-y-4"></div>
                     </div>
                 </div>`; 
             }
@@ -2771,12 +2779,23 @@ async ocrPdf(file, onProgress = () => {}) {
                 this.unsubscribe = AppDB.subscribe('digests', (snapshot) => {
                     const list = document.getElementById('digest-list'); if (!list) return; list.innerHTML = '';
                     this.digestsData = [];
-                    if(snapshot.empty) { list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests found.</p></div>`; return; }
+                    if(snapshot.empty) {
+                        const filters = document.getElementById('digest-subject-filter');
+                        if (filters) filters.innerHTML = '';
+                        list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests found.</p></div>`;
+                        return;
+                    }
                     
                     snapshot.forEach(doc => this.digestsData.push({ id: doc.id, ...doc.data() })); 
                     this.digestsData.sort((a, b) => (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase()));
                     
-                    window.appHandlers.renderDigestRows(this.digestsData);
+                    const availableSubjects = [...new Set(this.digestsData.map(raw => {
+                        const d = DigestUtils.normalize(raw);
+                        return (d.subject && d.subject.trim()) || (d.subjectName && d.subjectName.trim()) || 'Uncategorized';
+                    }))];
+                    if (this.activeSubject !== '__all__' && !availableSubjects.includes(this.activeSubject)) this.activeSubject = '__all__';
+                    window.appHandlers.renderDigestSubjectFilters();
+                    window.appHandlers.filterDigests();
                 });
             }
         }
@@ -7471,7 +7490,7 @@ await AppDB.add('digests', digestData);
                 }
             },
 
-      renderDigestRows: (data) => {
+      renderDigestRows: (data, activeSubject = '__all__') => {
                 const list = document.getElementById('digest-list');
                 if (!list) return;
                 list.innerHTML = '';
@@ -7528,10 +7547,12 @@ await AppDB.add('digests', digestData);
                 Object.keys(groupedDigests).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(subj => {
                     const subjectSection = document.createElement('section');
                     subjectSection.className = 'mb-7';
-                    subjectSection.innerHTML = `<div class="mb-3 flex items-center justify-between gap-3">
-                        <div class="flex items-center gap-2 min-w-0"><i class="fas fa-folder-open text-blue-500"></i><h3 class="font-black uppercase tracking-wider text-sm text-slate-700 truncate">${esc(subj)}</h3></div>
-                        <span class="shrink-0 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold px-2.5 py-1 rounded-full">${groupedDigests[subj].length} CASE${groupedDigests[subj].length === 1 ? '' : 'S'}</span>
-                    </div>`;
+                    if (activeSubject === '__all__') {
+                        subjectSection.innerHTML = `<div class="mb-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div class="flex items-center gap-2 min-w-0"><i class="fas fa-folder-open text-blue-500"></i><h3 class="font-black uppercase tracking-wider text-sm text-slate-700 truncate">${esc(subj)}</h3></div>
+                            <span class="shrink-0 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold px-2.5 py-1 rounded-full">${groupedDigests[subj].length} CASE${groupedDigests[subj].length === 1 ? '' : 'S'}</span>
+                        </div>`;
+                    }
 
                     const cards = document.createElement('div');
                     cards.className = 'space-y-5';
@@ -7604,10 +7625,56 @@ await AppDB.add('digests', digestData);
                 });
             },
             
+            renderDigestSubjectFilters: () => {
+                const wrap = document.getElementById('digest-subject-filter');
+                if (!wrap || !views.digests) return;
+
+                const counts = new Map();
+                (views.digests.digestsData || []).forEach(raw => {
+                    const d = DigestUtils.normalize(raw);
+                    const subject = (d.subject && d.subject.trim()) || (d.subjectName && d.subjectName.trim()) || 'Uncategorized';
+                    counts.set(subject, (counts.get(subject) || 0) + 1);
+                });
+
+                const subjects = [...counts.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+                const active = views.digests.activeSubject || '__all__';
+                const buttonClass = selected => selected
+                    ? 'shrink-0 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-900 text-white shadow-sm text-xs font-black uppercase tracking-wide transition'
+                    : 'shrink-0 px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-700 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50 text-xs font-black uppercase tracking-wide transition';
+
+                const allButton = `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter('__all__')" class="${buttonClass(active === '__all__')}"><i class="fas fa-layer-group mr-2"></i>ALL SUBJECTS <span class="ml-1 opacity-70">${views.digests.digestsData.length}</span></button>`;
+                const subjectButtons = subjects.map(subject => {
+                    const encoded = encodeURIComponent(subject);
+                    return `<button type="button" onclick="window.appHandlers.setDigestSubjectFilter(decodeURIComponent('${encoded}'))" class="${buttonClass(active === subject)}"><i class="fas fa-folder mr-2"></i>${Security.escapeHTML(subject)} <span class="ml-1 opacity-70">${counts.get(subject)}</span></button>`;
+                }).join('');
+                wrap.innerHTML = allButton + subjectButtons;
+            },
+
+            setDigestSubjectFilter: (subject) => {
+                if (!views.digests) return;
+                views.digests.activeSubject = subject || '__all__';
+                window.appHandlers.renderDigestSubjectFilters();
+                window.appHandlers.filterDigests();
+            },
+
             filterDigests: () => {
                 const term = (document.getElementById('digest-search')?.value || '').trim().toLowerCase();
-                const filtered = views.digests.digestsData.filter(d => !term || DigestUtils.searchText(d).includes(term));
-                window.appHandlers.renderDigestRows(filtered);
+                const activeSubject = views.digests?.activeSubject || '__all__';
+                const filtered = (views.digests?.digestsData || []).filter(raw => {
+                    const d = DigestUtils.normalize(raw);
+                    const subject = (d.subject && d.subject.trim()) || (d.subjectName && d.subjectName.trim()) || 'Uncategorized';
+                    const matchesSubject = activeSubject === '__all__' || subject === activeSubject;
+                    const matchesSearch = !term || DigestUtils.searchText(raw).includes(term);
+                    return matchesSubject && matchesSearch;
+                });
+
+                const heading = document.getElementById('digest-active-subject');
+                if (heading) {
+                    const label = activeSubject === '__all__' ? 'ALL SUBJECTS' : activeSubject;
+                    heading.classList.remove('hidden');
+                    heading.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4"><div><p class="text-[10px] font-black uppercase tracking-[.16em] text-blue-600">Currently Viewing</p><h4 class="mt-1 text-lg font-black text-slate-900 uppercase tracking-wide">${Security.escapeHTML(label)}</h4></div><span class="bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-full">${filtered.length} CASE${filtered.length === 1 ? '' : 'S'}</span></div>`;
+                }
+                window.appHandlers.renderDigestRows(filtered, activeSubject);
             },
 
             handleDigestUpload: async (input) => { const file = input.files[0]; if (!file) return; const display = document.getElementById('digest-filename'); const btn = document.getElementById('btn-process-digest'); display.innerText = file.name; display.classList.remove('hidden'); btn.innerText = "Reading PDF..."; btn.disabled = true; try { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; let fullText = ""; const maxPages = Math.min(pdf.numPages, 10); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' ') + "\n"; } window.appHandlers.digestText = fullText; document.getElementById('digest-textarea').value = ''; btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; } catch (e) { alert("Failed to read PDF."); btn.innerHTML = "Error"; } },
