@@ -7534,27 +7534,49 @@ await AppDB.add('digests', digestData);
                 if (!raw) throw new Error('Digest not found.');
                 const d = DigestUtils.normalize(raw);
 
-                // Keep the capture source inside the viewport. The Lex shell uses
-                // overflow:hidden on <body>, so a source placed extremely far off-screen
-                // can be clipped by html2canvas and become a blank PDF.
-                const host = document.createElement('div');
-                host.setAttribute('data-lex-pdf-source', 'true');
-                Object.assign(host.style, {
+                // IMPORTANT:
+                // html2pdf clones the element passed to .from(...). If THAT element is
+                // position:fixed, the clone is removed from the normal layout flow of
+                // html2pdf's temporary container and Chrome/html2canvas can capture a
+                // white page. Keep only the staging WRAPPER fixed; the actual PDF sheet
+                // (`host`) must remain in normal flow.
+                const stage = document.createElement('div');
+                stage.setAttribute('data-lex-pdf-stage', 'true');
+                Object.assign(stage.style, {
                     position: 'fixed',
                     left: '0',
                     top: '0',
                     width: '210mm',
                     minHeight: '297mm',
-                    padding: '10mm',
+                    margin: '0',
+                    padding: '0',
+                    boxSizing: 'border-box',
+                    overflow: 'visible',
+                    background: '#ffffff',
+                    zIndex: '2147483000',
+                    pointerEvents: 'none'
+                });
+
+                const host = document.createElement('div');
+                host.setAttribute('data-lex-pdf-source', 'true');
+                Object.assign(host.style, {
+                    // Do NOT change this to fixed/absolute. html2pdf needs this element
+                    // to participate in normal layout inside its cloned container.
+                    position: 'relative',
+                    display: 'block',
+                    width: '190mm',
+                    minHeight: '277mm',
+                    padding: '0',
                     margin: '0',
                     boxSizing: 'border-box',
                     background: '#ffffff',
                     color: '#0f172a',
                     overflow: 'visible',
-                    zIndex: '2147483000',
-                    pointerEvents: 'none'
+                    opacity: '1',
+                    visibility: 'visible'
                 });
                 host.innerHTML = window.appHandlers.digestPdfMarkup(d);
+                stage.appendChild(host);
 
                 // Cover the temporary render sheet while html2canvas captures only `host`.
                 const cover = document.createElement('div');
@@ -7573,9 +7595,9 @@ await AppDB.add('digests', digestData);
                 });
                 cover.innerHTML = `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px 22px;box-shadow:0 12px 30px rgba(15,23,42,.12);display:flex;align-items:center;gap:12px"><span class="loader" style="display:inline-block;flex:none"></span><strong>${Security.escapeHTML(message)}</strong></div>`;
 
-                document.body.appendChild(host);
+                document.body.appendChild(stage);
                 document.body.appendChild(cover);
-                return { host, cover, digest: d };
+                return { stage, host, cover, digest: d };
             },
             waitForDigestPdfLayout: async (source) => {
                 if (!source?.host) throw new Error('PDF source was not created.');
@@ -7589,7 +7611,9 @@ await AppDB.add('digests', digestData);
             },
             cleanupDigestPdfSource: (source) => {
                 source?.cover?.remove();
-                source?.host?.remove();
+                // stage owns host in the corrected PDF pipeline.
+                if (source?.stage) source.stage.remove();
+                else source?.host?.remove();
             },
             digestPdfOptions: (filename, host = null) => ({
                 margin: [10, 10, 10, 10],
@@ -7603,7 +7627,26 @@ await AppDB.add('digests', digestData);
                     scrollX: 0,
                     scrollY: 0,
                     windowWidth: Math.max(794, Math.ceil(host?.scrollWidth || 794)),
-                    windowHeight: Math.max(1123, Math.ceil(host?.scrollHeight || 1123))
+                    windowHeight: Math.max(1123, Math.ceil(host?.scrollHeight || 1123)),
+                    // Belt-and-suspenders fix: html2pdf/html2canvas works on a cloned DOM.
+                    // Force the cloned digest sheet back into visible normal flow even if
+                    // browser/global styles try to preserve an old fixed-position value.
+                    onclone: (clonedDocument) => {
+                        const clonedSource = clonedDocument.querySelector('[data-lex-pdf-source="true"]');
+                        if (clonedSource) {
+                            Object.assign(clonedSource.style, {
+                                position: 'relative',
+                                left: 'auto',
+                                top: 'auto',
+                                display: 'block',
+                                opacity: '1',
+                                visibility: 'visible',
+                                transform: 'none',
+                                background: '#ffffff',
+                                color: '#0f172a'
+                            });
+                        }
+                    }
                 },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                 pagebreak: { mode: ['css', 'legacy'] }
