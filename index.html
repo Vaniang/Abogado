@@ -681,6 +681,8 @@ const CloudStorage = {
 
                 return {
                     ...record,
+                    citation: this.text(record.citation || record.grNo || record.gr_no),
+                    grNo: this.text(record.grNo || record.gr_no || record.citation),
                     facts: this.text(record.facts),
                     issue: this.text(record.issue),
                     rulingRatio: this.text(record.rulingRatio || record.ruling_ratio || legacyRulingRatio || (!this.looksLegacyBundle(rawRuling) ? rawRuling : '')),
@@ -7187,8 +7189,9 @@ const subjectOptions = userSubjects.length
 Modal.show({
 title: 'Manual Digest',
 content: `<div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input type="text" id="dig-title" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500"></div>
-<div class="mt-2 grid grid-cols-2 gap-2">
+<div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
 <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook</label><select id="dig-subj" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">${subjectOptions}</select></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-1">G.R. No. / Citation</label><input type="text" id="dig-citation" placeholder="e.g. G.R. No. 123456" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500"></div>
 <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic/Article</label><input type="text" id="dig-topic" placeholder="e.g. Art 1156" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500"></div>
 </div>
 <div class="mt-2"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist</label><textarea id="dig-gist" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-amber-500"></textarea></div>
@@ -7203,6 +7206,7 @@ const selectedSubjectId = selectEl.value;
 const selectedSubjectName = selectEl.options[selectEl.selectedIndex]?.dataset.name || selectEl.options[selectEl.selectedIndex]?.text || '';
 const digestData = {
 title,
+citation: document.getElementById('dig-citation')?.value.trim() || '',
 subject: selectedSubjectName,
 subjectName: selectedSubjectName,
 topic: document.getElementById('dig-topic').value.trim(),
@@ -7443,10 +7447,24 @@ await AppDB.add('digests', digestData);
                 });
             },
             
+      toggleDigestFull: (id, button = null) => {
+                const panel = document.getElementById(`digest-full-${id}`);
+                if (!panel) return;
+                const opening = panel.classList.contains('hidden');
+                panel.classList.toggle('hidden', !opening);
+                if (button) {
+                    button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+                    button.innerHTML = opening
+                        ? '<i class="fas fa-chevron-up mr-2"></i>HIDE FULL DIGEST'
+                        : '<i class="fas fa-book-open mr-2"></i>READ FULL DIGEST';
+                }
+            },
+
       renderDigestRows: (data) => {
-                const list = document.getElementById('digest-list'); if (!list) return;
+                const list = document.getElementById('digest-list');
+                if (!list) return;
                 list.innerHTML = '';
-                if (!Array.isArray(data) || data.length === 0) {
+                if (!data.length) {
                     list.innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-slate-400"><i class="fas fa-folder-open text-5xl mb-4 opacity-30"></i><p>No case digests match your search.</p></div>`;
                     return;
                 }
@@ -7460,66 +7478,106 @@ await AppDB.add('digests', digestData);
                 });
 
                 const esc = Security.escapeHTML;
-                const cellText = (value, empty = '—') => `<div class="max-h-64 overflow-y-auto pr-1 whitespace-pre-wrap leading-relaxed text-sm text-slate-700">${esc(value || empty)}</div>`;
-                const notesCell = d => {
-                    const section = (label, value, cls = 'text-slate-700') => value ? `<div class="mb-3 last:mb-0"><p class="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">${label}</p><div class="whitespace-pre-wrap leading-relaxed text-sm ${cls}">${esc(value)}</div></div>` : '';
-                    return `<div class="max-h-80 overflow-y-auto pr-1">
-                        ${section('Doctrine', d.doctrine, 'text-amber-900')}
-                        ${section('Codal Provision', d.codalProvision, 'text-blue-900')}
-                        ${section('Legal Framework', d.legalFramework)}
-                        ${section('Personal Notes', d.personalNotes, 'text-amber-900')}
-                        ${(!d.doctrine && !d.codalProvision && !d.legalFramework && !d.personalNotes) ? '<span class="text-slate-400 italic text-sm">No notes yet.</span>' : ''}
+                const clean = value => DigestUtils.text(value);
+                const labeled = (label, value, fallback = 'Not specifically stated.') => `
+                    <div class="mb-4 last:mb-0">
+                        <p class="font-black text-[11px] uppercase tracking-wide text-slate-900 mb-1">${label}</p>
+                        <div class="text-sm leading-6 text-slate-800 whitespace-pre-wrap">${esc(clean(value) || fallback)}</div>
                     </div>`;
+
+                const applicableFramework = d => {
+                    const parts = [];
+                    if (d.codalProvision) parts.push(`<div><span class="font-bold">Provision:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.codalProvision)}</div></div>`);
+                    if (d.generalRule) parts.push(`<div><span class="font-bold">General Rule:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.generalRule)}</div></div>`);
+                    if (d.elementsRequisites) parts.push(`<div><span class="font-bold">Elements / Requisites:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.elementsRequisites)}</div></div>`);
+                    if (d.exceptions) parts.push(`<div><span class="font-bold">Exceptions, if any:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.exceptions)}</div></div>`);
+                    if (d.exceptionsToExceptions) parts.push(`<div><span class="font-bold">Exceptions to the Exceptions, if any:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.exceptionsToExceptions)}</div></div>`);
+                    if (d.supremeCourtApplication) parts.push(`<div><span class="font-bold">How the Supreme Court Applied the Provision:</span><div class="mt-1 whitespace-pre-wrap">${esc(d.supremeCourtApplication)}</div></div>`);
+                    if (!parts.length && d.legalFramework) parts.push(`<div class="whitespace-pre-wrap">${esc(d.legalFramework)}</div>`);
+                    return parts.length ? parts.join('<div class="h-3"></div>') : '<span class="text-slate-400 italic">No applicable provision/framework recorded.</span>';
+                };
+
+                const summaryApplication = d => {
+                    const parts = [];
+                    if (d.codalProvision) parts.push(`<div class="whitespace-pre-wrap"><span class="font-bold">${esc(d.codalProvision)}</span></div>`);
+                    if (d.supremeCourtApplication) parts.push(`<div class="mt-3"><span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Application to the Case</span><div class="mt-1 whitespace-pre-wrap">${esc(d.supremeCourtApplication)}</div></div>`);
+                    if (!parts.length && d.topic) parts.push(`<div class="whitespace-pre-wrap">${esc(d.topic)}</div>`);
+                    if (!parts.length && d.legalFramework) parts.push(`<div class="whitespace-pre-wrap">${esc(d.legalFramework)}</div>`);
+                    return parts.length ? parts.join('') : '<span class="text-slate-400 italic">No applicable provision recorded.</span>';
                 };
 
                 Object.keys(groupedDigests).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(subj => {
-                    const detailsWrap = document.createElement('details');
-                    detailsWrap.className = 'mb-5 bg-white border border-slate-200 rounded-xl shadow-sm group overflow-hidden';
-                    detailsWrap.open = true;
-                    const summary = document.createElement('summary');
-                    summary.className = 'p-5 font-bold text-slate-800 uppercase tracking-widest cursor-pointer outline-none list-none flex justify-between items-center bg-slate-50 hover:bg-slate-100 transition border-b border-slate-200';
-                    summary.innerHTML = `<div class="flex items-center gap-3"><i class="fas fa-folder text-blue-500 text-xl"></i>${esc(subj)}</div><span class="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full">${groupedDigests[subj].length} Cases</span>`;
-                    detailsWrap.appendChild(summary);
+                    const subjectSection = document.createElement('section');
+                    subjectSection.className = 'mb-7';
+                    subjectSection.innerHTML = `<div class="mb-3 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2 min-w-0"><i class="fas fa-folder-open text-blue-500"></i><h3 class="font-black uppercase tracking-wider text-sm text-slate-700 truncate">${esc(subj)}</h3></div>
+                        <span class="shrink-0 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold px-2.5 py-1 rounded-full">${groupedDigests[subj].length} CASE${groupedDigests[subj].length === 1 ? '' : 'S'}</span>
+                    </div>`;
 
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'overflow-x-auto bg-white';
-                    const rows = groupedDigests[subj].map(d => `
-                        <tr class="align-top hover:bg-slate-50/70 border-b border-slate-100 last:border-b-0">
-                            <td class="p-3 min-w-[220px] w-[220px]">
-                                <p class="font-bold text-slate-900 serif-text leading-snug">${esc(d.title || 'Untitled Case')}</p>
-                                ${d.topic ? `<span class="inline-block mt-2 bg-slate-100 border border-slate-200 text-slate-600 px-2 py-1 rounded text-[10px] font-bold uppercase">${esc(d.topic)}</span>` : ''}
-                                ${d.gist ? `<div class="mt-2 p-2 bg-amber-50 border-l-2 border-amber-500 text-xs text-amber-900 whitespace-pre-wrap">${esc(d.gist)}</div>` : ''}
-                            </td>
-                            <td class="p-3 min-w-[280px]">${cellText(d.facts)}</td>
-                            <td class="p-3 min-w-[260px]">${cellText(d.issue)}</td>
-                            <td class="p-3 min-w-[340px]">${cellText(d.rulingRatio, 'No ruling/ratio recorded.')}</td>
-                            <td class="p-3 min-w-[420px] bg-amber-50/30">${notesCell(d)}</td>
-                            <td class="p-3 min-w-[380px] bg-emerald-50/20">${cellText(d.verbatimNotes, 'No verbatim notes recorded.')}</td>
-                            <td class="p-3 min-w-[92px] sticky right-0 bg-white shadow-[-8px_0_12px_-12px_rgba(15,23,42,.35)]">
-                                <div class="grid grid-cols-2 gap-1.5">
-                                    <button onclick="window.appHandlers.openDigestNotesById('${d.id}')" class="text-slate-400 hover:text-amber-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Personal Notes"><i class="fas fa-sticky-note"></i></button>
-                                    <button onclick="window.appHandlers.editDigestById('${d.id}')" class="text-slate-400 hover:text-blue-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
-                                    <button onclick="window.appHandlers.printDigestById('${d.id}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
-                                    <button onclick="window.appHandlers.downloadDigestTextById('${d.id}')" class="text-slate-400 hover:text-slate-600 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm" title="Download Text"><i class="fas fa-download"></i></button>
-                                    <button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-400 hover:text-red-500 transition bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded shadow-sm col-span-2" title="Delete"><i class="fas fa-trash"></i></button>
+                    const cards = document.createElement('div');
+                    cards.className = 'space-y-5';
+
+                    groupedDigests[subj].forEach(d => {
+                        const article = document.createElement('article');
+                        article.className = 'bg-white border border-slate-300 rounded-xl shadow-sm overflow-hidden';
+                        const citation = clean(d.citation || d.grNo) || 'G.R. No. not recorded';
+                        const title = clean(d.title) || 'Untitled Case';
+                        const gist = clean(d.gist) || 'No gist recorded.';
+                        const fullId = `digest-full-${d.id}`;
+
+                        article.innerHTML = `
+                            <div class="grid grid-cols-1 lg:grid-cols-2 border-b border-slate-300">
+                                <div class="p-4 md:p-5 lg:border-r border-slate-300 min-h-[165px]">
+                                    <p class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-2">TITLE OF THE CASE | G.R. NO.</p>
+                                    <p class="font-black text-slate-950 serif-text leading-snug">${esc(title)} <span class="font-medium text-slate-500">| ${esc(citation)}</span></p>
+                                    <div class="mt-5">
+                                        <p class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1">GIST OF THE CASE:</p>
+                                        <div class="text-sm leading-6 text-slate-800 whitespace-pre-wrap">${esc(gist)}</div>
+                                    </div>
                                 </div>
-                            </td>
-                        </tr>`).join('');
+                                <div class="p-4 md:p-5 min-h-[165px]">
+                                    <p class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-2">APPLICABLE PROVISION/S: <span class="normal-case font-medium tracking-normal">(how do the provision/s apply to the case)</span></p>
+                                    <div class="text-sm leading-6 text-slate-800">${summaryApplication(d)}</div>
+                                </div>
+                            </div>
 
-                    wrapper.innerHTML = `<table class="w-full min-w-[2050px] text-left table-fixed">
-                        <thead class="bg-slate-900 text-white sticky top-0 z-10">
-                            <tr>
-                                <th class="p-3 text-[10px] uppercase tracking-widest w-[220px]">Case</th>
-                                <th class="p-3 text-[10px] uppercase tracking-widest w-[280px]">Facts</th>
-                                <th class="p-3 text-[10px] uppercase tracking-widest w-[260px]">Issue</th>
-                                <th class="p-3 text-[10px] uppercase tracking-widest w-[340px]">Ruling &amp; Ratio</th>
-                                <th class="p-3 text-[10px] uppercase tracking-widest w-[420px]">My Notes</th>
-                                <th class="p-3 text-[10px] uppercase tracking-widest w-[380px]">Verbatim Notes from the Case</th>
-                                <th class="p-3 text-[10px] uppercase tracking-widest w-[92px] sticky right-0 bg-slate-900">Actions</th>
-                            </tr>
-                        </thead><tbody>${rows}</tbody></table>`;
-                    detailsWrap.appendChild(wrapper);
-                    list.appendChild(detailsWrap);
+                            <div class="px-4 py-3 bg-slate-50 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
+                                <button onclick="window.appHandlers.toggleDigestFull('${d.id}', this)" aria-controls="${fullId}" aria-expanded="false" class="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-black tracking-wide transition shadow-sm">
+                                    <i class="fas fa-book-open mr-2"></i>READ FULL DIGEST
+                                </button>
+                                <div class="flex items-center gap-1.5 flex-wrap" aria-label="Digest actions">
+                                    <button onclick="window.appHandlers.openDigestNotesById('${d.id}')" class="text-slate-500 hover:text-amber-600 transition bg-white border border-slate-300 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Personal Notes"><i class="fas fa-sticky-note"></i></button>
+                                    <button onclick="window.appHandlers.editDigestById('${d.id}')" class="text-slate-500 hover:text-blue-600 transition bg-white border border-slate-300 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Edit Digest"><i class="fas fa-edit"></i></button>
+                                    <button onclick="window.appHandlers.printDigestById('${d.id}')" class="text-slate-500 hover:text-slate-800 transition bg-white border border-slate-300 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Print PDF"><i class="fas fa-print"></i></button>
+                                    <button onclick="window.appHandlers.downloadDigestTextById('${d.id}')" class="text-slate-500 hover:text-slate-800 transition bg-white border border-slate-300 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Download Text"><i class="fas fa-download"></i></button>
+                                    <button onclick="window.appHandlers.deleteDigest('${d.id}')" class="text-slate-500 hover:text-red-600 transition bg-white border border-slate-300 w-9 h-9 flex items-center justify-center rounded-lg shadow-sm" title="Delete"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+
+                            <div id="${fullId}" class="hidden p-4 md:p-6 bg-white">
+                                <div class="border border-slate-300 p-4 md:p-5 min-h-[220px]">
+                                    <h4 class="font-black text-sm uppercase tracking-wide text-slate-950 mb-5">MY NOTES:</h4>
+                                    ${labeled('DOCTRINE/S: (USED TO SOLVE THE CASE)', d.doctrine)}
+                                    <div class="mb-4">
+                                        <p class="font-black text-[11px] uppercase tracking-wide text-slate-900 mb-1">APPLICABLE PROVISION/S: <span class="normal-case font-medium">(How does the Supreme Court apply the provision)</span></p>
+                                        <div class="text-sm leading-6 text-slate-800">${applicableFramework(d)}</div>
+                                    </div>
+                                    ${labeled('VERBATIM NOTES: (FROM THE PROVIDED CASE, IMPORTANT, APPLICABLE NOTES)', d.verbatimNotes, 'No verbatim notes recorded.')}
+                                    ${d.personalNotes ? labeled('PERSONAL NOTES:', d.personalNotes) : ''}
+                                </div>
+
+                                <div class="border border-slate-300 p-4 md:p-5 mt-6 min-h-[320px]">
+                                    <h4 class="font-black text-sm uppercase tracking-wide text-slate-950 mb-5">DIGEST:</h4>
+                                    ${labeled('FACTS:', d.facts, 'No facts recorded.')}
+                                    ${labeled('ISSUE/S:', d.issue, 'No issue recorded.')}
+                                    ${labeled('RULING & RATIO:', d.rulingRatio, 'No ruling and ratio recorded.')}
+                                </div>
+                            </div>`;
+                        cards.appendChild(article);
+                    });
+
+                    subjectSection.appendChild(cards);
+                    list.appendChild(subjectSection);
                 });
             },
             
@@ -7589,6 +7647,7 @@ MY NOTES consists of these separate fields:
    d. Exceptions to the Exceptions, if any
    e. How the Supreme Court applied the provision in THIS case
 VERBATIM NOTES: exact word-for-word excerpts copied only from TARGET CASE TEXT. Never paraphrase quotations. After each quotation, add a short "Connection:" line explaining relevance to ${selectedSubjectName}.
+G.R. NO. / CITATION: identify the G.R. number from the TARGET CASE TEXT when stated. If not found, return an empty string.
 RECITATION GIST: 1-2 sentences only for quick identification of the case.
 
 Accuracy rules:
@@ -7599,6 +7658,7 @@ Accuracy rules:
 
 Return STRICTLY one raw JSON object with these exact keys:
 {
+  "gr_no": "string",
   "facts": "string",
   "issue": "string",
   "ruling_ratio": "string",
@@ -7623,6 +7683,7 @@ Do NOT use markdown fences and do NOT add text outside the JSON object.`;
         try { parsedDigest = JSON.parse(jsonString); }
         catch (_) { throw new Error('AI returned invalid JSON. Please try again.'); }
 
+        const grNo = DigestUtils.text(parsedDigest.gr_no);
         const facts = DigestUtils.text(parsedDigest.facts) || 'Not found.';
         const issue = DigestUtils.text(parsedDigest.issue) || 'Not found.';
         const rulingRatio = DigestUtils.text(parsedDigest.ruling_ratio) || 'Not found.';
@@ -7639,6 +7700,8 @@ Do NOT use markdown fences and do NOT add text outside the JSON object.`;
 
         const digestData = {
             title: titleInput,
+            citation: grNo,
+            grNo,
             subject: selectedSubjectName,
             subjectName: selectedSubjectName,
             topic: topicInput,
