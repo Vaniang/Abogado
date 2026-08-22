@@ -731,12 +731,53 @@ const CloudStorage = {
                     ['Elements / Requisites', record.elementsRequisites || record.elements_requisites],
                     ['Exceptions, if any', record.exceptions],
                     ['Exceptions to the Exceptions, if any', record.exceptionsToExceptions || record.exceptions_to_exceptions],
-                    ['How the Supreme Court Applied the Provision', record.supremeCourtApplication || record.supreme_court_application]
+                    ['How the Supreme Court Applied the Provision', record.supremeCourtApplication || record.supreme_court_application],
+                    ['Conceptual Explanation', record.conceptualExplanation || record.conceptual_explanation]
                 ];
                 return sections
                     .filter(([, value]) => this.text(value))
                     .map(([label, value]) => `${label}:\n${this.text(value)}`)
                     .join('\n\n');
+            },
+            parseLegalFrameworkSections(value = '') {
+                const source = this.text(value);
+                const empty = {
+                    generalRule: '',
+                    elementsRequisites: '',
+                    exceptions: '',
+                    exceptionsToExceptions: '',
+                    supremeCourtApplication: '',
+                    conceptualExplanation: ''
+                };
+                if (!source) return empty;
+
+                // Older Case Digester records stored Legal Framework as one text block.
+                // Find the known headings and split that block without discarding any text.
+                const markers = [
+                    { key: 'generalRule', re: /\bGeneral\s+Rule\b\s*:?[ \t]*/i },
+                    { key: 'elementsRequisites', re: /\b(?:Requisites\s*\/\s*Elements(?:\s*\/\s*Tests)?|Elements\s*\/\s*Requisites(?:\s*\/\s*Tests)?|Requisites\s*\/\s*Elements|Elements\s*\/\s*Requisites)\b\s*:?[ \t]*/i },
+                    { key: 'exceptionsToExceptions', re: /\bExceptions\s+to\s+the\s+Exceptions(?:,?\s*if\s+any)?\b\s*:?[ \t]*/i },
+                    { key: 'exceptions', re: /\bExceptions(?:,?\s*if\s+any)?\b(?!\s+to\s+the\s+Exceptions)\s*:?[ \t]*/i },
+                    { key: 'supremeCourtApplication', re: /\b(?:How\s+the\s+Supreme\s+Court\s+Applied\s+the\s+Provision(?:\s+in\s+(?:This|THIS)\s+Case)?|Supreme\s+Court\s+Application|Application\s+to\s+the\s+Case)\b\s*:?[ \t]*/i },
+                    { key: 'conceptualExplanation', re: /\bConceptual\s+Explanation\b\s*:?[ \t]*/i }
+                ];
+
+                const found = [];
+                markers.forEach(marker => {
+                    const match = source.match(marker.re);
+                    if (match && typeof match.index === 'number') {
+                        found.push({ key: marker.key, index: match.index, end: match.index + match[0].length });
+                    }
+                });
+                found.sort((a, b) => a.index - b.index);
+                if (!found.length) return empty;
+
+                const result = { ...empty };
+                found.forEach((marker, index) => {
+                    const end = index + 1 < found.length ? found[index + 1].index : source.length;
+                    result[marker.key] = source.slice(marker.end, end).trim();
+                });
+                return result;
             },
             normalize(record = {}) {
                 const rawRuling = this.text(record.ruling);
@@ -749,12 +790,17 @@ const CloudStorage = {
                 const legacyRulingRatio = legacyBundle ? this.extractBetween(legacyBundle, /III\.\s*RULING\s*&\s*RATIO\s*/i, /\n\s*IV\./i) : '';
                 const legacyVerbatim = legacyBundle ? this.extractBetween(legacyBundle, /V\.\s*VERBATIM NOTES[^\n]*\n?/i) : '';
 
-                const generalRule = this.text(record.generalRule || record.general_rule);
-                const elementsRequisites = this.text(record.elementsRequisites || record.elements_requisites);
-                const exceptions = this.text(record.exceptions);
-                const exceptionsToExceptions = this.text(record.exceptionsToExceptions || record.exceptions_to_exceptions);
-                const supremeCourtApplication = this.text(record.supremeCourtApplication || record.supreme_court_application);
-                const structuredFramework = this.buildLegalFramework({ generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication });
+                const rawLegalFramework = this.text(record.legalFramework || record.legal_framework || legacyFramework);
+                const parsedFramework = this.parseLegalFrameworkSections(rawLegalFramework);
+
+                const generalRule = this.text(record.generalRule || record.general_rule || parsedFramework.generalRule);
+                const elementsRequisites = this.text(record.elementsRequisites || record.elements_requisites || parsedFramework.elementsRequisites);
+                const exceptions = this.text(record.exceptions || parsedFramework.exceptions);
+                const exceptionsToExceptions = this.text(record.exceptionsToExceptions || record.exceptions_to_exceptions || parsedFramework.exceptionsToExceptions);
+                const supremeCourtApplication = this.text(record.supremeCourtApplication || record.supreme_court_application || parsedFramework.supremeCourtApplication);
+                const conceptualExplanation = this.text(record.conceptualExplanation || record.conceptual_explanation || parsedFramework.conceptualExplanation);
+                const recitationSummary = this.text(record.recitationSummary || record.recitation_summary || record.recitationTakeaway || record.recitation_takeaway);
+                const structuredFramework = this.buildLegalFramework({ generalRule, elementsRequisites, exceptions, exceptionsToExceptions, supremeCourtApplication, conceptualExplanation });
 
                 return {
                     ...record,
@@ -770,9 +816,12 @@ const CloudStorage = {
                     exceptions,
                     exceptionsToExceptions,
                     supremeCourtApplication,
-                    // Canonical display uses the five separate framework fields. The combined
-                    // legalFramework value is only a fallback for older records.
-                    legalFramework: this.text(structuredFramework || record.legalFramework || record.legal_framework || legacyFramework),
+                    conceptualExplanation,
+                    recitationSummary,
+                    // Keep BOTH representations. New records use the separated fields, while
+                    // older records may contain valuable discussion only inside legal_framework.
+                    rawLegalFramework,
+                    legalFramework: this.text(rawLegalFramework || structuredFramework),
                     verbatimNotes: this.text(record.verbatimNotes || record.verbatim_notes || legacyVerbatim),
                     personalNotes: this.text(record.personalNotes || record.personal_notes || (!this.looksLegacyBundle(rawNotes) ? rawNotes : '')),
                     gist: this.text(record.gist || record.recitation_gist)
@@ -790,16 +839,18 @@ const CloudStorage = {
                 if (d.exceptions) framework.push(`c. Exceptions, if any\n${d.exceptions}`);
                 if (d.exceptionsToExceptions) framework.push(`d. Exceptions to the Exceptions, if any\n${d.exceptionsToExceptions}`);
                 if (d.supremeCourtApplication) framework.push(`e. How the Supreme Court Applied the Provision in This Case\n${d.supremeCourtApplication}`);
+                if (d.conceptualExplanation) framework.push(`f. Conceptual Explanation\n${d.conceptualExplanation}`);
                 if (!framework.length && d.legalFramework) framework.push(d.legalFramework);
                 if (framework.length) parts.push(`3. LEGAL FRAMEWORK\n${framework.join('\n\n')}`);
 
                 if (d.verbatimNotes) parts.push(`4. VERBATIM NOTES\n${d.verbatimNotes}`);
+                if (d.recitationSummary && d.recitationSummary !== d.gist) parts.push(`RECITATION TAKEAWAY / PITCH\n${d.recitationSummary}`);
                 if (d.personalNotes) parts.push(`PERSONAL / CLASS NOTES\n${d.personalNotes}`);
                 return parts.join('\n\n');
             },
             searchText(record = {}) {
                 const d = this.normalize(record);
-                return [d.title, d.subject, d.subjectName, d.topic, d.facts, d.issue, d.rulingRatio, d.doctrine, d.codalProvision, d.legalFramework, d.verbatimNotes, d.personalNotes, d.gist]
+                return [d.title, d.subject, d.subjectName, d.topic, d.facts, d.issue, d.rulingRatio, d.doctrine, d.codalProvision, d.legalFramework, d.conceptualExplanation, d.recitationSummary, d.verbatimNotes, d.personalNotes, d.gist]
                     .map(value => this.text(value).toLowerCase()).join(' ');
             },
             exportText(record = {}) {
@@ -7713,13 +7764,36 @@ await AppDB.add('digests', digestData);
                 writeSubsection('2. Codal Provision', d.codalProvision);
 
                 writeSectionLabel('3. Legal Framework');
-                writeSubsection('a. General Rule', d.generalRule);
-                writeSubsection('b. Elements / Requisites', d.elementsRequisites);
-                writeSubsection('c. Exceptions, if any', d.exceptions);
-                writeSubsection('d. Exceptions to the Exceptions, if any', d.exceptionsToExceptions);
-                writeSubsection('e. How the Supreme Court Applied the Provision in This Case', d.supremeCourtApplication);
+                const hasStructuredFramework = [
+                    d.generalRule,
+                    d.elementsRequisites,
+                    d.exceptions,
+                    d.exceptionsToExceptions,
+                    d.supremeCourtApplication,
+                    d.conceptualExplanation
+                ].some(value => window.appHandlers.normalizeDigestPdfText(value));
+
+                if (hasStructuredFramework) {
+                    writeSubsection('a. General Rule', d.generalRule);
+                    writeSubsection('b. Elements / Requisites', d.elementsRequisites);
+                    writeSubsection('c. Exceptions, if any', d.exceptions);
+                    writeSubsection('d. Exceptions to the Exceptions, if any', d.exceptionsToExceptions);
+                    writeSubsection('e. How the Supreme Court Applied the Provision in This Case', d.supremeCourtApplication);
+                    if (window.appHandlers.normalizeDigestPdfText(d.conceptualExplanation)) {
+                        writeSubsection('f. Conceptual Explanation', d.conceptualExplanation);
+                    }
+                } else if (window.appHandlers.normalizeDigestPdfText(d.rawLegalFramework || d.legalFramework)) {
+                    // Critical backward-compatibility path: older Case Digester records saved
+                    // the entire framework in legal_framework instead of separate fields.
+                    writeSubsection('Legal Framework - Full Saved Discussion', d.rawLegalFramework || d.legalFramework);
+                } else {
+                    writeParagraph('No legal framework was saved for this digest.', { size: 10, color: [100, 116, 139], after: 4 });
+                }
 
                 writeSubsection('4. Verbatim Notes', d.verbatimNotes);
+                if (window.appHandlers.normalizeDigestPdfText(d.recitationSummary) && window.appHandlers.normalizeDigestPdfText(d.recitationSummary) !== window.appHandlers.normalizeDigestPdfText(d.gist)) {
+                    writeSubsection('Recitation Takeaway / Pitch', d.recitationSummary);
+                }
                 if (window.appHandlers.normalizeDigestPdfText(d.personalNotes)) {
                     writeSubsection('Personal / Class Notes', d.personalNotes);
                 }
@@ -7903,17 +7977,19 @@ await AppDB.add('digests', digestData);
                     </div>`;
 
                 const legalFrameworkFields = d => {
-                    const hasStructured = Boolean(d.generalRule || d.elementsRequisites || d.exceptions || d.exceptionsToExceptions || d.supremeCourtApplication);
+                    const hasStructured = Boolean(d.generalRule || d.elementsRequisites || d.exceptions || d.exceptionsToExceptions || d.supremeCourtApplication || d.conceptualExplanation);
                     if (!hasStructured && d.legalFramework) {
                         return `<div class="text-sm leading-6 text-slate-800 whitespace-pre-wrap">${esc(d.legalFramework)}</div>`;
                     }
-                    return [
+                    const fields = [
                         frameworkField('a', 'General Rule', d.generalRule),
                         frameworkField('b', 'Elements / Requisites', d.elementsRequisites),
                         frameworkField('c', 'Exceptions, if any', d.exceptions),
                         frameworkField('d', 'Exceptions to the Exceptions, if any', d.exceptionsToExceptions),
                         frameworkField('e', 'How the Supreme Court Applied the Provision in THIS Case', d.supremeCourtApplication)
-                    ].join('<div class="h-3"></div>');
+                    ];
+                    if (d.conceptualExplanation) fields.push(frameworkField('f', 'Conceptual Explanation', d.conceptualExplanation));
+                    return fields.join('<div class="h-3"></div>');
                 };
 
                 const summaryApplication = d => {
@@ -7990,6 +8066,7 @@ await AppDB.add('digests', digestData);
                                     </div>
 
                                     ${labeled('4. VERBATIM NOTES — EXACT EXCERPTS FROM THE TARGET CASE TEXT WITH CONNECTION', d.verbatimNotes, 'No verbatim notes recorded.')}
+                                    ${d.recitationSummary && d.recitationSummary !== d.gist ? labeled('RECITATION TAKEAWAY / PITCH:', d.recitationSummary) : ''}
                                     ${d.personalNotes ? labeled('PERSONAL / CLASS NOTES:', d.personalNotes) : ''}
                                 </div>
 
