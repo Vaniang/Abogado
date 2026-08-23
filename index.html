@@ -421,6 +421,63 @@
     .digest-card-actions { width: 100%; justify-content: flex-end; }
   }
 
+
+  /* ===== V2.9.4 — JUSTIFIED SAVED NOTES / DIGEST CONTENT =====
+     Body prose is justified for legal-document readability. Headings, labels,
+     metadata, buttons, and short UI text remain naturally left-aligned. */
+  #note-content-editor {
+    text-align: justify !important;
+    text-justify: inter-word;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+  }
+
+  .material-generated-content,
+  .digest-summary-cell,
+  .digest-full-panel,
+  .digest-notes-box,
+  .digest-body-box {
+    text-align: justify;
+    text-justify: inter-word;
+  }
+
+  #note-content-editor p,
+  #note-content-editor li,
+  #note-content-editor blockquote,
+  #note-content-editor td,
+  .note-template-block p,
+  .note-template-block li,
+  .note-template-block blockquote,
+  .note-template-block td,
+  .material-generated-content p,
+  .material-generated-content li,
+  .material-generated-content blockquote,
+  .material-generated-content td,
+  .digest-summary-cell .whitespace-pre-wrap,
+  .digest-full-panel .whitespace-pre-wrap,
+  .digest-notes-box .whitespace-pre-wrap,
+  .digest-body-box .whitespace-pre-wrap,
+  .case-digest-card p,
+  .recitation-gist {
+    text-align: justify !important;
+    text-justify: inter-word;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+  }
+
+  /* Preserve conventional alignment for structural text. */
+  #note-content-editor h1, #note-content-editor h2, #note-content-editor h3,
+  #note-content-editor h4, #note-content-editor h5, #note-content-editor h6,
+  .note-template-block h1, .note-template-block h2, .note-template-block h3,
+  .material-generated-content h1, .material-generated-content h2,
+  .material-generated-content h3, .material-generated-content h4,
+  .digest-summary-cell h1, .digest-summary-cell h2, .digest-summary-cell h3,
+  .digest-full-panel h1, .digest-full-panel h2, .digest-full-panel h3,
+  .digest-full-panel h4, .digest-full-panel h5,
+  .digest-card-actions, .digest-card-toolbar {
+    text-align: left !important;
+  }
+
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex overflow-hidden">
@@ -2617,16 +2674,24 @@ async ocrPdf(file, onProgress = () => {}) {
   const grMatch = citation.match(/G\.R\.\s*No\.\s*\d+/i);
   const grNo = grMatch ? grMatch[0] : '';
   const ponente = digest.ponente || 'N/A';
+  const discussedSubjectIds = Array.isArray(digest.discussedSubjectIds) ? digest.discussedSubjectIds : [];
+  const isDiscussed = discussedSubjectIds.includes(this.subjectId);
 
-  return `<div class="case-digest-card bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden" style="display: grid; grid-template-columns: 1fr 1fr; min-height: 280px;">
+  return `<div class="case-digest-card bg-white border ${isDiscussed ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-slate-200'} rounded-xl shadow-sm overflow-hidden" style="display: grid; grid-template-columns: 1fr 1fr; min-height: 280px;">
     
     <!-- LEFT COLUMN -->
     <div class="p-5 flex flex-col justify-between border-r border-slate-200">
       <div>
         <!-- TITLE -->
-        <h4 class="text-lg font-bold text-slate-900 uppercase tracking-wide mb-2">
-          ${titleDisplay}
-        </h4>
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-2">
+          <h4 class="text-lg font-bold text-slate-900 uppercase tracking-wide min-w-0">
+            ${titleDisplay}
+          </h4>
+          <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer select-none flex-shrink-0 transition ${isDiscussed ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}" title="Mark this case as already discussed in this subject">
+            <input type="checkbox" ${isDiscussed ? 'checked' : ''} onchange="window.appHandlers.toggleLinkedDigestDiscussed('${digest.id}', this.checked)" class="w-4 h-4 accent-emerald-600 cursor-pointer" aria-label="Mark ${Security.escapeHTML(digest.title || 'case')} as discussed">
+            <span class="text-[11px] font-black uppercase tracking-wide">${isDiscussed ? 'Discussed' : 'Mark Discussed'}</span>
+          </label>
+        </div>
         
         <!-- G.R. NO. | PONENTE -->
         <p class="text-xs text-slate-600 font-medium mb-3">
@@ -2676,7 +2741,8 @@ async ocrPdf(file, onProgress = () => {}) {
     </div>
   </div>`;
 }).join('');
-                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are master records from Consolidated Case Digests, displayed only when linked to this subject.</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
+                const discussedCount = records.filter(digest => Array.isArray(digest.discussedSubjectIds) && digest.discussedSubjectIds.includes(this.subjectId)).length;
+                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are master records from Consolidated Case Digests, displayed only when linked to this subject.</p><p class="text-xs font-bold mt-2 ${discussedCount === records.length && records.length ? 'text-emerald-700' : 'text-slate-500'}"><i class="fas fa-check-circle mr-1"></i>${discussedCount} of ${records.length} case${records.length === 1 ? '' : 's'} discussed</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
             }
         showDoctrines() {
                 this.activeNoteId = null;
@@ -5753,6 +5819,18 @@ initPomoPosition: () => {
             showSubjectMaterials: () => views.subject_notebook.showMaterials(),
             openSubjectMaterial: (id) => views.subject_notebook.showMaterialWorkspace(id),
             showSubjectDigests: () => views.subject_notebook.showDigests(),
+            toggleLinkedDigestDiscussed: async (id, checked) => {
+                const subject = window.appHandlers.getCurrentSubjectContext();
+                if (!subject?.id) throw new Error('Open a subject notebook first.');
+                const digest = views.subject_notebook.digestsData.find(item => item.id === id)
+                    || views.digests?.digestsData?.find(item => item.id === id);
+                if (!digest) throw new Error('Case digest not found.');
+                const current = Array.isArray(digest.discussedSubjectIds) ? [...digest.discussedSubjectIds] : [];
+                const next = checked
+                    ? [...new Set([...current, subject.id])]
+                    : current.filter(subjectId => subjectId !== subject.id);
+                await AppDB.update('digests', id, { discussedSubjectIds: next, updated: serverTimestamp() });
+            },
             showSubjectDoctrines: () => views.subject_notebook.showDoctrines(),
             currentMaterialOutput: null,
             uploadSubjectMaterial: () => {
@@ -6564,6 +6642,7 @@ getCurrentSubjectContext: () => ({
   const titleParts = (digest.title || 'Untitled Case').split(/\s+v\.?\s+/i);
   const titleDisplay = titleParts[1] ? `${esc(titleParts[0])} v. ${esc(titleParts[1])}` : esc(digest.title || 'Untitled Case');
   const normalized = DigestUtils.normalize(digest);
+  const isDiscussed = Array.isArray(digest.discussedSubjectIds) && digest.discussedSubjectIds.includes(views.subject_notebook.subjectId);
   const hasContent = normalized.facts || normalized.issue || normalized.rulingRatio || normalized.doctrine || normalized.codalProvision || normalized.legalFramework || normalized.verbatimNotes || normalized.personalNotes;
   Modal.show({
     title: `<i class="fas fa-book-open text-emerald-600"></i> ${titleDisplay}`,
@@ -6573,6 +6652,10 @@ getCurrentSubjectContext: () => ({
         <span class="text-slate-400">|</span>
         <span>Ponente: ${esc(digest.ponente || 'N/A')}</span>
         ${digest.topic ? `<span class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-[10px] font-bold uppercase">${esc(digest.topic)}</span>` : ''}
+        <label class="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer select-none ${isDiscussed ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}">
+          <input type="checkbox" ${isDiscussed ? 'checked' : ''} onchange="window.appHandlers.toggleLinkedDigestDiscussed('${digest.id}', this.checked)" class="w-4 h-4 accent-emerald-600">
+          <span class="text-[10px] font-black uppercase tracking-wide">Discussed</span>
+        </label>
       </div>
       ${digest.gist ? `<div class="mb-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 leading-relaxed"><span class="font-bold text-[10px] uppercase tracking-wider block mb-1 text-amber-700"><i class="fas fa-bolt mr-1"></i>Recitation Gist</span>${esc(digest.gist)}</div>` : ''}
       ${block('fa-file-lines', 'Facts', normalized.facts, 'bg-slate-50 border-slate-200 text-slate-700')}
@@ -7635,7 +7718,8 @@ await AppDB.add('digests', digestData);
                     indent = 0,
                     lineFactor = 1.4,
                     after = 3,
-                    firstLineIndent = 0
+                    firstLineIndent = 0,
+                    justify = true
                 } = {}) => {
                     setFont(family, style, size, color);
                     const lineHeight = lineHeightFor(size, lineFactor);
@@ -7674,9 +7758,18 @@ await AppDB.add('digests', digestData);
                             lines = doc.splitTextToSize(p, normalWidth).map(line => ({ text: line, extraIndent: 0 }));
                         }
 
-                        lines.forEach(line => {
+                        lines.forEach((line, lineIndex) => {
                             ensureSpace(lineHeight + 1);
-                            doc.text(String(line.text), marginLeft + indent + line.extraIndent, y);
+                            const x = marginLeft + indent + line.extraIndent;
+                            const availableWidth = contentWidth - indent - line.extraIndent;
+                            const lineText = String(line.text);
+                            const isLastLine = lineIndex === lines.length - 1;
+                            const canJustify = justify && !isLastLine && lineText.trim().split(/\s+/).length > 2 && doc.getTextWidth(lineText) >= availableWidth * 0.58;
+                            if (canJustify) {
+                                doc.text(lineText, x, y, { align: 'justify', maxWidth: availableWidth });
+                            } else {
+                                doc.text(lineText, x, y);
+                            }
                             y += lineHeight;
                         });
 
@@ -7750,7 +7843,7 @@ await AppDB.add('digests', digestData);
                 if (txt(d.subject || d.subjectName) !== '-') metaParts.push(`Subject: ${txt(d.subject || d.subjectName)}`);
                 if (txt(d.topic) !== '-') metaParts.push(`Topic: ${txt(d.topic)}`);
                 const metaText = metaParts.length ? metaParts.join('  |  ') : 'Case Digest';
-                writeParagraph(metaText, { size: 9, color: [71, 85, 105], after: 1.5 });
+                writeParagraph(metaText, { size: 9, color: [71, 85, 105], after: 1.5, justify: false });
                 drawRule([15, 23, 42], 0.55);
 
                 // ---- Quick identification ----
@@ -7787,7 +7880,7 @@ await AppDB.add('digests', digestData);
                     // the entire framework in legal_framework instead of separate fields.
                     writeSubsection('Legal Framework - Full Saved Discussion', d.rawLegalFramework || d.legalFramework);
                 } else {
-                    writeParagraph('No legal framework was saved for this digest.', { size: 10, color: [100, 116, 139], after: 4 });
+                    writeParagraph('No legal framework was saved for this digest.', { size: 10, color: [100, 116, 139], after: 4, justify: false });
                 }
 
                 writeSubsection('4. Verbatim Notes', d.verbatimNotes);
