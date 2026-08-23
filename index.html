@@ -2226,9 +2226,19 @@ async ocrPdf(file, onProgress = () => {}) {
                 return legacyNames.includes(currentName);
             }
             linkedDigests() {
+                const subjectId = this.subjectId;
                 return this.digestsData
                     .filter(record => this.recordLinkedToSubject(record))
-                    .sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+                    .sort((a, b) => {
+                        const aDiscussed = Array.isArray(a.discussedSubjectIds) && a.discussedSubjectIds.includes(subjectId);
+                        const bDiscussed = Array.isArray(b.discussedSubjectIds) && b.discussedSubjectIds.includes(subjectId);
+
+                        // Pending / not-discussed cases always stay at the top.
+                        if (aDiscussed !== bDiscussed) return aDiscussed ? 1 : -1;
+
+                        // Within each group, keep case titles alphabetically ordered.
+                        return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' });
+                    });
             }
             linkedDoctrines() {
                 return this.doctrinesData
@@ -2742,7 +2752,7 @@ async ocrPdf(file, onProgress = () => {}) {
   </div>`;
 }).join('');
                 const discussedCount = records.filter(digest => Array.isArray(digest.discussedSubjectIds) && digest.discussedSubjectIds.includes(this.subjectId)).length;
-                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are master records from Consolidated Case Digests, displayed only when linked to this subject.</p><p class="text-xs font-bold mt-2 ${discussedCount === records.length && records.length ? 'text-emerald-700' : 'text-slate-500'}"><i class="fas fa-check-circle mr-1"></i>${discussedCount} of ${records.length} case${records.length === 1 ? '' : 's'} discussed</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
+                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are master records from Consolidated Case Digests, displayed only when linked to this subject. Pending cases are listed first; discussed cases move to the bottom automatically.</p><p class="text-xs font-bold mt-2 ${discussedCount === records.length && records.length ? 'text-emerald-700' : 'text-slate-500'}"><i class="fas fa-check-circle mr-1"></i>${discussedCount} of ${records.length} case${records.length === 1 ? '' : 's'} discussed</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
             }
         showDoctrines() {
                 this.activeNoteId = null;
@@ -3972,7 +3982,21 @@ deleteAdvocacyDraft: (id) => {
                 margin: [15, 12, 15, 12],
                 filename: `${cleanTitle}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    onclone: (clonedDoc) => {
+                        const clonedEditor = clonedDoc.getElementById('note-content-editor');
+                        if (!clonedEditor) return;
+                        clonedEditor.querySelectorAll('p, li, blockquote, td').forEach(node => {
+                            node.style.setProperty('text-align', 'justify', 'important');
+                            node.style.setProperty('text-justify', 'inter-word', 'important');
+                        });
+                        clonedEditor.querySelectorAll('h1, h2, h3, h4, h5, h6, th').forEach(node => {
+                            node.style.setProperty('text-align', 'left', 'important');
+                        });
+                    }
+                },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                 pagebreak: { mode: ['css', 'legacy'] }
                 };
@@ -4842,6 +4866,25 @@ deleteAdvocacyDraft: (id) => {
                 blockquote {
                     orphans: 3;
                     widows: 3;
+                }
+
+                /* Exported legal body text is justified. Headings/labels remain left aligned. */
+                .lex-print-content p,
+                .lex-print-content li,
+                .lex-print-content blockquote,
+                .lex-print-content td {
+                    text-align: justify !important;
+                    text-justify: inter-word;
+                }
+
+                .lex-print-content h1,
+                .lex-print-content h2,
+                .lex-print-content h3,
+                .lex-print-content h4,
+                .lex-print-content h5,
+                .lex-print-content h6,
+                .lex-print-content th {
+                    text-align: left !important;
                 }
 
                 table {
@@ -5822,14 +5865,33 @@ initPomoPosition: () => {
             toggleLinkedDigestDiscussed: async (id, checked) => {
                 const subject = window.appHandlers.getCurrentSubjectContext();
                 if (!subject?.id) throw new Error('Open a subject notebook first.');
-                const digest = views.subject_notebook.digestsData.find(item => item.id === id)
-                    || views.digests?.digestsData?.find(item => item.id === id);
+
+                const notebookDigest = views.subject_notebook.digestsData.find(item => item.id === id);
+                const consolidatedDigest = views.digests?.digestsData?.find(item => item.id === id);
+                const digest = notebookDigest || consolidatedDigest;
                 if (!digest) throw new Error('Case digest not found.');
-                const current = Array.isArray(digest.discussedSubjectIds) ? [...digest.discussedSubjectIds] : [];
+
+                const previous = Array.isArray(digest.discussedSubjectIds) ? [...digest.discussedSubjectIds] : [];
                 const next = checked
-                    ? [...new Set([...current, subject.id])]
-                    : current.filter(subjectId => subjectId !== subject.id);
-                await AppDB.update('digests', id, { discussedSubjectIds: next, updated: serverTimestamp() });
+                    ? [...new Set([...previous, subject.id])]
+                    : previous.filter(subjectId => subjectId !== subject.id);
+
+                // Optimistic local update: immediately re-sort the notebook so
+                // discussed cases move to the bottom and unchecked cases return to the top.
+                if (notebookDigest) notebookDigest.discussedSubjectIds = [...next];
+                if (consolidatedDigest && consolidatedDigest !== notebookDigest) consolidatedDigest.discussedSubjectIds = [...next];
+                if (views.subject_notebook.activePanel === 'digests') views.subject_notebook.showDigests();
+
+                try {
+                    await AppDB.update('digests', id, { discussedSubjectIds: next, updated: serverTimestamp() });
+                } catch (error) {
+                    // Restore the previous state if Firestore saving fails.
+                    if (notebookDigest) notebookDigest.discussedSubjectIds = [...previous];
+                    if (consolidatedDigest && consolidatedDigest !== notebookDigest) consolidatedDigest.discussedSubjectIds = [...previous];
+                    if (views.subject_notebook.activePanel === 'digests') views.subject_notebook.showDigests();
+                    console.error('Unable to update discussed status:', error);
+                    alert('Unable to save the Discussed status. Please try again.');
+                }
             },
             showSubjectDoctrines: () => views.subject_notebook.showDoctrines(),
             currentMaterialOutput: null,
@@ -7762,11 +7824,43 @@ await AppDB.add('digests', digestData);
                             ensureSpace(lineHeight + 1);
                             const x = marginLeft + indent + line.extraIndent;
                             const availableWidth = contentWidth - indent - line.extraIndent;
-                            const lineText = String(line.text);
+                            const lineText = String(line.text).trim();
                             const isLastLine = lineIndex === lines.length - 1;
-                            const canJustify = justify && !isLastLine && lineText.trim().split(/\s+/).length > 2 && doc.getTextWidth(lineText) >= availableWidth * 0.58;
-                            if (canJustify) {
-                                doc.text(lineText, x, y, { align: 'justify', maxWidth: availableWidth });
+                            const words = lineText.split(/\s+/).filter(Boolean);
+
+                            // jsPDF's built-in { align: 'justify' } is inconsistent when the
+                            // line was produced by splitTextToSize().  Render every non-final
+                            // paragraph line word-by-word instead, distributing the remaining
+                            // width across the inter-word gaps.  This produces true legal-document
+                            // justification in both View PDF and Download PDF.
+                            const drawJustifiedLine = () => {
+                                if (words.length < 2) {
+                                    doc.text(lineText, x, y);
+                                    return;
+                                }
+                                const wordsWidth = words.reduce((sum, word) => sum + doc.getTextWidth(word), 0);
+                                const gapCount = words.length - 1;
+                                const naturalSpace = Math.max(doc.getTextWidth(' '), 0.7);
+                                const requiredGap = (availableWidth - wordsWidth) / gapCount;
+
+                                // A split line should normally be close to the target width.
+                                // If an unusual line would require extreme spacing, keep normal
+                                // spacing rather than create visually broken text.
+                                if (!Number.isFinite(requiredGap) || requiredGap < naturalSpace * 0.55 || requiredGap > naturalSpace * 4.5) {
+                                    doc.text(lineText, x, y);
+                                    return;
+                                }
+
+                                let cursorX = x;
+                                words.forEach((word, wordIndex) => {
+                                    doc.text(word, cursorX, y);
+                                    cursorX += doc.getTextWidth(word);
+                                    if (wordIndex < words.length - 1) cursorX += requiredGap;
+                                });
+                            };
+
+                            if (justify && !isLastLine && words.length > 1) {
+                                drawJustifiedLine();
                             } else {
                                 doc.text(lineText, x, y);
                             }
