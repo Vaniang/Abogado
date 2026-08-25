@@ -346,6 +346,26 @@
     flex-wrap: wrap;
   }
 
+  /* ===== NOTEBOOK CASE DIGEST VIEWER — Justified legal body text ===== */
+  #app-modal-body .notebook-digest-justified,
+  #app-modal-body .notebook-digest-justified p,
+  #app-modal-body .notebook-digest-justified li,
+  #app-modal-body .notebook-digest-justified blockquote {
+    text-align: justify !important;
+    text-justify: inter-word !important;
+    hyphens: auto;
+    overflow-wrap: anywhere;
+  }
+  #app-modal-body .notebook-digest-justified h1,
+  #app-modal-body .notebook-digest-justified h2,
+  #app-modal-body .notebook-digest-justified h3,
+  #app-modal-body .notebook-digest-justified h4,
+  #app-modal-body .notebook-digest-justified h5,
+  #app-modal-body .notebook-digest-justified h6,
+  #app-modal-body .notebook-digest-justified .digest-label {
+    text-align: left !important;
+  }
+
   /* ===== CONS. DIGESTS — Responsive 100% Zoom Layout ===== */
   .digest-page-shell {
     width: 100%;
@@ -476,6 +496,73 @@
   .digest-full-panel h4, .digest-full-panel h5,
   .digest-card-actions, .digest-card-toolbar {
     text-align: left !important;
+  }
+
+
+  /* ===== V2.9.5 — GLOBAL TABLE JUSTIFICATION =====
+     Every substantive table cell in Lex uses justified legal-document body text.
+     Headers and interactive controls remain naturally aligned for readability. */
+  #content-area table td,
+  #app-modal-body table td,
+  #note-content-editor table td,
+  .note-template-block table td,
+  .material-generated-content table td,
+  .subject-master-reviewer table td,
+  .case-digest-card table td,
+  .digest-page-shell table td,
+  .digest-full-panel table td,
+  .digest-notes-box table td,
+  .digest-body-box table td {
+    text-align: justify !important;
+    text-justify: inter-word !important;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  /* Make nested prose inside table cells inherit the same justification. */
+  #content-area table td p,
+  #content-area table td li,
+  #content-area table td blockquote,
+  #app-modal-body table td p,
+  #app-modal-body table td li,
+  #app-modal-body table td blockquote,
+  #note-content-editor table td p,
+  #note-content-editor table td li,
+  #note-content-editor table td blockquote,
+  .material-generated-content table td p,
+  .material-generated-content table td li,
+  .material-generated-content table td blockquote,
+  .note-template-block table td p,
+  .note-template-block table td li,
+  .note-template-block table td blockquote {
+    text-align: justify !important;
+    text-justify: inter-word !important;
+  }
+
+  /* Structural table text should not be stretched. */
+  #content-area table th,
+  #app-modal-body table th,
+  #note-content-editor table th,
+  .note-template-block table th,
+  .material-generated-content table th,
+  .subject-master-reviewer table th,
+  .case-digest-card table th,
+  .digest-page-shell table th {
+    text-align: left !important;
+  }
+
+  /* Keep controls/icons compact even when they live in a justified cell. */
+  table td button,
+  table td a,
+  table td input,
+  table td select,
+  table td textarea,
+  table td .digest-card-actions,
+  table td .inline-flex,
+  table td .flex {
+    text-align: initial;
   }
 
 </style>
@@ -6699,7 +6786,7 @@ getCurrentSubjectContext: () => ({
   const grNo = (digest.citation || '').match(/G\.R\.\s*No\.\s*\d+/i);
   const block = (icon, label, text, boxClass) => {
     if (!text) return '';
-    return `<div class="mb-4"><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 pb-1 border-b border-slate-200"><i class="fas ${icon} mr-1"></i>${label}</h5><div class="p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap ${boxClass}">${esc(text)}</div></div>`;
+    return `<div class="mb-4"><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 pb-1 border-b border-slate-200"><i class="fas ${icon} mr-1"></i>${label}</h5><div class="p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap ${boxClass}" style="text-align:justify;text-justify:inter-word;hyphens:auto;overflow-wrap:anywhere;">${esc(text)}</div></div>`;
   };
   const titleParts = (digest.title || 'Untitled Case').split(/\s+v\.?\s+/i);
   const titleDisplay = titleParts[1] ? `${esc(titleParts[0])} v. ${esc(titleParts[1])}` : esc(digest.title || 'Untitled Case');
@@ -6709,7 +6796,8 @@ getCurrentSubjectContext: () => ({
   Modal.show({
     title: `<i class="fas fa-book-open text-emerald-600"></i> ${titleDisplay}`,
     content: `
-      <div class="text-xs text-slate-500 font-medium mb-4 flex flex-wrap items-center gap-2">
+      <div class="notebook-digest-justified">
+      <div class="text-xs text-slate-500 font-medium mb-4 flex flex-wrap items-center gap-2" style="text-align:left;">
         <span class="font-bold text-slate-700">${esc(grNo ? grNo[0] : 'G.R. No. N/A')}</span>
         <span class="text-slate-400">|</span>
         <span>Ponente: ${esc(digest.ponente || 'N/A')}</span>
@@ -6719,13 +6807,14 @@ getCurrentSubjectContext: () => ({
           <span class="text-[10px] font-black uppercase tracking-wide">Discussed</span>
         </label>
       </div>
-      ${digest.gist ? `<div class="mb-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 leading-relaxed"><span class="font-bold text-[10px] uppercase tracking-wider block mb-1 text-amber-700"><i class="fas fa-bolt mr-1"></i>Recitation Gist</span>${esc(digest.gist)}</div>` : ''}
+      ${digest.gist ? `<div class="mb-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 leading-relaxed"><span class="font-bold text-[10px] uppercase tracking-wider block mb-1 text-amber-700" style="text-align:left;"><i class="fas fa-bolt mr-1"></i>Recitation Gist</span><div style="text-align:justify;text-justify:inter-word;hyphens:auto;overflow-wrap:anywhere;">${esc(digest.gist)}</div></div>` : ''}
       ${block('fa-file-lines', 'Facts', normalized.facts, 'bg-slate-50 border-slate-200 text-slate-700')}
       ${block('fa-circle-question', 'Issue', normalized.issue, 'bg-blue-50 border-blue-200 text-slate-800')}
       ${block('fa-gavel', 'Ruling & Ratio', normalized.rulingRatio, 'bg-slate-50 border-slate-200 text-slate-700')}
       ${block('fa-sticky-note', 'My Notes', DigestUtils.myNotesText(normalized), 'bg-amber-100/50 border-amber-200 text-amber-900')}
       ${block('fa-quote-left', 'Verbatim Notes from the Case', normalized.verbatimNotes, 'bg-emerald-50 border-emerald-200 text-slate-700')}
       ${hasContent ? '' : '<div class="text-center py-8 text-slate-400 text-sm"><i class="fas fa-file-circle-question text-4xl mb-3 opacity-40"></i><p class="font-bold">No full digest content yet.</p><p class="text-xs mt-1">Click "Edit Digest" below to add Facts, Issue, and Ruling.</p></div>'}
+      </div>
     `,
     submitText: 'Edit Digest',
     onSubmit: async () => {
