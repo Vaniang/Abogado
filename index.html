@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lex: Law School Companion V4.0</title>
+    <title>Lex: Law School Companion V5.0</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -565,6 +565,60 @@
     text-align: initial;
   }
 
+
+
+/* ============================================================
+   LEX V5 — CONTEXTUAL TUTOR / KNOWLEDGE SYSTEM
+   ============================================================ */
+#ask-lex-button {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 95;
+  border-radius: 9999px;
+  box-shadow: 0 18px 40px rgba(15,23,42,.22);
+}
+#ask-lex-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(440px, 100vw);
+  height: 100vh;
+  z-index: 190;
+  transform: translateX(105%);
+  transition: transform .25s ease;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -20px 0 45px rgba(15,23,42,.18);
+  display: flex;
+  flex-direction: column;
+}
+#ask-lex-drawer.open { transform: translateX(0); }
+#ask-lex-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 185;
+  background: rgba(15,23,42,.42);
+  backdrop-filter: blur(2px);
+  display: none;
+}
+#ask-lex-backdrop.open { display: block; }
+.lex-tutor-mode.active {
+  background: #1e293b;
+  color: white;
+  border-color: #1e293b;
+}
+#ask-lex-messages .lex-user-msg,
+#ask-lex-messages .lex-ai-msg { max-width: 92%; }
+#ask-lex-messages .lex-user-msg { margin-left: auto; }
+#knowledge-graph-canvas svg { max-width: 100%; height: auto; }
+.mastery-meter { height: .55rem; background: #e2e8f0; border-radius: 9999px; overflow: hidden; }
+.mastery-meter > span { display:block; height:100%; background: linear-gradient(90deg,#ef4444,#f59e0b,#10b981); }
+@media (max-width: 768px) {
+  #ask-lex-button { left: .75rem; bottom: 5.5rem; }
+  #ask-lex-drawer { width: 100vw; }
+}
+
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex overflow-hidden">
@@ -650,6 +704,43 @@
         </div>
     </div>
 
+
+
+    <!-- LEX V5 — CONTEXTUAL TUTOR -->
+    <button id="ask-lex-button" onclick="window.appHandlers.openLexTutor()" class="bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-800 hover:to-blue-800 text-white px-5 py-3 font-black text-sm flex items-center gap-2 border border-white/20" aria-label="Ask Lex">
+        <i class="fas fa-wand-magic-sparkles"></i><span>Ask Lex</span>
+    </button>
+    <div id="ask-lex-backdrop" onclick="window.appHandlers.closeLexTutor()"></div>
+    <aside id="ask-lex-drawer" aria-label="Ask Lex contextual tutor">
+        <div class="bg-gradient-to-r from-slate-900 to-indigo-900 text-white p-5 flex-shrink-0">
+            <div class="flex items-start justify-between gap-3">
+                <div><p class="text-[10px] uppercase tracking-[.24em] text-indigo-200 font-black">Contextual Tutor</p><h3 class="text-xl font-black mt-1"><i class="fas fa-wand-magic-sparkles text-amber-300 mr-2"></i>Ask Lex</h3><p id="ask-lex-context-label" class="text-xs text-indigo-100/80 mt-1">General Philippine-law tutor</p></div>
+                <button onclick="window.appHandlers.closeLexTutor()" class="w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+            <div class="grid grid-cols-4 gap-1 mb-3">
+                <button data-tutor-mode="general" onclick="window.appHandlers.setLexTutorMode('general')" class="lex-tutor-mode active p-2 rounded-lg border border-slate-200 text-xs font-black">General</button>
+                <button data-tutor-mode="subject" onclick="window.appHandlers.setLexTutorMode('subject')" class="lex-tutor-mode p-2 rounded-lg border border-slate-200 text-xs font-black">Subject</button>
+                <button data-tutor-mode="case" onclick="window.appHandlers.setLexTutorMode('case')" class="lex-tutor-mode p-2 rounded-lg border border-slate-200 text-xs font-black">Case</button>
+                <button data-tutor-mode="bar" onclick="window.appHandlers.setLexTutorMode('bar')" class="lex-tutor-mode p-2 rounded-lg border border-slate-200 text-xs font-black">Bar</button>
+            </div>
+            <div id="ask-lex-scope-controls" class="hidden grid grid-cols-1 gap-2">
+                <select id="ask-lex-subject" class="w-full p-2.5 rounded-lg border border-slate-200 bg-white text-sm" onchange="window.appHandlers.refreshLexTutorContext()"><option value="">Select subject…</option></select>
+                <select id="ask-lex-case" class="w-full p-2.5 rounded-lg border border-slate-200 bg-white text-sm hidden" onchange="window.appHandlers.refreshLexTutorContext()"><option value="">Select case…</option></select>
+            </div>
+        </div>
+        <div id="ask-lex-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-white">
+            <div class="p-4 rounded-xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-950"><b>Ask Lex follows your workflow.</b><br>Switch between General, Subject, Case, and Bar modes. Subject and Case modes use your saved Lex data as context; Bar mode also uses your mastery signals.</div>
+        </div>
+        <div class="p-4 border-t border-slate-200 bg-slate-50 flex-shrink-0">
+            <textarea id="ask-lex-input" rows="3" class="w-full p-3 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Ask a question…"></textarea>
+            <div class="flex items-center justify-between gap-2 mt-2">
+                <button onclick="window.appHandlers.clearLexTutor()" class="text-xs font-bold text-slate-500 hover:text-slate-700">Clear</button>
+                <button id="ask-lex-send" onclick="window.appHandlers.sendLexTutor()" class="bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2 rounded-lg text-sm font-black"><i class="fas fa-paper-plane mr-1"></i>Ask Lex</button>
+            </div>
+        </div>
+    </aside>
 
     <div id="lex-alarm-overlay" class="fixed inset-0 hidden items-center justify-center p-3 bg-slate-950/80 backdrop-blur-md">
         <div id="lex-alarm-card" class="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl border border-white/20">
@@ -1319,6 +1410,8 @@ let currentUser = null;
             add: async (collectionName, data) => { if (!currentUser) throw new Error("Unauthenticated"); return addDoc(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName), data); },
             set: async (collectionName, id, data, options = { merge: true }) => { if (!currentUser) throw new Error("Unauthenticated"); return setDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id), data, options); },
             get: async (collectionName, id) => { if (!currentUser) throw new Error("Unauthenticated"); return getDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id)); },
+            all: async (collectionName) => { if (!currentUser) return []; const snapshot = await getDocs(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName)); return snapshot.docs.map(record => ({ id: record.id, ...record.data() })); },
+            whereAll: async (collectionName, field, op, value) => { if (!currentUser) return []; const snapshot = await getDocs(query(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName), where(field, op, value))); return snapshot.docs.map(record => ({ id: record.id, ...record.data() })); },
             update: async (collectionName, id, data) => { if (!currentUser) throw new Error("Unauthenticated"); return updateDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id), data); },
             delete: async (collectionName, id) => { if (!currentUser) throw new Error("Unauthenticated"); return deleteDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id)); }
         };
@@ -1573,6 +1666,136 @@ async ocrPdf(file, onProgress = () => {}) {
         return [...new Set(values)].sort((a, b) => a - b);
     }
 };
+
+        // ============================================================
+        // LEX V5 — ADAPTIVE STUDY + CONTEXT ENGINE
+        // ============================================================
+        const StudyEngine = {
+            clamp(value, min = 0, max = 100) { return Math.max(min, Math.min(max, Number(value || 0))); },
+            async recordAttempt({ sourceType = 'study', subjectId = '', subjectName = 'General', topic = 'General', score = 0, detail = '' } = {}) {
+                try {
+                    await AppDB.add('study_attempts', {
+                        sourceType,
+                        subjectId: subjectId || '',
+                        subjectName: subjectName || 'General',
+                        topic: topic || 'General',
+                        score: this.clamp(score),
+                        detail: String(detail || '').slice(0, 1500),
+                        created: serverTimestamp()
+                    });
+                } catch (error) { console.warn('Study attempt was not recorded:', error); }
+            },
+            masteryFromAttempts(attempts = []) {
+                const groups = new Map();
+                attempts.forEach(item => {
+                    const subject = String(item.subjectName || 'General').trim() || 'General';
+                    const topic = String(item.topic || 'General').trim() || 'General';
+                    const key = `${subject}|||${topic}`;
+                    if (!groups.has(key)) groups.set(key, []);
+                    groups.get(key).push(this.clamp(item.score));
+                });
+                return [...groups.entries()].map(([key, scores]) => {
+                    const [subjectName, topic] = key.split('|||');
+                    const recent = scores.slice(-6);
+                    const average = recent.length ? Math.round(recent.reduce((a, b) => a + b, 0) / recent.length) : 0;
+                    return { subjectName, topic, score: average, attempts: scores.length };
+                }).sort((a, b) => a.score - b.score || b.attempts - a.attempts);
+            },
+            async snapshot() {
+                const [attempts, reviews, advocacy] = await Promise.all([
+                    AppDB.all('study_attempts'),
+                    AppDB.all('reviews'),
+                    AppDB.all('advocacy_sessions')
+                ]);
+                const now = Date.now();
+                let dueCards = 0;
+                reviews.forEach(review => {
+                    if (review.type !== 'recit' || !Array.isArray(review.content)) return;
+                    review.content.forEach(card => { const next = Number(card?.nextReview || 0); if (!next || next <= now) dueCards += 1; });
+                });
+                const advocacyAttempts = advocacy.filter(item => item.status === 'completed' && Number.isFinite(Number(item.overallScore))).map(item => ({
+                    subjectName: item.subjectName || 'General', topic: item.topic || item.title || 'Advocacy', score: Number(item.overallScore), sourceType: 'advocacy'
+                }));
+                const mastery = this.masteryFromAttempts([...attempts, ...advocacyAttempts]);
+                return { attempts, reviews, advocacy, dueCards, mastery };
+            }
+        };
+
+        const LexContextEngine = {
+            tutorMode: 'general',
+            tutorHistory: [],
+            subjects: [],
+            cases: [],
+            async refreshSelectors() {
+                const [subjects, cases] = await Promise.all([AppDB.all('subjects'), AppDB.all('digests')]);
+                this.subjects = subjects.filter(s => !s.archived).sort((a,b) => String(a.name||'').localeCompare(String(b.name||'')));
+                this.cases = cases.map(d => DigestUtils.normalize(d)).sort((a,b) => String(a.title||'').localeCompare(String(b.title||'')));
+                const subjectSelect = document.getElementById('ask-lex-subject');
+                const caseSelect = document.getElementById('ask-lex-case');
+                if (subjectSelect) {
+                    const current = subjectSelect.value;
+                    subjectSelect.innerHTML = '<option value="">Select subject…</option>' + this.subjects.map(s => `<option value="${s.id}">${Security.escapeHTML(s.name || 'Untitled Subject')}</option>`).join('');
+                    const notebookId = views.subject_notebook?.subjectId || '';
+                    subjectSelect.value = current || notebookId || '';
+                }
+                if (caseSelect) {
+                    const current = caseSelect.value;
+                    caseSelect.innerHTML = '<option value="">Select case…</option>' + this.cases.map(d => `<option value="${d.id}">${Security.escapeHTML(d.title || 'Untitled Case')}</option>`).join('');
+                    caseSelect.value = current || views.case_recitation?.active?.id || '';
+                }
+            },
+            currentViewContext() {
+                const label = typeof viewLabels !== 'undefined' ? (viewLabels[currentView] || currentView) : currentView;
+                const subject = views.subject_notebook?.subjectId ? { id: views.subject_notebook.subjectId, name: views.subject_notebook.subjectName || '' } : null;
+                const material = views.subject_notebook?.currentMaterialId ? views.subject_notebook.materialsData?.find(m => m.id === views.subject_notebook.currentMaterialId) : null;
+                const activeCase = views.case_recitation?.active || null;
+                return { view: label || 'LEX', subject, material, activeCase };
+            },
+            htmlText(html = '') { return Utils.htmlToText(html).slice(0, 7000); },
+            compactList(items = [], mapper, limit = 12) { return items.slice(0, limit).map(mapper).filter(Boolean).join('\n\n'); },
+            async subjectContext(subjectId, question = '') {
+                if (!subjectId) return { label: 'No subject selected', context: '' };
+                const subject = this.subjects.find(s => s.id === subjectId) || (await AppDB.get('subjects', subjectId)).data() || {};
+                const [notes, vault, doctrines, digests, materials] = await Promise.all([
+                    AppDB.whereAll('notes', 'subjectId', '==', subjectId),
+                    AppDB.whereAll('knowledge_vault', 'subjectId', '==', subjectId),
+                    AppDB.all('doctrines'),
+                    AppDB.all('digests'),
+                    AppDB.whereAll('materials', 'subjectId', '==', subjectId)
+                ]);
+                const subjectName = subject.name || 'Selected Subject';
+                const linkedDoctrines = doctrines.filter(d => (Array.isArray(d.subjectIds) && d.subjectIds.includes(subjectId)) || d.primarySubjectId === subjectId || d.subjectName === subjectName);
+                const linkedDigests = digests.map(d => DigestUtils.normalize(d)).filter(d => (Array.isArray(d.subjectIds) && d.subjectIds.includes(subjectId)) || d.primarySubjectId === subjectId || d.subject === subjectName || d.subjectName === subjectName);
+                const noteContext = this.compactList(notes, n => `NOTE: ${n.title || 'Untitled'}\n${this.htmlText(n.content || '')}`, 10);
+                const vaultContext = this.compactList(vault, v => `VAULT: ${v.title || v.topic || 'Untitled'}\n${String(v.plainText || v.content || '').slice(0, 4500)}`, 10);
+                const doctrineContext = this.compactList(linkedDoctrines, d => `DOCTRINE: ${d.article || d.topic || 'General'} — ${d.caseTitle || ''}\n${d.definition || d.doctrine || ''}\nRULE: ${d.generalRule || ''}\nAPPLICATION: ${d.application || ''}`, 10);
+                const digestContext = this.compactList(linkedDigests, d => `CASE: ${d.title}\nISSUE: ${d.issue}\nRULING: ${d.ruling}\nRATIO: ${d.ratioDecidendi}\nDOCTRINE: ${d.doctrine}`, 8);
+                const materialContext = this.compactList(materials, m => `MATERIAL: ${m.title || m.filename || 'Untitled'} — ${m.topic || ''} (${m.pageCount || '?'} pages; ${m.extractionStatus || m.status || 'uploaded'})`, 12);
+                const context = `SUBJECT: ${subjectName}\n\n${noteContext}\n\n${vaultContext}\n\n${doctrineContext}\n\n${digestContext}\n\n${materialContext}`.slice(0, 65000);
+                return { label: subjectName, context };
+            },
+            async caseContext(caseId) {
+                if (!caseId) return { label: 'No case selected', context: '' };
+                let d = this.cases.find(item => item.id === caseId);
+                if (!d) { const snap = await AppDB.get('digests', caseId); d = DigestUtils.normalize({ id: snap.id, ...snap.data() }); }
+                const context = `CASE: ${d.title}\nCITATION: ${d.citation || d.grNo || ''}\nSUBJECT: ${d.subject || d.subjectName || ''}\nTOPIC: ${d.topic || ''}\nFACTS:\n${d.facts}\n\nISSUE:\n${d.issue}\n\nRULING:\n${d.ruling}\n\nRATIO DECIDENDI:\n${d.ratioDecidendi}\n\nDOCTRINE:\n${d.doctrine}\n\nLEGAL BASIS:\n${d.codalProvision}\n\nGENERAL RULE:\n${d.generalRule}\n\nREQUISITES:\n${d.elementsRequisites}\n\nEXCEPTIONS:\n${d.exceptions}\n\nAPPLICATION:\n${d.supremeCourtApplication}\n\nPERSONAL NOTES:\n${d.personalNotes || ''}`.slice(0, 60000);
+                return { label: d.title || 'Selected Case', context };
+            },
+            async barContext(subjectId, question = '') {
+                const subject = await this.subjectContext(subjectId, question);
+                const snapshot = await StudyEngine.snapshot();
+                const weak = snapshot.mastery.filter(m => !subject.label || m.subjectName === subject.label).slice(0, 8);
+                const masteryText = weak.length ? weak.map(m => `${m.topic}: ${m.score}% (${m.attempts} attempts)`).join('\n') : 'No mastery attempts recorded yet.';
+                return { label: `${subject.label} — Bar Mode`, context: `${subject.context}\n\nLEARNER MASTERY / WEAKNESS SIGNALS:\n${masteryText}\nDue spaced-repetition cards: ${snapshot.dueCards}`.slice(0, 68000) };
+            },
+            async build(mode, subjectId, caseId, question = '') {
+                if (mode === 'subject') return this.subjectContext(subjectId, question);
+                if (mode === 'case') return this.caseContext(caseId);
+                if (mode === 'bar') return this.barContext(subjectId, question);
+                const current = this.currentViewContext();
+                return { label: `General • ${current.view}`, context: `CURRENT LEX SCREEN: ${current.view}${current.subject?.name ? `\nCURRENT SUBJECT: ${current.subject.name}` : ''}${current.material?.title ? `\nCURRENT MATERIAL: ${current.material.title}` : ''}${current.activeCase?.title ? `\nCURRENT CASE: ${current.activeCase.title}` : ''}` };
+            }
+        };
         
         const ADVOCACY_PRACTICE_TYPES = {
             guided_alac: { label: 'Guided ALAC Writing', icon: 'fa-list-ol' },
@@ -2756,7 +2979,7 @@ async ocrPdf(file, onProgress = () => {}) {
             <div class="bg-white border rounded-xl p-5 shadow-sm">
                 <h4 class="font-bold">
                     <i class="fas fa-magnifying-glass text-emerald-600 mr-2"></i>
-                    Ask This Material
+                    Chat With This Material
                 </h4>
                 <textarea
                     id="material-question"
@@ -2768,8 +2991,9 @@ async ocrPdf(file, onProgress = () => {}) {
                     onclick="window.appHandlers.askSubjectMaterial('${material.id}')"
                     class="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold">
                     <i class="fas fa-message mr-2"></i>
-                    Answer from PDF
+                    Send Grounded Question
                 </button>
+                <button onclick="window.appHandlers.showMaterialChatHistory('${material.id}')" class="w-full mt-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 py-2.5 rounded-lg text-xs font-bold"><i class="fas fa-clock-rotate-left mr-2"></i>Chat History</button>
             </div>
             
             <!-- NOTES -->
@@ -2835,13 +3059,11 @@ async ocrPdf(file, onProgress = () => {}) {
         <!-- AI OUTPUT -->
 
         <div
-      <div
         id="material-assistant-output"
         class="bg-white border border-slate-200 rounded-xl shadow-sm mt-6 p-8 min-h-[1100px] overflow-y-auto relative">
         <div
-               <div
                 id="material-placeholder"
-                class="absolute inset-0 flex items-center justify-center">
+                class="absolute inset-0 flex flex-col items-center justify-center text-center text-slate-400 p-8">
                 <i class="fas fa-book-open-reader text-6xl mb-4 opacity-20"></i>
                 <h4 class="font-bold text-slate-700">
                     AI-Grounded Study Tools
@@ -2964,57 +3186,50 @@ async ocrPdf(file, onProgress = () => {}) {
                     <td class="p-4 border-b border-slate-100"><p class="text-sm text-slate-600 whitespace-pre-wrap">${Security.escapeHTML(doctrine.application || 'No application recorded.')}</p></td>
                     <td class="p-4 border-b border-slate-100"><div class="flex gap-2"><button onclick="window.appHandlers.editLinkedDoctrine('${doctrine.id}')" class="text-blue-600 hover:bg-blue-50 rounded p-2" title="Edit"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.unlinkDoctrineFromCurrentSubject('${doctrine.id}')" class="text-slate-500 hover:bg-slate-100 rounded p-2" title="Unlink"><i class="fas fa-unlink"></i></button><button onclick="window.appHandlers.deleteDoctrine('${doctrine.id}')" class="text-red-500 hover:bg-red-50 rounded p-2" title="Delete from all subjects"><i class="fas fa-trash"></i></button></div></td>
                 </tr>`).join('');
-                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-7xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-blue-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Doctrine Matrix</h3><p class="text-sm text-slate-500 mt-1">Each entry is the same master doctrine displayed in the consolidated Doctrine Matrix.</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDoctrineToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDoctrineForCurrentSubject()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Doctrine</button></div></div>${records.length ? `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto"><table class="w-full text-left min-w-[900px]"><thead class="bg-slate-50"><tr><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Article / Topic</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Case and Citation</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Doctrine</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Application</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Actions</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-table text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No doctrines linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a doctrine here or link an existing entry from the consolidated matrix.</p></div>`}</div></div>`;
+                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-7xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-blue-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Doctrine Library</h3><p class="text-sm text-slate-500 mt-1">Each entry is the same master doctrine displayed in the consolidated Doctrine Library.</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDoctrineToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDoctrineForCurrentSubject()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Doctrine</button></div></div>${records.length ? `<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto"><table class="w-full text-left min-w-[900px]"><thead class="bg-slate-50"><tr><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Article / Topic</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Case and Citation</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Doctrine</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Application</th><th class="p-4 text-xs uppercase tracking-wider text-slate-500">Actions</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-table text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No doctrines linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a doctrine here or link an existing entry from the consolidated matrix.</p></div>`}</div></div>`;
             }
         }
 
   class DoctrineMatrixView {
-            constructor() { this.unsubscribe = null; this.doctrines = []; }
-            render() { 
-                return `
-                <div class="max-w-6xl mx-auto pb-24 h-full flex flex-col">
-                    <div class="flex justify-between items-center mb-6 flex-shrink-0">
-                        <div>
-                            <h3 class="text-xl font-bold text-slate-700">Jurisprudence Doctrine Matrix</h3>
-                            <p class="text-xs text-slate-500 mt-1">Map articles directly to key cases and doctrines for rapid Bar review.</p>
-                        </div>
-                        <button onclick="window.appHandlers.addDoctrine()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>Add Doctrine</button>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
-                        <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center gap-4">
-                            <div class="relative flex-1">
-                                <i class="fas fa-search absolute left-3 top-2.5 text-slate-400"></i>
-                                <input type="text" id="matrix-search" placeholder="Search by Article, Case, Doctrine, or Application..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterMatrix()">
-                            </div>
-                            <button onclick="window.appHandlers.printAllDoctrines()" class="text-slate-500 hover:text-blue-600 px-3 py-2 rounded border border-slate-200 bg-white shadow-sm transition text-sm font-bold flex items-center flex-shrink-0"><i class="fas fa-print mr-2"></i> Print Matrix</button>
-                        </div>
-                        <div class="flex-1 overflow-auto">
-                            <table class="w-full text-left border-collapse" id="matrix-table">
-                                <thead class="bg-slate-50 sticky top-0 shadow-sm z-10">
-                                    <tr>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-[15%]">Article / Topic</th>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-[20%]">Case Title & Citation</th>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-[30%]">Core Doctrine/Principle</th>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-[25%]">Application/Context</th>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center w-[10%]">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="matrix-list" class="text-sm divide-y divide-slate-100">
-                                    <tr><td colspan="5" class="p-8 text-center text-slate-400"><div class="loader mx-auto"></div></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>`; 
+            constructor() { this.unsubscribe = null; this.doctrines = []; this.subjects = []; }
+            normalize(d = {}) {
+                const val = x => String(x ?? '').trim();
+                return {
+                    ...d,
+                    article: val(d.article || d.topic || 'General'),
+                    topic: val(d.topic || d.article || 'General'),
+                    caseTitle: val(d.caseTitle), citation: val(d.citation),
+                    definition: val(d.definition || d.doctrine),
+                    doctrine: val(d.doctrine || d.definition),
+                    generalRule: val(d.generalRule || d.general_rule),
+                    requisites: val(d.requisites || d.elementsRequisites || d.elements_requisites),
+                    exceptions: val(d.exceptions),
+                    cases: Array.isArray(d.cases) ? d.cases : [],
+                    application: val(d.application),
+                    tagalogExplanation: val(d.tagalogExplanation || d.tagalog_explanation),
+                    examTip: val(d.examTip || d.exam_tip),
+                    subjectName: val(d.subjectName || d.subject)
+                };
             }
-            init() { 
-                this.unsubscribe = AppDB.subscribe('doctrines', (snapshot) => { 
-                    const list = document.getElementById('matrix-list'); if (!list) return; this.doctrines = []; 
-                    if (snapshot.empty) { list.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400"><i class="fas fa-table text-4xl mb-3 opacity-30"></i><br>No doctrines mapped yet.</td></tr>`; return; } 
-                    snapshot.forEach(doc => this.doctrines.push({ id: doc.id, ...doc.data() })); 
-                    this.doctrines.sort((a, b) => (a.article || '').localeCompare(b.article || '')); 
-                    window.appHandlers.renderMatrixRows(this.doctrines); 
-                }); 
+            render() {
+                return `<div class="max-w-7xl mx-auto pb-24">
+                    <div class="bg-gradient-to-r from-blue-900 to-slate-900 rounded-2xl p-7 text-white shadow-lg mb-6">
+                        <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4"><div><p class="text-[10px] uppercase tracking-[.24em] text-blue-200 font-black">Structured Jurisprudence Knowledge</p><h3 class="text-3xl font-black serif-text mt-2">Doctrine Library</h3><p class="text-sm text-blue-50/80 mt-2 max-w-3xl">Turn doctrine entries into exam-ready knowledge: definition → rule → requisites → exceptions → cases → application → Tagalog explanation → exam tip.</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.openKnowledgeGraph()" class="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 rounded-xl text-sm font-bold"><i class="fas fa-share-nodes mr-2"></i>Knowledge Graph</button><button onclick="window.appHandlers.addDoctrine()" class="bg-blue-500 hover:bg-blue-400 px-4 py-2.5 rounded-xl text-sm font-black"><i class="fas fa-plus mr-2"></i>Add Doctrine</button></div></div>
+                    </div>
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="p-4 md:p-5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row gap-3"><div class="relative flex-1"><i class="fas fa-search absolute left-3 top-3 text-slate-400"></i><input id="matrix-search" onkeyup="window.appHandlers.filterMatrix()" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm" placeholder="Search doctrine, rule, requisites, cases, application, exam tip..."></div><select id="doctrine-subject-filter" onchange="window.appHandlers.filterMatrix()" class="p-2.5 rounded-xl border border-slate-200 bg-white text-sm"><option value="all">All Subjects</option></select><button onclick="window.appHandlers.printAllDoctrines()" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold"><i class="fas fa-print mr-2"></i>Print</button></div>
+                        <div id="matrix-list" class="p-4 md:p-5 grid grid-cols-1 xl:grid-cols-2 gap-4"><div class="xl:col-span-2 p-10 text-center text-slate-400"><div class="loader mx-auto"></div></div></div>
+                    </div>
+                </div>`;
+            }
+            init() {
+                this.unsubscribe = AppDB.subscribe('doctrines', snapshot => {
+                    this.doctrines = [];
+                    snapshot.forEach(record => this.doctrines.push(this.normalize({ id: record.id, ...record.data() })));
+                    this.doctrines.sort((a,b) => String(a.article||'').localeCompare(String(b.article||'')));
+                    window.appHandlers.refreshDoctrineSubjectFilter();
+                    window.appHandlers.filterMatrix();
+                });
             }
         }
 
@@ -3302,51 +3517,128 @@ const cleanAiJsonResponse = (text) => {
                 }
 
         class LexVocabView {
-            constructor() { this.unsubscribe = null; this.vocabData = []; }
-            render() { 
-                return `
-                <div class="max-w-6xl mx-auto pb-24 h-full flex flex-col">
-                    <div class="flex justify-between items-center mb-6 flex-shrink-0">
-                        <div>
-                            <h3 class="text-xl font-bold text-slate-700">Lex-Vocab</h3>
-                            <p class="text-xs text-slate-500 mt-1">Master Latin legal maxims and terminology.</p>
-                        </div>
-                        <button onclick="window.appHandlers.addVocab()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>Add Word</button>
-                    </div>
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
-                        <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center gap-4">
-                            <div class="relative flex-1">
-                                <i class="fas fa-search absolute left-3 top-2.5 text-slate-400"></i>
-                                <input type="text" id="vocab-search" placeholder="Search Latin words, meanings, or applications..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" onkeyup="window.appHandlers.filterVocab()">
-                            </div>
-                            <button onclick="window.appHandlers.printAllVocab()" class="text-slate-500 hover:text-blue-600 px-3 py-2 rounded border border-slate-200 bg-white shadow-sm transition text-sm font-bold flex items-center flex-shrink-0"><i class="fas fa-print mr-2"></i> Print List</button>
-                        </div>
-                        <div class="flex-1 overflow-auto">
-                            <table class="w-full text-left border-collapse" id="vocab-table">
-                                <thead class="bg-slate-50 sticky top-0 shadow-sm z-10">
-                                    <tr>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-1/4">Latin Word / Maxim</th>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-1/3">Meaning</th>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 w-1/3">Application / Context</th>
-                                        <th class="p-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="vocab-list" class="text-sm divide-y divide-slate-100">
-                                    <tr><td colspan="4" class="p-8 text-center text-slate-400"><div class="loader mx-auto"></div></td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>`; 
+            constructor() {
+                this.unsubscribe = null;
+                this.vocabData = [];
+                this.activeCategory = 'all';
             }
-            init() { 
-                this.unsubscribe = AppDB.subscribe('lex_vocab', (snapshot) => { 
-                    const list = document.getElementById('vocab-list'); if (!list) return; this.vocabData = []; 
-                    if (snapshot.empty) { list.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-400"><i class="fas fa-language text-4xl mb-3 opacity-30"></i><br>No vocabulary entries yet.</td></tr>`; return; } 
-                    snapshot.forEach(doc => this.vocabData.push({ id: doc.id, ...doc.data() })); 
-                    this.vocabData.sort((a, b) => (a.word || '').localeCompare(b.word || '', undefined, { numeric: true, sensitivity: 'base' })); 
-                    window.appHandlers.renderVocabRows(this.vocabData); 
-                }); 
+
+            normalizeEntry(entry = {}) {
+                const text = value => String(value ?? '').trim();
+                return {
+                    ...entry,
+                    word: text(entry.word || entry.term),
+                    term: text(entry.term || entry.word),
+                    meaning: text(entry.meaning || entry.definition),
+                    definition: text(entry.definition || entry.meaning),
+                    application: text(entry.application || entry.context),
+                    category: text(entry.category || 'Legal Term'),
+                    simpleExplanation: text(entry.simpleExplanation || entry.simple_explanation),
+                    tagalogExplanation: text(entry.tagalogExplanation || entry.tagalog_explanation),
+                    legalBasis: text(entry.legalBasis || entry.legal_basis),
+                    usageExample: text(entry.usageExample || entry.usage_example),
+                    etymology: text(entry.etymology),
+                    relatedTerms: Array.isArray(entry.relatedTerms)
+                        ? entry.relatedTerms
+                        : text(entry.related_terms)
+                            .split(/[,;\n]+/)
+                            .map(value => value.trim())
+                            .filter(Boolean),
+                    sourceCitation: text(entry.sourceCitation || entry.source_citation),
+                    subjectTag: text(entry.subjectTag || entry.subject_tag),
+                    sourceStatus: text(entry.sourceStatus || entry.source_status || 'personal')
+                };
+            }
+
+            render() {
+                return `
+                <div class="max-w-7xl mx-auto pb-24">
+                    <div class="bg-gradient-to-r from-indigo-800 via-slate-900 to-blue-900 rounded-2xl p-7 text-white shadow-lg mb-6">
+                        <div class="flex flex-col xl:flex-row xl:items-end justify-between gap-5">
+                            <div>
+                                <p class="text-[10px] uppercase tracking-[.25em] text-indigo-200 font-black">Study Lab • Personal Knowledge Base</p>
+                                <h3 class="text-3xl font-black serif-text mt-2">Legal Dictionary</h3>
+                                <p class="text-sm text-indigo-50/80 mt-2 max-w-3xl">
+                                    Build your own Philippine-law dictionary of legal terms, Latin maxims, doctrines, procedural concepts, and statutory terms.
+                                    Keep definitions tied to legal basis and sources whenever available.
+                                </p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="window.appHandlers.aiDefineVocab()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 px-4 py-2.5 rounded-xl text-sm font-black shadow-sm">
+                                    <i class="fas fa-wand-magic-sparkles mr-2"></i>Draft with Lex
+                                </button>
+                                <button onclick="window.appHandlers.addVocab()" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2.5 rounded-xl text-sm font-bold">
+                                    <i class="fas fa-plus mr-2"></i>Add Manually
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="p-4 md:p-5 border-b border-slate-100 bg-slate-50">
+                            <div class="flex flex-col lg:flex-row gap-3 lg:items-center">
+                                <div class="relative flex-1">
+                                    <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
+                                    <input
+                                        type="text"
+                                        id="vocab-search"
+                                        placeholder="Search term, definition, legal basis, source, related term..."
+                                        class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                        onkeyup="window.appHandlers.filterVocab()">
+                                </div>
+
+                                <select id="vocab-category-filter" onchange="window.appHandlers.filterVocab()" class="p-2.5 border border-slate-200 rounded-xl text-sm bg-white min-w-[180px]">
+                                    <option value="all">All Categories</option>
+                                    <option value="Latin Maxim">Latin Maxim</option>
+                                    <option value="Legal Term">Legal Term</option>
+                                    <option value="Doctrine">Doctrine</option>
+                                    <option value="Procedure">Procedure</option>
+                                    <option value="Statutory Term">Statutory Term</option>
+                                    <option value="Other">Other</option>
+                                </select>
+
+                                <button onclick="window.appHandlers.printAllVocab()" class="text-slate-600 hover:text-indigo-700 px-3 py-2.5 rounded-xl border border-slate-200 bg-white shadow-sm transition text-sm font-bold">
+                                    <i class="fas fa-print mr-2"></i>Print
+                                </button>
+                            </div>
+
+                            <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                                <span class="font-bold text-slate-400 uppercase tracking-wider">Source Status:</span>
+                                <span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100"><i class="fas fa-circle-check mr-1"></i>Source-grounded / verified</span>
+                                <span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><i class="fas fa-triangle-exclamation mr-1"></i>AI draft — verify</span>
+                                <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200"><i class="fas fa-pen mr-1"></i>Personal entry</span>
+                            </div>
+                        </div>
+
+                        <div id="vocab-list" class="p-4 md:p-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div class="lg:col-span-2 p-10 text-center text-slate-400"><div class="loader mx-auto"></div></div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            init() {
+                this.unsubscribe = AppDB.subscribe('lex_vocab', snapshot => {
+                    const list = document.getElementById('vocab-list');
+                    if (!list) return;
+
+                    this.vocabData = [];
+                    snapshot.forEach(record => {
+                        this.vocabData.push(
+                            this.normalizeEntry({ id: record.id, ...record.data() })
+                        );
+                    });
+
+                    this.vocabData.sort((a, b) =>
+                        (a.term || '').localeCompare(
+                            b.term || '',
+                            undefined,
+                            { numeric: true, sensitivity: 'base' }
+                        )
+                    );
+
+                    window.appHandlers.filterVocab();
+                });
             }
         }
 
@@ -3766,12 +4058,35 @@ const cleanAiJsonResponse = (text) => {
 
         class StudyLabView {
             constructor(){this.unsubscribeReviews=null;}
-            render(){ const cards=[['codal_trainer','fa-eye-slash','Codal Trainer','Flashcards, recitation, exams, and provision comparisons.'],['review','fa-graduation-cap','Mock Review','Generate flashcards or Bar-style problems from notes and complete PDFs.'],['saved_reviews','fa-clock-rotate-left','Review Queue','Open saved reviews and answer due spaced-repetition cards.'],['mnemonic','fa-lightbulb','Mnemonic Mode','Create recall devices for elements and requisites.'],['issue_tree','fa-diagram-project','Visual Maps','Turn rules, elements, and exceptions into issue trees.'],['lex_vocab','fa-language','Lex-Vocab','Review Latin maxims and legal terminology.']]; return `<div class="max-w-6xl mx-auto pb-24"><div class="bg-gradient-to-r from-emerald-800 to-slate-900 rounded-2xl p-7 text-white shadow-lg mb-6"><p class="text-xs uppercase tracking-[.2em] text-emerald-200 font-black">Active Recall & Examination Prep</p><div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-2"><div><h3 class="text-3xl font-black serif-text">Study Lab</h3><p class="text-sm text-emerald-50/80 mt-2">Recall, mock exams, spaced repetition, mnemonics, visual maps, and vocabulary in one hub.</p></div><span id="study-lab-due" class="bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-xs font-bold">Due cards: —</span></div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${cards.map(([v,i,t,c])=>`<button onclick="window.appHandlers.navigate('${v}')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md hover:border-emerald-300 transition"><div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl"><i class="fas ${i}"></i></div><h4 class="font-black text-slate-800 mt-4">${t}</h4><p class="text-sm text-slate-500 mt-2">${c}</p><p class="text-xs font-bold text-emerald-600 mt-4">Open <i class="fas fa-arrow-right ml-1"></i></p></button>`).join('')}</div></div>`; }
+            render(){ const cards=[['adaptive_study','fa-chart-line','Adaptive Study','Mastery scores, weakness detection, and today’s recommended study queue.'],['knowledge_vault','fa-vault','Knowledge Vault','Persistent subject/topic knowledge saved from research, cases, notes, doctrines, and codal work.'],['codal_trainer','fa-eye-slash','Codal Trainer','Flashcards, recitation, exams, and provision comparisons.'],['review','fa-graduation-cap','Mock Review','Generate flashcards or Bar-style problems from notes and complete PDFs.'],['saved_reviews','fa-clock-rotate-left','Review Queue','Open saved reviews and answer due spaced-repetition cards.'],['mnemonic','fa-lightbulb','Mnemonic Mode','Create recall devices for elements and requisites.'],['issue_tree','fa-diagram-project','Visual Maps','Turn rules, elements, and exceptions into issue trees.'],['lex_vocab','fa-book-open','Legal Dictionary','Definitions, legal basis, related terms, Tagalog explanations, and flashcards.']]; return `<div class="max-w-6xl mx-auto pb-24"><div class="bg-gradient-to-r from-emerald-800 to-slate-900 rounded-2xl p-7 text-white shadow-lg mb-6"><p class="text-xs uppercase tracking-[.2em] text-emerald-200 font-black">Active Recall & Examination Prep</p><div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-2"><div><h3 class="text-3xl font-black serif-text">Study Lab</h3><p class="text-sm text-emerald-50/80 mt-2">Recall, mock exams, spaced repetition, mnemonics, visual maps, and vocabulary in one hub.</p></div><span id="study-lab-due" class="bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-xs font-bold">Due cards: —</span></div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${cards.map(([v,i,t,c])=>`<button onclick="window.appHandlers.navigate('${v}')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md hover:border-emerald-300 transition"><div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl"><i class="fas ${i}"></i></div><h4 class="font-black text-slate-800 mt-4">${t}</h4><p class="text-sm text-slate-500 mt-2">${c}</p><p class="text-xs font-bold text-emerald-600 mt-4">Open <i class="fas fa-arrow-right ml-1"></i></p></button>`).join('')}</div></div>`; }
             init(){ this.unsubscribeReviews=AppDB.subscribe('reviews',s=>{let due=0,now=Date.now();s.forEach(r=>{const d=r.data();if(d.type!=='recit'||!Array.isArray(d.content))return;d.content.forEach(c=>{const n=Number(c?.nextReview??0);if(!n||n<=now)due++;});});const e=document.getElementById('study-lab-due');if(e)e.textContent=`Due cards: ${due}`;}); }
         }
 
+        class KnowledgeVaultView {
+            constructor() { this.unsubscribe = null; this.entries = []; this.subjects = []; }
+            render() { return `<div class="max-w-7xl mx-auto pb-24"><div class="bg-gradient-to-r from-violet-900 to-slate-900 rounded-2xl p-7 text-white shadow-lg mb-6"><div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4"><div><p class="text-[10px] uppercase tracking-[.24em] text-violet-200 font-black">Persistent Personal Knowledge</p><h3 class="text-3xl font-black serif-text mt-2">Knowledge Vault</h3><p class="text-sm text-violet-50/80 mt-2 max-w-3xl">Save durable understanding from research, cases, doctrines, notes, codal work, materials, and Ask Lex—organized by subject and topic instead of scattered copies.</p></div><button onclick="window.appHandlers.createVaultEntry()" class="bg-violet-500 hover:bg-violet-400 px-4 py-2.5 rounded-xl text-sm font-black"><i class="fas fa-plus mr-2"></i>New Vault Entry</button></div></div><div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden"><div class="p-4 border-b bg-slate-50 grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3"><input id="vault-search" onkeyup="window.appHandlers.filterVault()" class="p-2.5 border border-slate-200 rounded-xl bg-white text-sm" placeholder="Search topic, source, subject, tags, content..."><select id="vault-subject-filter" onchange="window.appHandlers.filterVault()" class="p-2.5 border border-slate-200 rounded-xl bg-white text-sm"><option value="all">All Subjects</option></select></div><div id="vault-list" class="p-4 md:p-5 grid grid-cols-1 lg:grid-cols-2 gap-4"><div class="lg:col-span-2 p-10 text-center text-slate-400"><div class="loader mx-auto"></div></div></div></div></div>`; }
+            init() { this.unsubscribe = AppDB.subscribe('knowledge_vault', snapshot => { this.entries=[]; snapshot.forEach(r=>this.entries.push({id:r.id,...r.data()})); this.entries.sort((a,b)=>Utils.timestampMillis(b.updated||b.created)-Utils.timestampMillis(a.updated||a.created)); window.appHandlers.refreshVaultSubjectFilter(); window.appHandlers.filterVault(); }); }
+        }
+
+        class AdaptiveStudyView {
+            constructor() { this.unsubscribeAttempts=null; this.unsubscribeReviews=null; this.unsubscribeAdvocacy=null; this.data={attempts:[],reviews:[],advocacy:[]}; }
+            render() { return `<div class="max-w-7xl mx-auto pb-24"><div class="bg-gradient-to-r from-emerald-800 to-slate-900 rounded-2xl p-7 text-white shadow-lg mb-6"><p class="text-[10px] uppercase tracking-[.24em] text-emerald-200 font-black">Adaptive Study Engine</p><h3 class="text-3xl font-black serif-text mt-2">Today's Study Queue</h3><p class="text-sm text-emerald-50/80 mt-2 max-w-3xl">Lex combines spaced repetition, mock/codal exam scores, Advocacy Lab results, and Case Recitation performance to prioritize what needs attention next.</p></div><div id="adaptive-summary" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"><div class="bg-white p-5 rounded-xl border border-slate-200 text-slate-400">Loading mastery…</div></div><div class="grid grid-cols-1 xl:grid-cols-2 gap-5"><div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5"><h4 class="font-black text-slate-800"><i class="fas fa-list-check text-emerald-600 mr-2"></i>Recommended Next Actions</h4><div id="adaptive-queue" class="mt-4 space-y-3"></div></div><div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5"><h4 class="font-black text-slate-800"><i class="fas fa-chart-line text-blue-600 mr-2"></i>Topic Mastery</h4><div id="adaptive-mastery" class="mt-4 space-y-3"></div></div></div></div>`; }
+            init() {
+                const render=()=>window.appHandlers.renderAdaptiveStudy();
+                this.unsubscribeAttempts=AppDB.subscribe('study_attempts',s=>{this.data.attempts=[];s.forEach(r=>this.data.attempts.push({id:r.id,...r.data()}));render();});
+                this.unsubscribeReviews=AppDB.subscribe('reviews',s=>{this.data.reviews=[];s.forEach(r=>this.data.reviews.push({id:r.id,...r.data()}));render();});
+                this.unsubscribeAdvocacy=AppDB.subscribe('advocacy_sessions',s=>{this.data.advocacy=[];s.forEach(r=>this.data.advocacy.push({id:r.id,...r.data()}));render();});
+            }
+        }
+
+        class KnowledgeGraphView {
+            constructor() { this.subjects=[]; }
+            render() { return `<div class="max-w-7xl mx-auto pb-24"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><h3 class="text-2xl font-black text-slate-800"><i class="fas fa-share-nodes text-violet-600 mr-2"></i>Visual Knowledge Graph</h3><p class="text-sm text-slate-500 mt-1">See how Subjects ↔ Topics ↔ Materials ↔ Codals/Notes ↔ Doctrines ↔ Cases ↔ Vault entries connect.</p></div><div class="flex gap-2"><select id="graph-subject" onchange="window.appHandlers.renderKnowledgeGraph()" class="p-2.5 border border-slate-200 rounded-xl bg-white text-sm"><option value="">Select subject…</option></select><button onclick="window.appHandlers.renderKnowledgeGraph()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold"><i class="fas fa-rotate mr-1"></i>Refresh</button></div></div><div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 min-h-[650px]"><div id="knowledge-graph-summary" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5"></div><div id="knowledge-graph-canvas" class="overflow-auto min-h-[500px] flex items-start justify-center p-3 bg-slate-50 rounded-xl border border-slate-100"><div class="text-center text-slate-400 py-20">Choose a subject to build its graph.</div></div></div></div>`; }
+            async init() { this.subjects=await AppDB.all('subjects'); const s=document.getElementById('graph-subject'); if(s){s.innerHTML='<option value="">Select subject…</option>'+this.subjects.filter(x=>!x.archived).map(x=>`<option value="${x.id}">${Security.escapeHTML(x.name||'Subject')}</option>`).join(''); if(views.subject_notebook?.subjectId) s.value=views.subject_notebook.subjectId; if(s.value) window.appHandlers.renderKnowledgeGraph();} }
+        }
+
         class ResourcesView {
-            render(){const hasKey=Boolean(localStorage.getItem('gemini_api_key'));return `<div class="max-w-5xl mx-auto pb-24"><div class="mb-6"><h3 class="text-2xl font-black text-slate-800">Resources & Settings</h3><p class="text-sm text-slate-500 mt-1">External legal resources and shared configuration for Lex.</p></div><div class="grid grid-cols-1 md:grid-cols-2 gap-5"><button onclick="window.open('https://' + 'www.ecodalplus.com/ecodals', '_blank')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:border-blue-300 hover:shadow-md transition"><div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-scale-balanced text-xl"></i></div><h4 class="font-black text-slate-800 mt-4">eCodal+ / Codals</h4><p class="text-sm text-slate-500 mt-2">Open the external codal reference in a new tab.</p></button><button onclick="window.appHandlers.openAISettings()" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:border-emerald-300 hover:shadow-md transition"><div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fas fa-key text-xl"></i></div><h4 class="font-black text-slate-800 mt-4">AI Configuration</h4><p class="text-sm text-slate-500 mt-2">One Gemini API key is shared by all AI tools.</p><p class="text-xs mt-3 font-bold ${hasKey?'text-emerald-600':'text-amber-600'}">${hasKey?'API key configured':'API key not configured'}</p></button><div class="md:col-span-2 bg-amber-50 border border-amber-200 rounded-2xl p-6"><h4 class="font-black text-amber-900"><i class="fas fa-shield-halved mr-2"></i>Storage Security Updated</h4><p class="text-sm text-amber-900/80 mt-2">Lex V4 no longer stores a Cloudinary API secret in client-side HTML. Uploads use the unsigned preset; privileged signing or permanent deletion belongs on a trusted backend/serverless function.</p></div></div></div>`;}
+            render(){const hasKey=Boolean(localStorage.getItem('gemini_api_key'));return `<div class="max-w-5xl mx-auto pb-24"><div class="mb-6"><h3 class="text-2xl font-black text-slate-800">Resources & Settings</h3><p class="text-sm text-slate-500 mt-1">External legal resources and shared configuration for Lex.</p></div><div class="grid grid-cols-1 md:grid-cols-2 gap-5"><button onclick="window.open('https://' + 'www.ecodalplus.com/ecodals', '_blank')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:border-blue-300 hover:shadow-md transition"><div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-scale-balanced text-xl"></i></div><h4 class="font-black text-slate-800 mt-4">eCodal+ / Codals</h4><p class="text-sm text-slate-500 mt-2">Open the external codal reference in a new tab.</p></button><button onclick="window.appHandlers.openAISettings()" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:border-emerald-300 hover:shadow-md transition"><div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fas fa-key text-xl"></i></div><h4 class="font-black text-slate-800 mt-4">AI Configuration</h4><p class="text-sm text-slate-500 mt-2">One Gemini API key is shared by Ask Lex, research, dictionary, study, case, doctrine, and material tools.</p><p class="text-xs mt-3 font-bold ${hasKey?'text-emerald-600':'text-amber-600'}">${hasKey?'API key configured':'API key not configured'}</p></button><div class="md:col-span-2 bg-amber-50 border border-amber-200 rounded-2xl p-6"><h4 class="font-black text-amber-900"><i class="fas fa-shield-halved mr-2"></i>Storage Security Updated</h4><p class="text-sm text-amber-900/80 mt-2">Lex V4 no longer stores a Cloudinary API secret in client-side HTML. Uploads use the unsigned preset; privileged signing or permanent deletion belongs on a trusted backend/serverless function.</p></div></div></div>`;}
             init(){}
         }
 
@@ -3781,7 +4096,7 @@ const cleanAiJsonResponse = (text) => {
             init(){this.unsubscribe=AppDB.subscribe('digests',s=>{this.digests=[];s.forEach(r=>this.digests.push(DigestUtils.normalize({id:r.id,...r.data()})));this.digests.sort((a,b)=>(a.title||'').localeCompare(b.title||'',undefined,{sensitivity:'base'}));const e=document.getElementById('recit-case-select');if(e)e.innerHTML=this.digests.length?'<option value="">Select a case…</option>'+this.digests.map(d=>`<option value="${d.id}">${Security.escapeHTML(d.title||'Untitled Case')}</option>`).join(''):'<option value="">No saved cases yet</option>';});}
             start(id){const d=this.digests.find(x=>x.id===id);if(!d)throw new Error('Select a saved case first.');this.active=d;this.index=0;this.questions=[['Facts','Counsel, give me the material facts of the case in chronological order.',d.facts],['Issue','What was the controlling legal issue resolved by the Court?',d.issue],['Ruling','How did the Supreme Court rule on that issue?',d.ruling],['Ratio Decidendi','Why did the Court rule that way? Explain the ratio decidendi.',d.ratioDecidendi],['Doctrine','What controlling doctrine should you remember from this case?',d.doctrine],['Application','How did the Court apply the governing rule to the material facts?',d.supremeCourtApplication]].filter(x=>DigestUtils.text(x[2])).map(x=>({label:x[0],question:x[1],expected:x[2]}));this.renderQuestion();}
             renderQuestion(){const q=this.questions[this.index],w=document.getElementById('case-recit-workspace');if(!q||!w||!this.active)return;w.innerHTML=`<div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden"><div class="bg-gradient-to-r from-indigo-700 to-slate-900 text-white p-6"><p class="text-[10px] uppercase tracking-[.2em] text-indigo-200 font-black">${Security.escapeHTML(this.active.title||'Case')}</p><div class="flex items-center justify-between gap-3 mt-2"><h4 class="text-xl font-black">${q.label}</h4><span class="text-xs bg-white/10 px-3 py-1.5 rounded-full">${this.index+1} / ${this.questions.length}</span></div><p class="mt-4 text-indigo-50 leading-relaxed">${q.question}</p></div><div class="p-6"><textarea id="case-recit-answer" rows="7" class="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Answer as if you were speaking to your professor…"></textarea><div class="flex flex-wrap gap-2 mt-4"><button onclick="window.appHandlers.evaluateCaseRecitation()" id="case-recit-evaluate" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-check-double mr-1"></i>Evaluate</button><button onclick="window.appHandlers.showCaseRecitationModel()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-eye mr-1"></i>Model Answer</button><button onclick="window.appHandlers.nextCaseRecitation()" class="ml-auto bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold">Next <i class="fas fa-arrow-right ml-1"></i></button></div><div id="case-recit-feedback" class="mt-5 hidden"></div></div></div>`;}
-            async evaluate(){const q=this.questions[this.index],answer=document.getElementById('case-recit-answer')?.value.trim()||'';if(!q||!answer)throw new Error('Give your answer first.');const f=document.getElementById('case-recit-feedback'),b=document.getElementById('case-recit-evaluate');f.classList.remove('hidden');b.disabled=true;b.innerHTML='<i class="fas fa-spinner fa-spin mr-1"></i>Evaluating…';try{const apiKey=localStorage.getItem('gemini_api_key')||'';if(!apiKey){const tok=v=>new Set(String(v||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>4)),e=tok(q.expected),a=tok(answer),hits=[...e].filter(w=>a.has(w)).length,c=e.size?Math.min(100,Math.round(hits/e.size*100)):0;f.innerHTML=`<div class="p-5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-950"><p class="font-black">Local coverage check: ${c}%</p><p class="mt-2">Configure Gemini in Resources → AI Configuration for detailed professor-style feedback.</p></div>`;return;}const prompt=`You are a strict but constructive Philippine law professor conducting recitation. Evaluate the student's answer ONLY against the SAVED CASE DIGEST below. Do not add outside facts or law.\n\nCASE: ${this.active.title}\nAREA: ${q.label}\nQUESTION: ${q.question}\n\nGROUND-TRUTH ANSWER:\n${q.expected}\n\nSTUDENT ANSWER:\n${answer}\n\nGive concise clean-HTML feedback on directness, accuracy, important omissions, and a better 2–4 sentence oral answer. Do not invent beyond the saved digest.`;const data=await GeminiService.generate(apiKey,{contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.15}});f.innerHTML=`<div class="p-5 rounded-xl bg-indigo-50 border border-indigo-200 text-sm text-slate-800 leading-relaxed">${Security.sanitizeAI(GeminiService.text(data))}</div>`;}finally{b.disabled=false;b.innerHTML='<i class="fas fa-check-double mr-1"></i>Evaluate';}}
+            async evaluate(){const q=this.questions[this.index],answer=document.getElementById('case-recit-answer')?.value.trim()||'';if(!q||!answer)throw new Error('Give your answer first.');const words=v=>new Set(String(v||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>4)),expectedWords=words(q.expected),answerWords=words(answer),hits=[...expectedWords].filter(w=>answerWords.has(w)).length,localScore=expectedWords.size?Math.min(100,Math.round(hits/expectedWords.size*100)):0;StudyEngine.recordAttempt({sourceType:'case_recitation',subjectName:this.active.subject||this.active.subjectName||'General',topic:this.active.topic||q.label,score:localScore,detail:`${this.active.title} — ${q.label}`});const f=document.getElementById('case-recit-feedback'),b=document.getElementById('case-recit-evaluate');f.classList.remove('hidden');b.disabled=true;b.innerHTML='<i class="fas fa-spinner fa-spin mr-1"></i>Evaluating…';try{const apiKey=localStorage.getItem('gemini_api_key')||'';if(!apiKey){const tok=v=>new Set(String(v||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>4)),e=tok(q.expected),a=tok(answer),hits=[...e].filter(w=>a.has(w)).length,c=e.size?Math.min(100,Math.round(hits/e.size*100)):0;f.innerHTML=`<div class="p-5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-950"><p class="font-black">Local coverage check: ${c}%</p><p class="mt-2">Configure Gemini in Resources → AI Configuration for detailed professor-style feedback.</p></div>`;return;}const prompt=`You are a strict but constructive Philippine law professor conducting recitation. Evaluate the student's answer ONLY against the SAVED CASE DIGEST below. Do not add outside facts or law.\n\nCASE: ${this.active.title}\nAREA: ${q.label}\nQUESTION: ${q.question}\n\nGROUND-TRUTH ANSWER:\n${q.expected}\n\nSTUDENT ANSWER:\n${answer}\n\nGive concise clean-HTML feedback on directness, accuracy, important omissions, and a better 2–4 sentence oral answer. Do not invent beyond the saved digest.`;const data=await GeminiService.generate(apiKey,{contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.15}});f.innerHTML=`<div class="p-5 rounded-xl bg-indigo-50 border border-indigo-200 text-sm text-slate-800 leading-relaxed">${Security.sanitizeAI(GeminiService.text(data))}</div>`;}finally{b.disabled=false;b.innerHTML='<i class="fas fa-check-double mr-1"></i>Evaluate';}}
             showModel(){const q=this.questions[this.index],f=document.getElementById('case-recit-feedback');if(!q||!f)return;f.classList.remove('hidden');f.innerHTML=`<div class="p-5 rounded-xl bg-emerald-50 border border-emerald-200"><p class="text-xs font-black uppercase tracking-widest text-emerald-700 mb-2">Grounded Model Answer</p><p class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${Security.escapeHTML(q.expected)}</p></div>`;}
             next(){if(!this.questions.length)return;this.index=(this.index+1)%this.questions.length;this.renderQuestion();}
         }
@@ -3795,7 +4110,7 @@ const cleanAiJsonResponse = (text) => {
         // ------------------------------------
         
        const views = {
-            dashboard: new DashboardView(), subjects: new SubjectsView(), case_center: new CaseCenterView(), case_recitation: new CaseRecitationCoachView(), study_lab: new StudyLabView(), ai_search: new AiSearchView(), advocacy_lab: new AdvocacyLabView(), resources: new ResourcesView(),
+            dashboard: new DashboardView(), subjects: new SubjectsView(), case_center: new CaseCenterView(), case_recitation: new CaseRecitationCoachView(), study_lab: new StudyLabView(), adaptive_study: new AdaptiveStudyView(), knowledge_vault: new KnowledgeVaultView(), knowledge_graph: new KnowledgeGraphView(), ai_search: new AiSearchView(), advocacy_lab: new AdvocacyLabView(), resources: new ResourcesView(),
             semesters: new SemestersView(), subject_notebook: new SubjectNotebookView(), matrix: new DoctrineMatrixView(), lex_vocab: new LexVocabView(), codal_trainer: new CodalTrainerView(), mnemonic: new MnemonicView(), issue_tree: new IssueTreeView(), digests: new DigestsView(), case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView(),
             codals: { render: () => `<div class="text-center mt-20 text-slate-500">Open Codals from Resources.</div>`, init: () => {} }
         };
@@ -3811,8 +4126,8 @@ const cleanAiJsonResponse = (text) => {
             { id: 'advocacy_lab', label: 'Advocacy Lab', icon: 'fa-comments' },
             { id: 'resources', label: 'Resources', icon: 'fa-toolbox' }
         ];
-        const parentView = { semesters:'subjects', subject_notebook:'subjects', case_digester:'case_center', digests:'case_center', matrix:'case_center', case_recitation:'case_center', codal_trainer:'study_lab', review:'study_lab', saved_reviews:'study_lab', mnemonic:'study_lab', issue_tree:'study_lab', lex_vocab:'study_lab', codals:'resources' };
-        const viewLabels = { dashboard:'Dashboard', subjects:'Subjects', semesters:'Semesters', subject_notebook:'Subject Notebook', case_center:'Case Center', case_digester:'Case Digester', digests:'Case Library', matrix:'Doctrine Matrix', case_recitation:'Case Recitation Coach', ai_search:'Legal Research', study_lab:'Study Lab', codal_trainer:'Codal Trainer', review:'Mock Review', saved_reviews:'Review Queue', mnemonic:'Mnemonic Mode', issue_tree:'Visual Maps', lex_vocab:'Lex-Vocab', advocacy_lab:'Advocacy Lab', resources:'Resources' };
+        const parentView = { semesters:'subjects', subject_notebook:'subjects', case_digester:'case_center', digests:'case_center', matrix:'case_center', case_recitation:'case_center', adaptive_study:'study_lab', knowledge_vault:'study_lab', knowledge_graph:'case_center', codal_trainer:'study_lab', review:'study_lab', saved_reviews:'study_lab', mnemonic:'study_lab', issue_tree:'study_lab', lex_vocab:'study_lab', codals:'resources' };
+        const viewLabels = { dashboard:'Dashboard', subjects:'Subjects', semesters:'Semesters', subject_notebook:'Subject Notebook', case_center:'Case Center', case_digester:'Case Digester', digests:'Case Library', matrix:'Doctrine Library', case_recitation:'Case Recitation Coach', ai_search:'Legal Research', study_lab:'Study Lab', adaptive_study:'Adaptive Study', knowledge_vault:'Knowledge Vault', knowledge_graph:'Knowledge Graph', codal_trainer:'Codal Trainer', review:'Mock Review', saved_reviews:'Review Queue', mnemonic:'Mnemonic Mode', issue_tree:'Visual Maps', lex_vocab:'Legal Dictionary', advocacy_lab:'Advocacy Lab', resources:'Resources' };
        function renderSidebar() { sidebarNav.innerHTML = navItems.map(item => { const active=currentView===item.id||parentView[currentView]===item.id; return `<a href="#" data-nav-id="${item.id}" onclick="event.preventDefault(); window.appHandlers.navigate('${item.id}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 ${active?'bg-blue-600 text-white shadow-md':'text-slate-300 hover:bg-slate-800 hover:text-white'}"><i class="fas ${item.icon} w-5 text-center"></i>${item.label}</a>`; }).join(''); }
         function updateMobileNav() { ['dashboard','subjects','advocacy_lab'].forEach(id=>{ const button=document.getElementById(`mobile-nav-${id}`); const active=currentView===id||parentView[currentView]===id; if(button)button.classList.toggle('mobile-active',active); }); }
 
@@ -3909,6 +4224,51 @@ const cleanAiJsonResponse = (text) => {
            MAIN APP HANDLERS OBJECT
            ========================================== */
         window.appHandlers = {
+            // ========================================================
+            // V5 — CONTEXTUAL TUTOR
+            // ========================================================
+            openLexTutor: async () => { document.getElementById('ask-lex-drawer')?.classList.add('open'); document.getElementById('ask-lex-backdrop')?.classList.add('open'); await LexContextEngine.refreshSelectors(); window.appHandlers.refreshLexTutorContext(); setTimeout(()=>document.getElementById('ask-lex-input')?.focus(),120); },
+            closeLexTutor: () => { document.getElementById('ask-lex-drawer')?.classList.remove('open'); document.getElementById('ask-lex-backdrop')?.classList.remove('open'); },
+            setLexTutorMode: async (mode) => { LexContextEngine.tutorMode=mode; document.querySelectorAll('.lex-tutor-mode').forEach(b=>b.classList.toggle('active',b.dataset.tutorMode===mode)); const controls=document.getElementById('ask-lex-scope-controls'),subject=document.getElementById('ask-lex-subject'),caseSel=document.getElementById('ask-lex-case'); if(controls)controls.classList.toggle('hidden',mode==='general'); if(subject)subject.classList.toggle('hidden',mode==='case'); if(caseSel)caseSel.classList.toggle('hidden',mode!=='case'); await LexContextEngine.refreshSelectors(); window.appHandlers.refreshLexTutorContext(); },
+            refreshLexTutorContext: async () => { const mode=LexContextEngine.tutorMode,subjectId=document.getElementById('ask-lex-subject')?.value||'',caseId=document.getElementById('ask-lex-case')?.value||''; try{const ctx=await LexContextEngine.build(mode,subjectId,caseId,''); const label=document.getElementById('ask-lex-context-label'); if(label)label.textContent=ctx.label;}catch(e){console.warn(e);} },
+            clearLexTutor: () => { LexContextEngine.tutorHistory=[]; const box=document.getElementById('ask-lex-messages'); if(box)box.innerHTML='<div class="p-4 rounded-xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-950">New Ask Lex session started.</div>'; },
+            sendLexTutor: async () => { const input=document.getElementById('ask-lex-input'),button=document.getElementById('ask-lex-send'),messages=document.getElementById('ask-lex-messages'),question=input?.value.trim()||''; if(!question)return; const apiKey=localStorage.getItem('gemini_api_key')||''; if(!apiKey){window.appHandlers.openAISettings();return;} const mode=LexContextEngine.tutorMode,subjectId=document.getElementById('ask-lex-subject')?.value||'',caseId=document.getElementById('ask-lex-case')?.value||''; messages.insertAdjacentHTML('beforeend',`<div class="lex-user-msg bg-indigo-700 text-white rounded-xl rounded-br-none p-3 text-sm whitespace-pre-wrap">${Security.escapeHTML(question)}</div>`); input.value=''; button.disabled=true;button.innerHTML='<i class="fas fa-spinner fa-spin"></i>'; const loadingId='lex-tutor-'+Date.now();messages.insertAdjacentHTML('beforeend',`<div id="${loadingId}" class="lex-ai-msg bg-slate-50 border border-slate-200 rounded-xl rounded-bl-none p-3 text-sm text-slate-500"><i class="fas fa-spinner fa-spin mr-2"></i>Building contextual answer…</div>`);messages.scrollTop=messages.scrollHeight;try{const ctx=await LexContextEngine.build(mode,subjectId,caseId,question);const sourceRule=mode==='case'?`Use ONLY the saved case digest supplied in CONTEXT. If the digest does not support a point, say so.`:mode==='subject'||mode==='bar'?`Prioritize the student's saved Lex context. Clearly distinguish saved-context statements from any general Philippine-law explanation you add. Never invent citations.`:`Answer as a Philippine law-school tutor. Do not invent statutes, cases, citations, or quotations.`;const modeRule=mode==='bar'?`BAR MODE: teach toward issue spotting, legal basis, ALAC application, common traps, and the learner's weak areas. Be concise enough for active review.`:`Teach for understanding and recitation. Simplify language without simplifying away legal qualifications.`;const prompt=`You are LEX, the student's contextual Philippine law-school tutor.\n\nMODE: ${mode.toUpperCase()}\n${sourceRule}\n${modeRule}\n\nCONTEXT LABEL: ${ctx.label}\nCONTEXT:\n${ctx.context||'No saved context supplied.'}\n\nSTUDENT QUESTION:\n${question}\n\nReturn clean basic HTML only. Use short headings and bullets when useful. If the question asks for a rule or doctrine, include a brief Tagalog/Taglish explanation after the English explanation. Never fabricate legal authority.`;const contents=[...LexContextEngine.tutorHistory.slice(-6),{role:'user',parts:[{text:prompt}]}];const data=await GeminiService.generate(apiKey,{contents,generationConfig:{temperature:0.12}});const raw=GeminiService.text(data),html=Security.sanitizeAI(raw.replace(/^```html\s*/i,'').replace(/\s*```$/i,''));document.getElementById(loadingId)?.remove();const messageId=LexContextEngine.tutorHistory.length;LexContextEngine.tutorHistory.push({role:'user',parts:[{text:question}]},{role:'model',parts:[{text:raw}]});messages.insertAdjacentHTML('beforeend',`<div class="lex-ai-msg bg-white border border-slate-200 rounded-xl rounded-bl-none p-4 text-sm text-slate-800 leading-relaxed shadow-sm">${html}<div class="mt-3 pt-3 border-t border-slate-100"><button onclick="window.appHandlers.saveTutorAnswerToVault(${messageId+1}, '${Security.escapeHTML(ctx.label).replace(/'/g,"\\'")}')" class="text-xs font-bold text-violet-700 hover:underline"><i class="fas fa-vault mr-1"></i>Save answer to Knowledge Vault</button></div></div>`);}catch(e){document.getElementById(loadingId)?.remove();messages.insertAdjacentHTML('beforeend',`<div class="lex-ai-msg bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">${Security.escapeHTML(e.message)}</div>`);}finally{button.disabled=false;button.innerHTML='<i class="fas fa-paper-plane mr-1"></i>Ask Lex';messages.scrollTop=messages.scrollHeight;} },
+            saveTutorAnswerToVault: (index,label='Ask Lex') => { const item=LexContextEngine.tutorHistory[index]; if(!item)return; const html=item.parts?.[0]?.text||''; window.appHandlers.saveToKnowledgeVault({title:`Ask Lex — ${label}`,topic:label,content:Utils.htmlToText(html),sourceType:'ask_lex',sourceLabel:label}); },
+
+            // ========================================================
+            // V5 — KNOWLEDGE VAULT
+            // ========================================================
+            saveToKnowledgeVault: async (payload={}) => { const subjects=await AppDB.all('subjects'); const initialSubjectId=payload.subjectId||views.subject_notebook?.subjectId||''; const initialSubjectName=payload.subjectName||subjects.find(s=>s.id===initialSubjectId)?.name||views.subject_notebook?.subjectName||''; const opts='<option value="">General / Unassigned</option>'+subjects.filter(s=>!s.archived).map(s=>`<option value="${s.id}" data-name="${Security.escapeHTML(s.name||'')}" ${s.id===initialSubjectId?'selected':''}>${Security.escapeHTML(s.name||'')}</option>`).join(''); Modal.show({title:'<i class="fas fa-vault text-violet-600 mr-2"></i>Save to Knowledge Vault',content:`<div><label class="block text-sm font-bold mb-1">Title</label><input id="vault-save-title" value="${Security.escapeHTML(payload.title||payload.topic||'Knowledge Note')}" class="w-full p-2.5 border rounded-lg"></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Subject</label><select id="vault-save-subject" class="w-full p-2.5 border rounded-lg bg-white">${opts}</select></div><div><label class="block text-sm font-bold mb-1">Topic</label><input id="vault-save-topic" value="${Security.escapeHTML(payload.topic||'')}" class="w-full p-2.5 border rounded-lg"></div></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Knowledge</label><textarea id="vault-save-content" rows="9" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(String(payload.content||''))}</textarea></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Tags</label><input id="vault-save-tags" value="${Security.escapeHTML(Array.isArray(payload.tags)?payload.tags.join(', '):payload.tags||'')}" class="w-full p-2.5 border rounded-lg" placeholder="e.g. exam, doctrine, exceptions"></div>${payload.sourceLabel?`<div class="mt-3 p-3 rounded-lg bg-slate-50 border text-xs text-slate-600"><b>Source:</b> ${Security.escapeHTML(payload.sourceLabel)}</div>`:''}`,submitText:'Save to Vault',onSubmit:async()=>{const sel=document.getElementById('vault-save-subject'),sid=sel.value,sname=sel.options[sel.selectedIndex]?.dataset.name||sel.options[sel.selectedIndex]?.text||'';const content=document.getElementById('vault-save-content').value.trim();if(!content)throw new Error('Knowledge content is required.');await AppDB.add('knowledge_vault',{title:document.getElementById('vault-save-title').value.trim()||'Knowledge Note',subjectId:sid||'',subjectName:sname==='General / Unassigned'?'':sname,topic:document.getElementById('vault-save-topic').value.trim(),plainText:content,content,sourceType:payload.sourceType||'manual',sourceId:payload.sourceId||'',sourceLabel:payload.sourceLabel||'',tags:document.getElementById('vault-save-tags').value.split(/[,;]+/).map(v=>v.trim()).filter(Boolean),created:serverTimestamp(),updated:serverTimestamp(),schemaVersion:1});}}); },
+            createVaultEntry: () => window.appHandlers.saveToKnowledgeVault({title:'New Knowledge Note',sourceType:'manual'}),
+            refreshVaultSubjectFilter: async () => { const s=document.getElementById('vault-subject-filter');if(!s)return;const subjects=await AppDB.all('subjects'),cur=s.value;s.innerHTML='<option value="all">All Subjects</option><option value="">General / Unassigned</option>'+subjects.filter(x=>!x.archived).map(x=>`<option value="${x.id}">${Security.escapeHTML(x.name||'')}</option>`).join('');if([...s.options].some(o=>o.value===cur))s.value=cur; },
+            filterVault: () => { const q=(document.getElementById('vault-search')?.value||'').toLowerCase(),subject=document.getElementById('vault-subject-filter')?.value??'all'; const rows=views.knowledge_vault.entries.filter(v=>{const hay=[v.title,v.topic,v.subjectName,v.plainText,v.sourceLabel,...(v.tags||[])].join(' ').toLowerCase();return (subject==='all'||String(v.subjectId||'')===subject)&&(!q||hay.includes(q));}); window.appHandlers.renderVaultRows(rows); },
+            renderVaultRows: rows => { const list=document.getElementById('vault-list');if(!list)return;if(!rows.length){list.innerHTML='<div class="lg:col-span-2 p-12 text-center text-slate-400 border-2 border-dashed rounded-2xl"><i class="fas fa-vault text-5xl opacity-20 mb-4"></i><p class="font-bold">Your Knowledge Vault is ready.</p><p class="text-xs mt-1">Save useful understanding from across Lex instead of making duplicate notes.</p></div>';return;}list.innerHTML=rows.map(v=>`<article class="border border-slate-200 rounded-2xl p-5 hover:border-violet-300 hover:shadow-sm transition"><div class="flex items-start justify-between gap-3"><div><div class="flex flex-wrap gap-2 mb-2">${v.subjectName?`<span class="px-2 py-1 bg-violet-50 text-violet-700 rounded text-[10px] font-black uppercase">${Security.escapeHTML(v.subjectName)}</span>`:''}<span class="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-black uppercase">${Security.escapeHTML(v.sourceType||'manual')}</span></div><h4 class="font-black text-slate-900 text-lg">${Security.escapeHTML(v.title||'Knowledge Note')}</h4>${v.topic?`<p class="text-xs text-violet-600 font-bold mt-1">${Security.escapeHTML(v.topic)}</p>`:''}</div><button onclick="window.appHandlers.deleteVaultEntry('${v.id}')" class="w-8 h-8 rounded-lg border text-red-500 hover:bg-red-50"><i class="fas fa-trash"></i></button></div><p class="text-sm text-slate-600 mt-4 whitespace-pre-wrap leading-relaxed">${Security.escapeHTML(Utils.excerpt(v.plainText||v.content||'',900))}</p>${v.sourceLabel?`<p class="text-xs text-slate-400 mt-3"><i class="fas fa-link mr-1"></i>${Security.escapeHTML(v.sourceLabel)}</p>`:''}<div class="mt-4 flex gap-3"><button onclick="window.appHandlers.openVaultEntry('${v.id}')" class="text-xs font-bold text-violet-700 hover:underline">Open</button><button onclick="window.appHandlers.openLexTutorWithVault('${v.id}')" class="text-xs font-bold text-indigo-700 hover:underline"><i class="fas fa-wand-magic-sparkles mr-1"></i>Ask Lex</button></div></article>`).join(''); },
+            openVaultEntry: id => { const v=views.knowledge_vault.entries.find(x=>x.id===id);if(!v)return;Modal.show({title:`<i class="fas fa-vault text-violet-600 mr-2"></i>${Security.escapeHTML(v.title||'Knowledge Note')}`,content:`<div class="flex flex-wrap gap-2">${v.subjectName?`<span class="px-2 py-1 bg-violet-50 text-violet-700 rounded text-xs font-bold">${Security.escapeHTML(v.subjectName)}</span>`:''}${v.topic?`<span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-bold">${Security.escapeHTML(v.topic)}</span>`:''}</div><div class="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">${Security.escapeHTML(v.plainText||v.content||'')}</div>${v.sourceLabel?`<div class="mt-4 p-3 bg-slate-50 border rounded-lg text-xs"><b>Source:</b> ${Security.escapeHTML(v.sourceLabel)}</div>`:''}`,hideSubmit:true}); },
+            deleteVaultEntry: id => Modal.show({title:'Delete Vault Entry',content:'<p>Remove this Knowledge Vault entry?</p>',submitText:'Delete',submitClass:'px-4 py-2 bg-red-600 text-white rounded-lg',onSubmit:async()=>AppDB.delete('knowledge_vault',id)}),
+            openLexTutorWithVault: id => { const v=views.knowledge_vault.entries.find(x=>x.id===id);if(!v)return;window.appHandlers.openLexTutor();document.getElementById('ask-lex-input').value=`Help me understand and review this Knowledge Vault entry: ${v.title}\n\n${v.plainText||v.content||''}`; },
+            saveAiSearchToVault: index => { const item=views.ai_search.searchHistory[index];if(!item)return;window.appHandlers.saveToKnowledgeVault({title:`Legal Research — ${item.query.slice(0,70)}`,topic:item.query,content:item.plainText||Utils.htmlToText(item.answerHtml||''),sourceType:'legal_research',sourceLabel:'Legal Research'}); },
+            saveCurrentNoteToVault: noteId => { const title=document.getElementById('note-title-editor')?.value.trim()||'Class Note';const content=document.getElementById('note-content-editor')?.innerText.trim()||'';window.appHandlers.saveToKnowledgeVault({title,content,subjectId:views.subject_notebook.subjectId||'',subjectName:views.subject_notebook.subjectName||'',topic:title,sourceType:'class_note',sourceId:noteId,sourceLabel:'Subject Notebook'}); },
+            saveLatestDigestToVault: () => { const d=views.case_digester.digestedData;if(!d)return alert('No newly generated digest is available.');const content=[d.doctrine?`Doctrine: ${d.doctrine}`:'',d.generalRule?`General Rule: ${d.generalRule}`:'',d.elementsRequisites?`Requisites: ${d.elementsRequisites}`:'',d.exceptions?`Exceptions: ${d.exceptions}`:'',d.supremeCourtApplication?`Application: ${d.supremeCourtApplication}`:''].filter(Boolean).join('\n\n');window.appHandlers.saveToKnowledgeVault({title:`${d.title} — Doctrine`,topic:d.topic||'',subjectName:d.subjectName||d.subject||'',subjectId:d.primarySubjectId||'',content,sourceType:'case_digest',sourceLabel:d.title||'Case Digest'}); },
+            saveCodalSessionToVault: () => { const s=window.appHandlers.codalSession;if(!s)return alert('Run a Codal Trainer activity first.');window.appHandlers.saveToKnowledgeVault({title:s.title||`${s.subject} — ${s.topic}`,topic:s.topic||'',subjectName:s.subject||'',content:JSON.stringify(s.payload,null,2),sourceType:'codal_trainer',sourceLabel:'Codal Trainer'}); },
+            saveMaterialOutputToVault: () => { const r=window.appHandlers.currentMaterialOutput,ctx=window.appHandlers.getCurrentSubjectContext();if(!r)return;window.appHandlers.saveToKnowledgeVault({title:r.title||r.outputType||'Material Note',topic:r.title||'',subjectId:ctx.id||'',subjectName:ctx.name||'',content:Utils.htmlToText(r.html||''),sourceType:'material',sourceId:r.materialId||'',sourceLabel:`${r.materialTitle}${r.sourcePages?.length?` — pp. ${r.sourcePages.join(', ')}`:''}`}); },
+
+            // ========================================================
+            // V5 — ADAPTIVE STUDY
+            // ========================================================
+            renderAdaptiveStudy: () => { const v=views.adaptive_study;if(!v)return;const attempts=[...(v.data.attempts||[]),...(v.data.advocacy||[]).filter(x=>x.status==='completed'&&Number.isFinite(Number(x.overallScore))).map(x=>({subjectName:x.subjectName||'General',topic:x.topic||x.title||'Advocacy',score:Number(x.overallScore),sourceType:'advocacy'}))],mastery=StudyEngine.masteryFromAttempts(attempts),now=Date.now();let due=0;(v.data.reviews||[]).forEach(r=>{if(r.type==='recit'&&Array.isArray(r.content))r.content.forEach(c=>{const n=Number(c?.nextReview||0);if(!n||n<=now)due++;});});const avg=mastery.length?Math.round(mastery.reduce((a,b)=>a+b.score,0)/mastery.length):0;const weak=mastery.filter(m=>m.score<70);const summary=document.getElementById('adaptive-summary');if(summary)summary.innerHTML=`<div class="bg-white border rounded-xl p-5"><p class="text-xs font-black uppercase text-slate-400">Overall Mastery</p><p class="text-3xl font-black text-slate-800 mt-2">${avg}%</p></div><div class="bg-white border rounded-xl p-5"><p class="text-xs font-black uppercase text-slate-400">Due Flashcards</p><p class="text-3xl font-black text-amber-600 mt-2">${due}</p></div><div class="bg-white border rounded-xl p-5"><p class="text-xs font-black uppercase text-slate-400">Weak Topics</p><p class="text-3xl font-black text-rose-600 mt-2">${weak.length}</p></div>`;const q=document.getElementById('adaptive-queue');if(q){const actions=[];if(due)actions.push(`<button onclick="window.appHandlers.navigate('saved_reviews')" class="w-full text-left p-4 rounded-xl bg-amber-50 border border-amber-200"><b>Review ${due} due flashcard${due===1?'':'s'}</b><p class="text-xs text-slate-500 mt-1">Protect recall before adding new material.</p></button>`);weak.slice(0,5).forEach(m=>actions.push(`<button onclick="window.appHandlers.openAdaptivePractice('${Security.escapeHTML(m.subjectName).replace(/'/g,"\\'")}', '${Security.escapeHTML(m.topic).replace(/'/g,"\\'")}')" class="w-full text-left p-4 rounded-xl bg-rose-50 border border-rose-200"><b>${Security.escapeHTML(m.subjectName)} — ${Security.escapeHTML(m.topic)}</b><p class="text-xs text-rose-700 mt-1">Mastery ${m.score}% • practice recommended</p></button>`));if(!actions.length)actions.push('<div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-sm"><b>No urgent weakness detected.</b> Continue your syllabus or create a new practice set.</div>');q.innerHTML=actions.join('');}const box=document.getElementById('adaptive-mastery');if(box){box.innerHTML=mastery.length?mastery.slice(0,15).map(m=>`<div><div class="flex justify-between gap-3 text-xs"><span class="font-bold text-slate-700">${Security.escapeHTML(m.subjectName)} — ${Security.escapeHTML(m.topic)}</span><span class="font-black ${m.score<60?'text-rose-600':m.score<80?'text-amber-600':'text-emerald-600'}">${m.score}%</span></div><div class="mastery-meter mt-1"><span style="width:${m.score}%"></span></div><p class="text-[10px] text-slate-400 mt-1">${m.attempts} recorded attempt${m.attempts===1?'':'s'}</p></div>`).join(''):'<p class="text-sm text-slate-400">Complete a Codal exam, mock exam, case recitation, or Advocacy Lab practice to begin building mastery.</p>'; } },
+            openAdaptivePractice: (subject,topic) => { window.appHandlers.navigate('codal_trainer');setTimeout(()=>{const s=document.getElementById('codal-subject'),t=document.getElementById('codal-topic');if(s){const opt=[...s.options].find(o=>o.value===subject||o.text===subject);if(opt)s.value=opt.value;}if(t)t.value=topic;window.appHandlers.setCodalCommand('recite');},100); },
+
+            // ========================================================
+            // V5 — MATERIAL CHAT HISTORY
+            // ========================================================
+            saveMaterialChatTurn: async (material,question,html,chunks) => { try{const ctx=window.appHandlers.getCurrentSubjectContext();await AppDB.add('material_chats',{materialId:material.id,materialTitle:material.title||'',subjectId:ctx.id||material.subjectId||'',subjectName:ctx.name||'',question,answerHtml:Security.sanitizeAI(html),answerText:Utils.htmlToText(html),sourcePages:MaterialUtils.sourcePages(chunks),created:serverTimestamp()});}catch(e){console.warn('Material chat history save failed',e);} },
+            showMaterialChatHistory: async materialId => { const rows=await AppDB.whereAll('material_chats','materialId','==',materialId);rows.sort((a,b)=>Utils.timestampMillis(b.created)-Utils.timestampMillis(a.created));Modal.show({title:'<i class="fas fa-comments text-emerald-600 mr-2"></i>Material Chat History',content:rows.length?`<div class="space-y-4">${rows.slice(0,30).map(r=>`<div class="border rounded-xl p-4"><p class="text-xs font-black uppercase text-emerald-600">Question</p><p class="text-sm font-bold mt-1">${Security.escapeHTML(r.question||'')}</p><div class="mt-3 text-sm leading-relaxed">${Security.sanitizeAI(r.answerHtml||Security.escapeHTML(r.answerText||''))}</div><p class="text-[10px] text-slate-400 mt-3">Pages: ${(r.sourcePages||[]).join(', ')||'—'}</p></div>`).join('')}</div>`:'<p class="text-slate-500">No saved material conversations yet.</p>',hideSubmit:true}); },
+
+            // ========================================================
+            // V5 — KNOWLEDGE GRAPH
+            // ========================================================
+            openKnowledgeGraph: () => window.appHandlers.navigate('knowledge_graph'),
+            renderKnowledgeGraph: async () => { const subjectId=document.getElementById('graph-subject')?.value||'';const canvas=document.getElementById('knowledge-graph-canvas'),summary=document.getElementById('knowledge-graph-summary');if(!subjectId||!canvas)return;canvas.innerHTML='<div class="py-20 text-slate-400"><div class="loader mx-auto mb-3"></div>Building graph…</div>';try{const subject=views.knowledge_graph.subjects.find(s=>s.id===subjectId)||{},[notes,materials,vault,doctrines,digests]=await Promise.all([AppDB.whereAll('notes','subjectId','==',subjectId),AppDB.whereAll('materials','subjectId','==',subjectId),AppDB.whereAll('knowledge_vault','subjectId','==',subjectId),AppDB.all('doctrines'),AppDB.all('digests')]);const sname=subject.name||'Subject',docs=doctrines.filter(d=>(Array.isArray(d.subjectIds)&&d.subjectIds.includes(subjectId))||d.primarySubjectId===subjectId||d.subjectName===sname),cases=digests.map(d=>DigestUtils.normalize(d)).filter(d=>(Array.isArray(d.subjectIds)&&d.subjectIds.includes(subjectId))||d.primarySubjectId===subjectId||d.subject===sname||d.subjectName===sname);if(summary)summary.innerHTML=[[notes.length,'Notes'],[materials.length,'Materials'],[docs.length,'Doctrines'],[cases.length,'Cases'],[vault.length,'Vault']].map(([n,l])=>`<div class="bg-slate-50 border rounded-xl p-3 text-center"><p class="text-xl font-black text-slate-800">${n}</p><p class="text-[10px] uppercase font-bold text-slate-400">${l}</p></div>`).join('');const safe=(value,max=26)=>String(value||'').replace(/["<>]/g,'').replace(/\s+/g,' ').slice(0,max);let lines=['graph LR',`S["${safe(sname,35)}"]`];notes.slice(0,6).forEach((n,i)=>{lines.push(`N${i}["Note: ${safe(n.title,24)}"]`,`S --> N${i}`);});materials.slice(0,6).forEach((m,i)=>{lines.push(`M${i}["Material: ${safe(m.title||m.filename,24)}"]`,`S --> M${i}`);});docs.slice(0,8).forEach((d,i)=>{lines.push(`D${i}["Doctrine: ${safe(d.article||d.topic||d.definition||d.doctrine,24)}"]`,`S --> D${i}`);});cases.slice(0,8).forEach((d,i)=>{lines.push(`C${i}["Case: ${safe(d.title,24)}"]`,`S --> C${i}`);docs.slice(0,8).forEach((doc,j)=>{if(doc.caseTitle&&d.title&&safe(doc.caseTitle,50).toLowerCase()===safe(d.title,50).toLowerCase())lines.push(`D${j} --> C${i}`);});});vault.slice(0,8).forEach((v,i)=>{lines.push(`V${i}["Vault: ${safe(v.title||v.topic,24)}"]`,`S --> V${i}`);});const id='knowledge-graph-'+Date.now();const rendered=await mermaid.render(id,lines.join('\n'));canvas.innerHTML=`<div class="w-full overflow-auto">${rendered.svg}</div>`;}catch(e){canvas.innerHTML=`<div class="p-5 bg-red-50 border border-red-200 rounded-xl text-red-700">${Security.escapeHTML(e.message)}</div>`;} },
             digestText: '',
             digestMeta: null,
             pdfText: '',
@@ -4255,101 +4615,557 @@ deleteAdvocacyDraft: (id) => {
                 });
                 },
 
-            // --- LEX-VOCAB HANDLERS ---
-            addVocab: () => {
-                Modal.show({ 
-                    title: '<i class="fas fa-language text-blue-600"></i> Add Lex-Vocab', 
+            // --- LEGAL DICTIONARY HANDLERS ---
+            addVocab: (prefill = {}) => {
+                const p = {
+                    term: prefill.term || prefill.word || '',
+                    category: prefill.category || 'Legal Term',
+                    definition: prefill.definition || prefill.meaning || '',
+                    simpleExplanation: prefill.simpleExplanation || '',
+                    tagalogExplanation: prefill.tagalogExplanation || '',
+                    legalBasis: prefill.legalBasis || '',
+                    application: prefill.application || '',
+                    usageExample: prefill.usageExample || '',
+                    etymology: prefill.etymology || '',
+                    relatedTerms: Array.isArray(prefill.relatedTerms) ? prefill.relatedTerms.join(', ') : (prefill.relatedTerms || ''),
+                    sourceCitation: prefill.sourceCitation || '',
+                    subjectTag: prefill.subjectTag || '',
+                    sourceStatus: prefill.sourceStatus || 'personal'
+                };
+
+                const option = (value, label) =>
+                    `<option value="${value}" ${p.category === value ? 'selected' : ''}>${label}</option>`;
+
+                Modal.show({
+                    title: '<i class="fas fa-book-open text-indigo-600 mr-2"></i>Add Legal Dictionary Entry',
                     content: `
-                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Latin Word / Maxim</label><input type="text" id="voc-word" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Ignorantia legis non excusat"></div>
-                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Meaning</label><textarea id="voc-mean" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Ignorance of the law excuses no one..."></textarea></div>
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Application / Context</label><textarea id="voc-app" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Applies to all laws; conclusive presumption..."></textarea></div>`, 
-                    onSubmit: async () => { 
-                        const word = document.getElementById('voc-word').value.trim(); 
-                        const meaning = document.getElementById('voc-mean').value.trim(); 
-                        const application = document.getElementById('voc-app').value.trim(); 
-                        if (!word || !meaning) { alert("Word and Meaning are required."); throw new Error("Validation failed"); } 
-                        await AppDB.add('lex_vocab', { word, meaning, application, created: serverTimestamp() }); 
-                    } 
-                }); 
-            },
-            editVocab: (id, word, meaning, application) => {
-                const decodeHtml = (html) => { const txt = document.createElement("textarea"); txt.innerHTML = html; return txt.value; };
-                Modal.show({ 
-                    title: '<i class="fas fa-edit text-amber-500"></i> Edit Lex-Vocab', 
-                    content: `
-                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Latin Word / Maxim</label><input type="text" id="voc-word" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value="${word.replace(/"/g, '&quot;')}"></div>
-                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Meaning</label><textarea id="voc-mean" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 resize-none">${decodeHtml(meaning)}</textarea></div>
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Application / Context</label><textarea id="voc-app" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500 resize-none">${decodeHtml(application)}</textarea></div>`, 
-                    submitText: 'Update',
-                    submitClass: 'px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-medium transition shadow-sm',
-                    onSubmit: async () => { 
-                        const updatedWord = document.getElementById('voc-word').value.trim(); 
-                        const updatedMeaning = document.getElementById('voc-mean').value.trim(); 
-                        const updatedApplication = document.getElementById('voc-app').value.trim(); 
-                        if (!updatedWord || !updatedMeaning) { alert("Word and Meaning are required."); throw new Error("Validation failed"); } 
-                        await AppDB.update('lex_vocab', id, { word: updatedWord, meaning: updatedMeaning, application: updatedApplication, updated: serverTimestamp() }); 
-                    } 
-                }); 
-            },
-            deleteVocab: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete Entry', content: '<p>Are you sure you want to remove this vocabulary entry?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('lex_vocab', id) }); },
-            printVocab: (word, meaning, application) => {
-                const html = `<div style="font-family: serif; max-width: 800px; margin: 0 auto; line-height: 1.6;">
-                    <h1 style="color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 28px;">${word}</h1>
-                    <div style="margin-top: 20px;">
-                        <h3 style="color: #475569; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Meaning</h3>
-                        <p style="font-size: 18px; color: #334155; margin-top: 5px;">${meaning}</p>
-                    </div>
-                    ${application ? `<div style="margin-top: 25px;"><h3 style="color: #475569; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Application / Context</h3><p style="font-size: 16px; color: #475569; margin-top: 5px; font-style: italic;">${application.replace(/\n/g, '<br>')}</p></div>` : ''}
-                </div>`;
-                window.appHandlers.printContent(`LexVocab - ${word}`, html);
-            },
-            printAllVocab: () => {
-                if (!views.lex_vocab || views.lex_vocab.vocabData.length === 0) { alert("No vocabulary to print."); return; }
-                let html = `<div style="font-family: serif; max-width: 900px; margin: 0 auto; line-height: 1.6;">
-                    <h1 style="text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 30px;">Lex-Vocab: Legal Maxims & Terminology</h1>`;
-                
-                views.lex_vocab.vocabData.forEach(d => {
-                    html += `
-                    <div style="margin-bottom: 30px; page-break-inside: avoid;">
-                        <h2 style="color: #1e3a8a; margin-bottom: 5px; font-size: 20px;">${d.word}</h2>
-                        <p style="margin: 0 0 10px 0;"><strong>Meaning:</strong> ${d.meaning}</p>
-                        ${d.application ? `<p style="margin: 0; color: #475569; font-style: italic;"><strong>Context:</strong> ${d.application.replace(/\n/g, '<br>')}</p>` : ''}
-                    </div><hr style="border: 0; border-top: 1px solid #e2e8f0; margin-bottom: 30px;">`;
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Term / Maxim</label>
+                                <input id="voc-word" value="${Security.escapeHTML(p.term)}" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="e.g., res judicata">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Category</label>
+                                <select id="voc-category" class="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                                    ${option('Latin Maxim', 'Latin Maxim')}
+                                    ${option('Legal Term', 'Legal Term')}
+                                    ${option('Doctrine', 'Doctrine')}
+                                    ${option('Procedure', 'Procedure')}
+                                    ${option('Statutory Term', 'Statutory Term')}
+                                    ${option('Other', 'Other')}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Legal Definition</label>
+                            <textarea id="voc-mean" rows="4" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(p.definition)}</textarea>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Simple Explanation</label>
+                                <textarea id="voc-simple" rows="3" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Explain it in plain English...">${Security.escapeHTML(p.simpleExplanation)}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Tagalog / Taglish Explanation</label>
+                                <textarea id="voc-tagalog" rows="3" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Simple Filipino/Taglish explanation...">${Security.escapeHTML(p.tagalogExplanation)}</textarea>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Legal Basis</label>
+                            <textarea id="voc-basis" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Article, Rule, statute, doctrine, if supported...">${Security.escapeHTML(p.legalBasis)}</textarea>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Application / Context</label>
+                            <textarea id="voc-app" rows="3" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(p.application)}</textarea>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Usage Example</label>
+                            <textarea id="voc-example" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Example sentence or legal context...">${Security.escapeHTML(p.usageExample)}</textarea>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Etymology <span class="font-normal text-slate-400">(optional)</span></label>
+                                <textarea id="voc-etymology" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(p.etymology)}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Related Terms</label>
+                                <textarea id="voc-related" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Separate with commas">${Security.escapeHTML(p.relatedTerms)}</textarea>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Source / Citation</label>
+                                <textarea id="voc-source" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Case citation, law, book, class note...">${Security.escapeHTML(p.sourceCitation)}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Subject Tag</label>
+                                <input id="voc-subject" value="${Security.escapeHTML(p.subjectTag)}" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="e.g., Remedial Law">
+                                <input type="hidden" id="voc-source-status" value="${Security.escapeHTML(p.sourceStatus)}">
+                            </div>
+                        </div>
+
+                        ${p.sourceStatus === 'ai_draft' ? `<div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900"><b>AI Draft:</b> verify the legal basis and citation against an authoritative source before treating this entry as verified.</div>` : ''}
+                    `,
+                    submitText: 'Save Entry',
+                    onSubmit: async () => {
+                        const word = document.getElementById('voc-word').value.trim();
+                        const meaning = document.getElementById('voc-mean').value.trim();
+
+                        if (!word || !meaning) {
+                            alert("Term and Legal Definition are required.");
+                            throw new Error("Validation failed");
+                        }
+
+                        const relatedTerms = document.getElementById('voc-related').value
+                            .split(/[,;\n]+/)
+                            .map(value => value.trim())
+                            .filter(Boolean);
+
+                        const sourceCitation = document.getElementById('voc-source').value.trim();
+                        const currentStatus = document.getElementById('voc-source-status').value || 'personal';
+                        const sourceStatus =
+                            sourceCitation && currentStatus !== 'ai_draft'
+                                ? 'verified'
+                                : currentStatus;
+
+                        await AppDB.add('lex_vocab', {
+                            word,
+                            term: word,
+                            category: document.getElementById('voc-category').value,
+                            meaning,
+                            definition: meaning,
+                            simpleExplanation: document.getElementById('voc-simple').value.trim(),
+                            tagalogExplanation: document.getElementById('voc-tagalog').value.trim(),
+                            legalBasis: document.getElementById('voc-basis').value.trim(),
+                            application: document.getElementById('voc-app').value.trim(),
+                            usageExample: document.getElementById('voc-example').value.trim(),
+                            etymology: document.getElementById('voc-etymology').value.trim(),
+                            relatedTerms,
+                            sourceCitation,
+                            subjectTag: document.getElementById('voc-subject').value.trim(),
+                            sourceStatus,
+                            schemaVersion: 2,
+                            created: serverTimestamp(),
+                            updated: serverTimestamp()
+                        });
+                    }
                 });
-                html += `</div>`;
-                window.appHandlers.printContent('Lex-Vocab Dictionary', html);
             },
+
+            aiDefineVocab: () => {
+                const apiKey = localStorage.getItem('gemini_api_key') || '';
+
+                if (!apiKey) {
+                    alert('Configure your Gemini API Key in AI Settings first.');
+                    window.appHandlers.openAISettings();
+                    return;
+                }
+
+                Modal.show({
+                    title: '<i class="fas fa-wand-magic-sparkles text-amber-500 mr-2"></i>Draft Dictionary Entry with Lex',
+                    content: `
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Legal Term / Latin Maxim</label>
+                            <input id="voc-ai-term" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="e.g., forum shopping">
+                        </div>
+                        <div class="mt-3">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Optional Source Text</label>
+                            <textarea id="voc-ai-source" rows="7" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Paste a codal provision, case excerpt, textbook discussion, or class note if you want the entry grounded only in that source."></textarea>
+                            <p class="text-xs text-slate-400 mt-1">If source text is supplied, Lex must use only that source. Without source text, the result is saved as an AI draft that should be verified.</p>
+                        </div>
+                    `,
+                    submitText: 'Draft Entry',
+                    onSubmit: async () => {
+                        const term = document.getElementById('voc-ai-term').value.trim();
+                        const sourceText = document.getElementById('voc-ai-source').value.trim();
+
+                        if (!term) throw new Error('Enter a legal term first.');
+
+                        const sourceRule = sourceText
+                            ? `Use ONLY the SOURCE TEXT supplied below. Do not add outside facts, law, legal basis, cases, or citations. If a field is not supported by the source, return an empty string.`
+                            : `Use your general Philippine-law knowledge cautiously. Do NOT invent a statute, Rule, article, G.R. number, case name, quotation, or source citation. If you are not confident that a legal basis or source citation is exact, return an empty string for that field.`;
+
+                        const prompt = `You are LEX, a Philippine law-school legal dictionary assistant.
+
+Create a study-oriented dictionary entry for: "${term}"
+
+${sourceRule}
+
+Return STRICTLY one valid raw JSON object with exactly these keys:
+{
+  "term": "string",
+  "category": "Latin Maxim | Legal Term | Doctrine | Procedure | Statutory Term | Other",
+  "definition": "string",
+  "simple_explanation": "string",
+  "tagalog_explanation": "string",
+  "legal_basis": "string",
+  "application": "string",
+  "usage_example": "string",
+  "etymology": "string",
+  "related_terms": ["string"],
+  "source_citation": "string"
+}
+
+Requirements:
+- Definition: legally precise but concise.
+- Simple explanation: plain English for a law student.
+- Tagalog explanation: natural Filipino/Taglish; retain important legal terms in English.
+- Legal basis/source: only if exact and supported under the source rule above.
+- Usage example: educational example, not legal advice.
+- Related terms: maximum 8.
+- No markdown. No commentary outside JSON.
+- Never fabricate citations.
+
+${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
+
+                        const data = await GeminiService.generate(apiKey, {
+                            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                            generationConfig: {
+                                responseMimeType: 'application/json',
+                                temperature: sourceText ? 0.05 : 0.15
+                            }
+                        });
+
+                        let raw = GeminiService.text(data)
+                            .replace(/^```json\s*/i, '')
+                            .replace(/\s*```$/i, '')
+                            .trim();
+
+                        let parsed;
+                        try {
+                            parsed = JSON.parse(raw);
+                        } catch (_) {
+                            throw new Error('Lex returned an invalid dictionary draft. Please try again.');
+                        }
+
+                        setTimeout(() => {
+                            window.appHandlers.addVocab({
+                                term: parsed.term || term,
+                                category: parsed.category || 'Legal Term',
+                                definition: parsed.definition || '',
+                                simpleExplanation: parsed.simple_explanation || '',
+                                tagalogExplanation: parsed.tagalog_explanation || '',
+                                legalBasis: parsed.legal_basis || '',
+                                application: parsed.application || '',
+                                usageExample: parsed.usage_example || '',
+                                etymology: parsed.etymology || '',
+                                relatedTerms: Array.isArray(parsed.related_terms) ? parsed.related_terms : [],
+                                sourceCitation: parsed.source_citation || '',
+                                sourceStatus: sourceText ? 'verified' : 'ai_draft'
+                            });
+                        }, 150);
+                    }
+                });
+            },
+
+            viewVocab: (id) => {
+                const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
+                if (!d) return;
+
+                const status = d.sourceStatus === 'verified'
+                    ? '<span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-circle-check mr-1"></i>Source-grounded</span>'
+                    : d.sourceStatus === 'ai_draft'
+                    ? '<span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-triangle-exclamation mr-1"></i>AI Draft — Verify</span>'
+                    : '<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-pen mr-1"></i>Personal Entry</span>';
+
+                const block = (label, value, extra = '') =>
+                    value
+                        ? `<div class="mt-4 ${extra}"><p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">${label}</p><div class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${Security.escapeHTML(value)}</div></div>`
+                        : '';
+
+                const related = (d.relatedTerms || [])
+                    .map(term => `<button onclick="document.getElementById('app-modal').classList.add('hidden'); window.appHandlers.searchDictionaryTerm('${Security.escapeHTML(String(term)).replace(/'/g, "\\'")}')" class="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-bold hover:bg-indigo-100">${Security.escapeHTML(term)}</button>`)
+                    .join('');
+
+                Modal.show({
+                    title: `<i class="fas fa-book-open text-indigo-600 mr-2"></i>${Security.escapeHTML(d.term || d.word)}`,
+                    content: `
+                        <div class="flex flex-wrap items-center gap-2">
+                            ${status}
+                            ${d.category ? `<span class="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(d.category)}</span>` : ''}
+                            ${d.subjectTag ? `<span class="px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(d.subjectTag)}</span>` : ''}
+                        </div>
+
+                        ${block('Legal Definition', d.definition || d.meaning)}
+                        ${block('Simple Explanation', d.simpleExplanation, 'bg-slate-50 border border-slate-100 rounded-xl p-4')}
+                        ${block('Tagalog / Taglish Explanation', d.tagalogExplanation, 'bg-amber-50 border border-amber-100 rounded-xl p-4')}
+                        ${block('Legal Basis', d.legalBasis)}
+                        ${block('Application / Context', d.application)}
+                        ${block('Usage Example', d.usageExample)}
+                        ${block('Etymology', d.etymology)}
+                        ${block('Source / Citation', d.sourceCitation)}
+                        ${related ? `<div class="mt-4"><p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Related Terms</p><div class="flex flex-wrap gap-2">${related}</div></div>` : ''}
+
+                        <div class="mt-5 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
+                            <button onclick="window.appHandlers.dictionaryToFlashcard('${d.id}')" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"><i class="fas fa-clone mr-1"></i>Add to Flashcards</button>
+                            <button onclick="window.appHandlers.editVocabById('${d.id}')" class="px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold"><i class="fas fa-pen mr-1"></i>Edit Entry</button>
+                        </div>
+                    `,
+                    hideSubmit: true
+                });
+            },
+
+            editVocabById: (id) => {
+                const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
+                if (!d) return;
+
+                const p = d;
+                const option = (value, label) =>
+                    `<option value="${value}" ${p.category === value ? 'selected' : ''}>${label}</option>`;
+
+                Modal.show({
+                    title: '<i class="fas fa-edit text-amber-500 mr-2"></i>Edit Dictionary Entry',
+                    content: `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div><label class="block text-sm font-bold mb-1">Term</label><input id="voc-word" value="${Security.escapeHTML(p.term)}" class="w-full p-2.5 border rounded-lg"></div>
+                            <div><label class="block text-sm font-bold mb-1">Category</label><select id="voc-category" class="w-full p-2.5 border rounded-lg bg-white">${option('Latin Maxim','Latin Maxim')}${option('Legal Term','Legal Term')}${option('Doctrine','Doctrine')}${option('Procedure','Procedure')}${option('Statutory Term','Statutory Term')}${option('Other','Other')}</select></div>
+                        </div>
+                        <div class="mt-3"><label class="block text-sm font-bold mb-1">Legal Definition</label><textarea id="voc-mean" rows="4" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.definition)}</textarea></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div><label class="block text-sm font-bold mb-1">Simple Explanation</label><textarea id="voc-simple" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.simpleExplanation)}</textarea></div>
+                            <div><label class="block text-sm font-bold mb-1">Tagalog / Taglish</label><textarea id="voc-tagalog" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.tagalogExplanation)}</textarea></div>
+                        </div>
+                        <div class="mt-3"><label class="block text-sm font-bold mb-1">Legal Basis</label><textarea id="voc-basis" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.legalBasis)}</textarea></div>
+                        <div class="mt-3"><label class="block text-sm font-bold mb-1">Application / Context</label><textarea id="voc-app" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.application)}</textarea></div>
+                        <div class="mt-3"><label class="block text-sm font-bold mb-1">Usage Example</label><textarea id="voc-example" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.usageExample)}</textarea></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div><label class="block text-sm font-bold mb-1">Etymology</label><textarea id="voc-etymology" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.etymology)}</textarea></div>
+                            <div><label class="block text-sm font-bold mb-1">Related Terms</label><textarea id="voc-related" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML((p.relatedTerms || []).join(', '))}</textarea></div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div><label class="block text-sm font-bold mb-1">Source / Citation</label><textarea id="voc-source" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.sourceCitation)}</textarea></div>
+                            <div><label class="block text-sm font-bold mb-1">Subject Tag</label><input id="voc-subject" value="${Security.escapeHTML(p.subjectTag)}" class="w-full p-2.5 border rounded-lg"><div class="mt-2"><label class="inline-flex items-center gap-2 text-xs"><input type="checkbox" id="voc-verified" ${p.sourceStatus === 'verified' ? 'checked' : ''}> Mark source/citation as verified</label></div></div>
+                        </div>
+                    `,
+                    submitText: 'Update Entry',
+                    onSubmit: async () => {
+                        const word = document.getElementById('voc-word').value.trim();
+                        const meaning = document.getElementById('voc-mean').value.trim();
+                        if (!word || !meaning) throw new Error('Term and definition are required.');
+
+                        await AppDB.update('lex_vocab', id, {
+                            word,
+                            term: word,
+                            category: document.getElementById('voc-category').value,
+                            meaning,
+                            definition: meaning,
+                            simpleExplanation: document.getElementById('voc-simple').value.trim(),
+                            tagalogExplanation: document.getElementById('voc-tagalog').value.trim(),
+                            legalBasis: document.getElementById('voc-basis').value.trim(),
+                            application: document.getElementById('voc-app').value.trim(),
+                            usageExample: document.getElementById('voc-example').value.trim(),
+                            etymology: document.getElementById('voc-etymology').value.trim(),
+                            relatedTerms: document.getElementById('voc-related').value.split(/[,;\n]+/).map(v => v.trim()).filter(Boolean),
+                            sourceCitation: document.getElementById('voc-source').value.trim(),
+                            subjectTag: document.getElementById('voc-subject').value.trim(),
+                            sourceStatus: document.getElementById('voc-verified').checked
+                                ? 'verified'
+                                : (p.sourceStatus === 'ai_draft' ? 'ai_draft' : 'personal'),
+                            schemaVersion: 2,
+                            updated: serverTimestamp()
+                        });
+                    }
+                });
+            },
+
+            // Legacy edit signature retained for old buttons/data compatibility.
+            editVocab: (id) => window.appHandlers.editVocabById(id),
+
+            deleteVocab: (id) => {
+                Modal.show({
+                    title: '<i class="fas fa-trash text-red-500 mr-2"></i>Delete Dictionary Entry',
+                    content: '<p>Are you sure you want to remove this dictionary entry?</p>',
+                    submitText: 'Delete',
+                    submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg',
+                    onSubmit: async () => await AppDB.delete('lex_vocab', id)
+                });
+            },
+
+            dictionaryToFlashcard: async (id) => {
+                const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
+                if (!d) return;
+
+                const backParts = [
+                    d.definition || d.meaning,
+                    d.simpleExplanation ? `Simple explanation: ${d.simpleExplanation}` : '',
+                    d.legalBasis ? `Legal basis: ${d.legalBasis}` : ''
+                ].filter(Boolean);
+
+                const card = {
+                    front: `Define or explain: ${d.term || d.word}`,
+                    back: backParts.join('\n\n'),
+                    interval: 0,
+                    repetitions: 0,
+                    easeFactor: 2.5,
+                    nextReview: Date.now()
+                };
+
+                await AppDB.add('reviews', {
+                    title: `Dictionary — ${d.term || d.word}`,
+                    type: 'recit',
+                    sourceType: 'legal_dictionary',
+                    sourceId: d.id,
+                    content: [card],
+                    created: serverTimestamp()
+                });
+
+                alert('Dictionary term added to your spaced-repetition Review Queue.');
+            },
+
+            searchDictionaryTerm: (term) => {
+                window.appHandlers.navigate('lex_vocab');
+                setTimeout(() => {
+                    const input = document.getElementById('vocab-search');
+                    if (!input) return;
+                    input.value = term;
+                    window.appHandlers.filterVocab();
+                }, 100);
+            },
+
+            printVocabById: (id) => {
+                const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
+                if (!d) return;
+
+                const section = (label, value) =>
+                    value
+                        ? `<div style="margin-top:20px;"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:5px;">${label}</h3><p style="margin:0;white-space:pre-wrap;">${Security.escapeHTML(value)}</p></div>`
+                        : '';
+
+                const html = `<div style="font-family:serif;max-width:800px;margin:0 auto;line-height:1.65;">
+                    <h1 style="color:#1e3a8a;border-bottom:2px solid #e2e8f0;padding-bottom:10px;">${Security.escapeHTML(d.term)}</h1>
+                    <p style="font-family:sans-serif;font-size:12px;color:#64748b;">${Security.escapeHTML(d.category || '')}${d.subjectTag ? ` • ${Security.escapeHTML(d.subjectTag)}` : ''}</p>
+                    ${section('Legal Definition', d.definition)}
+                    ${section('Simple Explanation', d.simpleExplanation)}
+                    ${section('Tagalog / Taglish Explanation', d.tagalogExplanation)}
+                    ${section('Legal Basis', d.legalBasis)}
+                    ${section('Application / Context', d.application)}
+                    ${section('Usage Example', d.usageExample)}
+                    ${section('Etymology', d.etymology)}
+                    ${section('Source / Citation', d.sourceCitation)}
+                    ${section('Related Terms', (d.relatedTerms || []).join(', '))}
+                </div>`;
+
+                window.appHandlers.printContent(`Legal Dictionary - ${d.term}`, html);
+            },
+
+            // Legacy print signature retained.
+            printVocab: (word) => {
+                const d = views.lex_vocab.vocabData.find(entry => entry.term === word || entry.word === word);
+                if (d) window.appHandlers.printVocabById(d.id);
+            },
+
+            printAllVocab: () => {
+                if (!views.lex_vocab || !views.lex_vocab.vocabData.length) {
+                    alert("No dictionary entries to print.");
+                    return;
+                }
+
+                let html = `<div style="font-family:serif;max-width:900px;margin:0 auto;line-height:1.6;">
+                    <h1 style="text-align:center;border-bottom:2px solid black;padding-bottom:10px;margin-bottom:30px;">LEX Legal Dictionary</h1>`;
+
+                views.lex_vocab.vocabData.forEach(d => {
+                    html += `<div style="margin-bottom:28px;page-break-inside:avoid;">
+                        <h2 style="color:#1e3a8a;margin-bottom:5px;font-size:20px;">${Security.escapeHTML(d.term)}</h2>
+                        <p style="font-family:sans-serif;font-size:11px;color:#64748b;margin:0 0 8px;">${Security.escapeHTML(d.category || 'Legal Term')}${d.subjectTag ? ` • ${Security.escapeHTML(d.subjectTag)}` : ''}</p>
+                        <p style="margin:0 0 8px;"><strong>Definition:</strong> ${Security.escapeHTML(d.definition)}</p>
+                        ${d.simpleExplanation ? `<p style="margin:0 0 8px;"><strong>Simple:</strong> ${Security.escapeHTML(d.simpleExplanation)}</p>` : ''}
+                        ${d.legalBasis ? `<p style="margin:0 0 8px;"><strong>Legal Basis:</strong> ${Security.escapeHTML(d.legalBasis)}</p>` : ''}
+                        ${d.sourceCitation ? `<p style="margin:0;"><strong>Source:</strong> ${Security.escapeHTML(d.sourceCitation)}</p>` : ''}
+                    </div><hr style="border:0;border-top:1px solid #e2e8f0;margin-bottom:28px;">`;
+                });
+
+                html += '</div>';
+                window.appHandlers.printContent('LEX Legal Dictionary', html);
+            },
+
             renderVocabRows: (data) => {
-                const list = document.getElementById('vocab-list'); if (!list) return;
-                if (data.length === 0) { list.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-400"><i class="fas fa-language text-4xl mb-3 opacity-30"></i><br>No vocabulary entries found.</td></tr>`; return; }
-                
+                const list = document.getElementById('vocab-list');
+                if (!list) return;
+
+                if (!data.length) {
+                    list.innerHTML = `<div class="lg:col-span-2 p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><i class="fas fa-book-open text-5xl mb-4 opacity-20"></i><p class="font-bold text-slate-500">No matching dictionary entries.</p><p class="text-xs mt-1">Add one manually or let Lex draft an entry for you.</p></div>`;
+                    return;
+                }
+
                 list.innerHTML = data.map(d => {
-                    const safeWord = d.word ? d.word.replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
-                    const safeMeaning = d.meaning ? d.meaning.replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
-                    const safeApplication = d.application ? d.application.replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
-                    
-                    return `<tr class="hover:bg-slate-50 transition group">
-                        <td class="p-3 align-top font-bold text-blue-800 serif-text text-base">${d.word}</td>
-                        <td class="p-3 align-top text-slate-700">${d.meaning}</td>
-                        <td class="p-3 align-top text-slate-600 italic whitespace-pre-wrap">${d.application || '-'}</td>
-                        <td class="p-3 align-top text-center space-x-2 whitespace-nowrap">
-                            <button onclick="window.appHandlers.printVocab('${safeWord}', '${safeMeaning}', '${safeApplication}')" class="text-slate-400 hover:text-blue-600 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Print"><i class="fas fa-print"></i></button>
-                            <button onclick="window.appHandlers.editVocab('${d.id}', '${safeWord}', '${safeMeaning}', '${safeApplication}')" class="text-slate-400 hover:text-amber-500 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Edit"><i class="fas fa-edit"></i></button>
-                            <button onclick="window.appHandlers.deleteVocab('${d.id}')" class="text-slate-400 hover:text-red-500 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Delete"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>`;
+                    const status =
+                        d.sourceStatus === 'verified'
+                            ? `<span class="text-[10px] font-black text-emerald-700"><i class="fas fa-circle-check mr-1"></i>VERIFIED</span>`
+                            : d.sourceStatus === 'ai_draft'
+                            ? `<span class="text-[10px] font-black text-amber-700"><i class="fas fa-triangle-exclamation mr-1"></i>AI DRAFT</span>`
+                            : `<span class="text-[10px] font-black text-slate-400"><i class="fas fa-pen mr-1"></i>PERSONAL</span>`;
+
+                    const relatedPreview = (d.relatedTerms || []).slice(0, 3)
+                        .map(term => `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px]">${Security.escapeHTML(term)}</span>`)
+                        .join('');
+
+                    return `<article class="border border-slate-200 rounded-2xl p-5 bg-white hover:border-indigo-300 hover:shadow-sm transition flex flex-col">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    ${status}
+                                    <span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(d.category || 'Legal Term')}</span>
+                                </div>
+                                <h4 class="text-xl font-black text-indigo-900 serif-text break-words">${Security.escapeHTML(d.term || d.word)}</h4>
+                                ${d.subjectTag ? `<p class="text-[10px] font-bold uppercase tracking-widest text-violet-500 mt-1">${Security.escapeHTML(d.subjectTag)}</p>` : ''}
+                            </div>
+                            <div class="flex gap-1 flex-shrink-0">
+                                <button onclick="window.appHandlers.viewVocab('${d.id}')" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50" title="Open"><i class="fas fa-eye"></i></button>
+                                <button onclick="window.appHandlers.editVocabById('${d.id}')" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-amber-600 hover:bg-amber-50" title="Edit"><i class="fas fa-pen"></i></button>
+                                <button onclick="window.appHandlers.deleteVocab('${d.id}')" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50" title="Delete"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+
+                        <p class="text-sm text-slate-700 leading-relaxed mt-4">${Security.escapeHTML(d.definition || d.meaning)}</p>
+
+                        ${d.simpleExplanation ? `<div class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-100"><p class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">In Simple Terms</p><p class="text-xs text-slate-600 leading-relaxed">${Security.escapeHTML(d.simpleExplanation)}</p></div>` : ''}
+
+                        ${d.legalBasis ? `<p class="text-xs text-blue-700 mt-3"><b>Legal basis:</b> ${Security.escapeHTML(d.legalBasis)}</p>` : ''}
+
+                        ${relatedPreview ? `<div class="mt-3 flex flex-wrap gap-1">${relatedPreview}</div>` : ''}
+
+                        <div class="mt-auto pt-4 flex flex-wrap gap-2">
+                            <button onclick="window.appHandlers.viewVocab('${d.id}')" class="text-xs font-bold text-indigo-700 hover:underline">Full Entry</button>
+                            <button onclick="window.appHandlers.dictionaryToFlashcard('${d.id}')" class="text-xs font-bold text-emerald-700 hover:underline">+ Flashcard</button>
+                            <button onclick="window.appHandlers.printVocabById('${d.id}')" class="text-xs font-bold text-slate-500 hover:underline">Print</button>
+                        </div>
+                    </article>`;
                 }).join('');
             },
-            filterVocab: () => { 
-                const term = document.getElementById('vocab-search').value.toLowerCase(); 
-                const filtered = views.lex_vocab.vocabData.filter(d => 
-                    (d.word && d.word.toLowerCase().includes(term)) || 
-                    (d.meaning && d.meaning.toLowerCase().includes(term)) || 
-                    (d.application && d.application.toLowerCase().includes(term))
-                ); 
-                window.appHandlers.renderVocabRows(filtered); 
+
+            filterVocab: () => {
+                const term = (document.getElementById('vocab-search')?.value || '').toLowerCase().trim();
+                const category = document.getElementById('vocab-category-filter')?.value || 'all';
+
+                const filtered = views.lex_vocab.vocabData.filter(d => {
+                    const categoryMatch = category === 'all' || d.category === category;
+                    const haystack = [
+                        d.term,
+                        d.definition,
+                        d.simpleExplanation,
+                        d.tagalogExplanation,
+                        d.legalBasis,
+                        d.application,
+                        d.usageExample,
+                        d.etymology,
+                        d.sourceCitation,
+                        d.subjectTag,
+                        ...(d.relatedTerms || [])
+                    ].join(' ').toLowerCase();
+
+                    return categoryMatch && (!term || haystack.includes(term));
+                });
+
+                window.appHandlers.renderVocabRows(filtered);
             },
-            
+
             performAiSearch: async () => {
                 const apiKey = document.getElementById('search-api-key').value.trim(); 
                 const queryInput = document.getElementById('search-query'); 
@@ -4429,7 +5245,7 @@ deleteAdvocacyDraft: (id) => {
                     
                     answerHtml = answerHtml.replace(/<ul>/g, '<ul class="list-disc pl-5 my-3 space-y-2">');
 
-                    output.insertAdjacentHTML('beforeend', `<div class="mb-6 w-full flex justify-start animate-fade-in"><div class="bg-white p-5 rounded-xl rounded-tl-none shadow-sm border border-slate-200 max-w-[95%] text-slate-800 leading-relaxed font-serif text-sm group"><h4 class="font-bold text-blue-600 text-[10px] uppercase tracking-wider mb-3 border-b border-slate-100 pb-2"><i class="fas fa-robot mr-1"></i> Professor Gemini</h4>${answerHtml}<div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><select id="save-select-${historyIndex}" class="search-subject-dropdown p-1.5 rounded border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-500 max-w-[150px]">${subjectOptions}</select><button onclick="window.appHandlers.saveAiSearch(${historyIndex})" class="bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded text-xs font-bold transition shadow-sm"><i class="fas fa-save mr-1"></i> Save to Notes</button></div></div></div>`);
+                    output.insertAdjacentHTML('beforeend', `<div class="mb-6 w-full flex justify-start animate-fade-in"><div class="bg-white p-5 rounded-xl rounded-tl-none shadow-sm border border-slate-200 max-w-[95%] text-slate-800 leading-relaxed font-serif text-sm group"><h4 class="font-bold text-blue-600 text-[10px] uppercase tracking-wider mb-3 border-b border-slate-100 pb-2"><i class="fas fa-robot mr-1"></i> Professor Gemini</h4>${answerHtml}<div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><select id="save-select-${historyIndex}" class="search-subject-dropdown p-1.5 rounded border border-slate-300 text-xs outline-none focus:ring-1 focus:ring-blue-500 max-w-[150px]">${subjectOptions}</select><button onclick="window.appHandlers.saveAiSearchToVault(${historyIndex})" class="bg-violet-50 text-violet-700 hover:bg-violet-100 px-3 py-1.5 rounded text-xs font-bold transition shadow-sm"><i class="fas fa-vault mr-1"></i> Vault</button><button onclick="window.appHandlers.saveAiSearch(${historyIndex})" class="bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded text-xs font-bold transition shadow-sm"><i class="fas fa-save mr-1"></i> Save to Notes</button></div></div></div>`);
                     output.scrollTop = output.scrollHeight;
                 } catch (error) { document.getElementById(`loading-${msgId}`).remove(); output.insertAdjacentHTML('beforeend', `<div class="mb-4 w-full flex justify-start"><div class="p-4 bg-red-50 text-red-700 rounded-xl rounded-tl-none border border-red-200 shadow-sm text-sm">Failed to search: ${error.message}</div></div>`); output.scrollTop = output.scrollHeight; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Ask Gemini'; }
             },
@@ -4586,7 +5402,7 @@ deleteAdvocacyDraft: (id) => {
             codalList: (arr) => (Array.isArray(arr) && arr.length) ? `<ul class="list-disc pl-5 space-y-1">${arr.map(x => `<li>${Security.escapeHTML(x)}</li>`).join('')}</ul>` : '',
             codalSaveBar: (meta) => `<div class="mb-4 flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
             <p class="text-xs text-blue-900 font-bold"><i class="fas fa-bookmark mr-1"></i>${Security.escapeHTML(meta.subject)} — ${Security.escapeHTML(meta.topic)} <span class="uppercase text-blue-600">/${meta.command}</span></p>
-            <button onclick="window.appHandlers.saveCodalTrainerItem()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap"><i class="fas fa-save mr-1"></i>Save to Trainer Library</button>
+            <div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.saveCodalSessionToVault()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap"><i class="fas fa-vault mr-1"></i>Knowledge Vault</button><button onclick="window.appHandlers.saveCodalTrainerItem()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap"><i class="fas fa-save mr-1"></i>Trainer Library</button></div>
             </div>`,
             saveCodalTrainerItem: async () => {
             const s = window.appHandlers.codalSession;
@@ -4781,6 +5597,7 @@ deleteAdvocacyDraft: (id) => {
             const promptText = `You are a strict Philippine Bar Examiner. Evaluate the student's answer using ALAC. Scenario: ${session.payload.scenario} Question: ${session.payload.question} Student answer: ${answer} Return ONLY raw JSON: {"score":8,"answer_comments":"...","legal_basis_comments":"...","application_comments":"...","conclusion_comments":"...","model_answer":"textbook ALAC model answer","next_step":"..."}`;
             const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
             const g = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
+            StudyEngine.recordAttempt({ sourceType: 'codal_exam', subjectName: session.subject || 'General', topic: session.topic || 'General', score: Number(g.score || 0) * 10, detail: g.next_step || '' });
             result.innerHTML = `<div class="bg-purple-50 border border-purple-200 rounded-xl p-5 text-sm">
             <div class="flex items-center justify-between mb-3"><p class="font-bold text-purple-800"><i class="fas fa-marker mr-1"></i> Examiner's Evaluation</p><span class="text-lg font-black text-purple-700">${Security.escapeHTML(String(g.score ?? '—'))}/10</span></div>
             <ul class="list-disc pl-5 space-y-1 text-slate-700">
@@ -4835,6 +5652,8 @@ deleteAdvocacyDraft: (id) => {
             const promptText = `You are a fierce Philippine law professor reciting a student. Question: ${session.payload.question} Student answer: ${answer} Return ONLY raw JSON: {"verdict":"PASS / ALMOST / MISS","comments":"...","model_answer":"..."}`;
             const data = await GeminiService.generate(apiKey, { contents: [{ role: 'user', parts: [{ text: promptText }] }] });
             const g = JSON.parse(cleanAiJsonResponse(GeminiService.text(data)));
+            const verdictScore = /PASS/i.test(g.verdict || '') ? 85 : /ALMOST/i.test(g.verdict || '') ? 65 : 35;
+            StudyEngine.recordAttempt({ sourceType: 'codal_recitation', subjectName: session.subject || 'General', topic: session.topic || 'General', score: verdictScore, detail: g.comments || '' });
             result.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-xl p-5 text-sm"><p class="font-bold text-red-800 mb-2"><i class="fas fa-stamp mr-1"></i> Verdict: ${Security.escapeHTML(g.verdict || '')}</p><p class="text-slate-700">${Security.escapeHTML(g.comments || '')}</p><details class="mt-3"><summary class="cursor-pointer font-bold text-red-700">View Model Answer</summary><p class="mt-2 whitespace-pre-wrap text-slate-700 leading-relaxed">${Security.escapeHTML(g.model_answer || '')}</p></details></div>`;
             } catch (e) { result.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">${Security.escapeHTML(e.message)}</div>`; }
             finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Evaluate My Answer'; }
@@ -4852,97 +5671,34 @@ deleteAdvocacyDraft: (id) => {
             </div>`;
             },
 
-          renderMatrixRows: (data) => { 
-                const list = document.getElementById('matrix-list'); if (!list) return; 
-                if (data.length === 0) { list.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400"><i class="fas fa-table text-4xl mb-3 opacity-30"></i><br>No matching doctrines found.</td></tr>`; return; }
-                
-                list.innerHTML = data.map(d => {
-                    // FIX: Added .replace(/\n/g, "\\n").replace(/\r/g, "") to prevent multi-line text from crashing the buttons
-                    const safeArticle = d.article ? d.article.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n").replace(/\r/g, "") : '';
-                    const safeTitle = d.caseTitle ? d.caseTitle.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n").replace(/\r/g, "") : '';
-                    const safeCitation = d.citation ? d.citation.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n").replace(/\r/g, "") : '';
-                    const safeDoctrine = d.doctrine ? d.doctrine.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n").replace(/\r/g, "") : '';
-                    const safeApplication = d.application ? d.application.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n").replace(/\r/g, "") : '';
-                    
-                    return `<tr class="hover:bg-slate-50 transition group">
-                        <td class="p-3 align-top"><span class="bg-blue-100 text-blue-800 font-bold px-2 py-1 rounded text-xs whitespace-nowrap">${d.article}</span></td>
-                        <td class="p-3 align-top"><p class="font-bold text-slate-800 serif-text">${d.caseTitle}</p><p class="text-xs text-slate-500 mt-1">${d.citation}</p></td>
-                        <td class="p-3 align-top text-slate-700 leading-relaxed whitespace-pre-wrap">${d.doctrine}</td>
-                        <td class="p-3 align-top text-slate-600 italic leading-relaxed whitespace-pre-wrap">${d.application || '-'}</td>
-                        <td class="p-3 align-top text-center space-x-2 whitespace-nowrap">
-                            <button onclick="window.appHandlers.printDoctrine('${safeArticle}', '${safeTitle}', '${safeCitation}', '${safeDoctrine}', '${safeApplication}')" class="text-slate-400 hover:text-blue-600 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Print"><i class="fas fa-print"></i></button>
-                            <button onclick="window.appHandlers.editDoctrine('${d.id}', '${safeArticle}', '${safeTitle}', '${safeCitation}', '${safeDoctrine}', '${safeApplication}')" class="text-slate-400 hover:text-amber-500 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Edit"><i class="fas fa-edit"></i></button>
-                            <button onclick="window.appHandlers.deleteDoctrine('${d.id}')" class="text-slate-400 hover:text-red-500 transition opacity-0 group-hover:opacity-100 bg-white p-1.5 rounded shadow-sm border border-slate-200" title="Delete"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>`;
-                }).join(''); 
+          refreshDoctrineSubjectFilter: async () => {
+                const select=document.getElementById('doctrine-subject-filter'); if(!select)return;
+                const subjects=await AppDB.all('subjects'); const current=select.value;
+                select.innerHTML='<option value="all">All Subjects</option>'+subjects.filter(s=>!s.archived).map(s=>`<option value="${Security.escapeHTML(s.name||'')}">${Security.escapeHTML(s.name||'Subject')}</option>`).join('');
+                if([...select.options].some(o=>o.value===current))select.value=current;
             },
-            filterMatrix: () => { 
-                const term = document.getElementById('matrix-search').value.toLowerCase(); 
-                const filtered = views.matrix.doctrines.filter(d => 
-                    (d.article && d.article.toLowerCase().includes(term)) || 
-                    (d.caseTitle && d.caseTitle.toLowerCase().includes(term)) || 
-                    (d.doctrine && d.doctrine.toLowerCase().includes(term)) ||
-                    (d.application && d.application.toLowerCase().includes(term))
-                ); 
-                window.appHandlers.renderMatrixRows(filtered); 
+          renderMatrixRows: (data) => {
+                const list=document.getElementById('matrix-list'); if(!list)return;
+                if(!data.length){list.innerHTML='<div class="xl:col-span-2 p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><i class="fas fa-scale-balanced text-5xl opacity-20 mb-4"></i><p class="font-bold">No doctrines match this view.</p></div>';return;}
+                const esc=value=>Security.escapeHTML(String(value||''));
+                const block=(label,value)=>value?`<div class="mt-3"><p class="text-[10px] uppercase tracking-widest font-black text-slate-400">${label}</p><p class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed mt-1">${esc(value)}</p></div>`:'';
+                list.innerHTML=data.map(d=>`<article class="border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-sm transition bg-white"><div class="flex items-start justify-between gap-3"><div><div class="flex flex-wrap gap-2 mb-2"><span class="px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-black uppercase">${esc(d.article||d.topic||'General')}</span>${d.subjectName?`<span class="px-2 py-1 rounded bg-violet-50 text-violet-700 text-[10px] font-black uppercase">${esc(d.subjectName)}</span>`:''}</div><h4 class="font-black text-slate-900 text-lg serif-text">${esc(d.caseTitle||d.topic||'Doctrine')}</h4>${d.citation?`<p class="text-xs text-slate-500 mt-1">${esc(d.citation)}</p>`:''}</div><div class="flex gap-1"><button onclick="window.appHandlers.saveDoctrineToVault('${d.id}')" class="w-8 h-8 rounded-lg border text-violet-600 hover:bg-violet-50" title="Save to Knowledge Vault"><i class="fas fa-vault"></i></button><button onclick="window.appHandlers.editDoctrineById('${d.id}')" class="w-8 h-8 rounded-lg border text-amber-600 hover:bg-amber-50"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.deleteDoctrine('${d.id}')" class="w-8 h-8 rounded-lg border text-red-500 hover:bg-red-50"><i class="fas fa-trash"></i></button></div></div>${block('Definition',d.definition||d.doctrine)}${block('General Rule',d.generalRule)}${block('Requisites / Elements',d.requisites)}${block('Exceptions / Qualifications',d.exceptions)}${d.cases?.length?block('Related Cases',d.cases.join('\n')):''}${block('Application',d.application)}${block('Tagalog / Taglish',d.tagalogExplanation)}${block('Exam Tip',d.examTip)}<div class="mt-4 pt-3 border-t border-slate-100 flex gap-3"><button onclick="window.appHandlers.openLexTutorForDoctrine('${d.id}')" class="text-xs font-bold text-indigo-700 hover:underline"><i class="fas fa-wand-magic-sparkles mr-1"></i>Ask Lex</button><button onclick="window.appHandlers.saveDoctrineToVault('${d.id}')" class="text-xs font-bold text-violet-700 hover:underline">Save to Vault</button></div></article>`).join('');
             },
-            
-            addDoctrine: () => { 
-                Modal.show({ 
-                    title: '<i class="fas fa-table text-blue-600"></i> Map New Doctrine', 
-                    content: `
-                        <div class="grid grid-cols-2 gap-3 mb-3">
-                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Article / Topic</label><input type="text" id="doc-art" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Art. 1156"></div>
-                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Citation / Year</label><input type="text" id="doc-cite" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., G.R. 12345 (2020)"></div>
-                        </div>
-                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input type="text" id="doc-title" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., People vs. Example"></div>
-                        <div class="mb-3"><label class="block text-sm font-medium text-slate-700 mb-1">Core Doctrine/Principle</label><textarea id="doc-text" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-none" placeholder="State the core ruling concisely..."></textarea></div>
-                        <div><label class="block text-sm font-medium text-slate-700 mb-1">Application/Context</label><textarea id="doc-app" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-none" placeholder="How was it applied to the facts?"></textarea></div>`, 
-                    onSubmit: async () => { 
-                        const article = document.getElementById('doc-art').value.trim() || 'General'; 
-                        const caseTitle = document.getElementById('doc-title').value.trim(); 
-                        const citation = document.getElementById('doc-cite').value.trim(); 
-                        const doctrine = document.getElementById('doc-text').value.trim(); 
-                        const application = document.getElementById('doc-app').value.trim(); 
-                        if (!caseTitle || !doctrine) { alert("Case Title and Doctrine are required."); throw new Error("Validation failed"); } 
-                        await AppDB.add('doctrines', { article, caseTitle, citation, doctrine, application, created: serverTimestamp() }); 
-                    } 
-                }); 
+            filterMatrix: () => {
+                const term=(document.getElementById('matrix-search')?.value||'').toLowerCase(); const subject=document.getElementById('doctrine-subject-filter')?.value||'all';
+                const filtered=views.matrix.doctrines.filter(d=>{const hay=[d.article,d.topic,d.caseTitle,d.citation,d.definition,d.doctrine,d.generalRule,d.requisites,d.exceptions,d.application,d.tagalogExplanation,d.examTip,...(d.cases||[])].join(' ').toLowerCase(); const subjectMatch=subject==='all'||d.subjectName===subject||d.subject===subject; return subjectMatch&&(!term||hay.includes(term));});
+                window.appHandlers.renderMatrixRows(filtered);
             },
-            
-            editDoctrine: (id, article, caseTitle, citation, doctrine, application) => {
-                const decodeHtml = (html) => { const txt = document.createElement("textarea"); txt.innerHTML = html; return txt.value; };
-                Modal.show({ 
-                    title: '<i class="fas fa-edit text-amber-500"></i> Edit Doctrine', 
-                    content: `
-                        <div class="grid grid-cols-2 gap-3 mb-3">
-                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Article / Topic</label><input type="text" id="doc-art" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value="${article.replace(/"/g, '&quot;')}"></div>
-                            <div><label class="block text-sm font-medium text-slate-700 mb-1">Citation / Year</label><input type="text" id="doc-cite" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value="${citation.replace(/"/g, '&quot;')}"></div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Case Title</label><input type="text" id="doc-title" class="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-500" value="${caseTitle.replace(/"/g, '&quot;')}">
-                        </div>
-                        <div class="mb-3">
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Core Doctrine/Principle</label><textarea id="doc-text" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-none focus:ring-2 focus:ring-amber-500">${decodeHtml(doctrine)}</textarea>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Application/Context</label><textarea id="doc-app" rows="2" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-none focus:ring-2 focus:ring-amber-500">${decodeHtml(application || '')}</textarea>
-                        </div>`, 
-                    submitText: 'Update',
-                    submitClass: 'px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-medium transition shadow-sm',
-                    onSubmit: async () => { 
-                        const updatedArticle = document.getElementById('doc-art').value.trim() || 'General'; 
-                        const updatedCaseTitle = document.getElementById('doc-title').value.trim(); 
-                        const updatedCitation = document.getElementById('doc-cite').value.trim(); 
-                        const updatedDoctrine = document.getElementById('doc-text').value.trim(); 
-                        const updatedApplication = document.getElementById('doc-app').value.trim();
-                        if (!updatedCaseTitle || !updatedDoctrine) { alert("Case Title and Doctrine are required."); throw new Error("Validation failed"); } 
-                        await AppDB.update('doctrines', id, { article: updatedArticle, caseTitle: updatedCaseTitle, citation: updatedCitation, doctrine: updatedDoctrine, application: updatedApplication, updated: serverTimestamp() }); 
-                    } 
-                }); 
+            doctrineEditor: (existing = null) => {
+                const d=existing||{}; const subjects=views.subjects.subjects||[];
+                const options='<option value="">Unassigned</option>'+subjects.map(s=>`<option value="${s.id}" data-name="${Security.escapeHTML(s.name||'')}" ${(Array.isArray(d.subjectIds)&&d.subjectIds.includes(s.id))||d.primarySubjectId===s.id?'selected':''}>${Security.escapeHTML(s.name||'')}</option>`).join('');
+                Modal.show({title:`<i class="fas fa-scale-balanced text-blue-600 mr-2"></i>${existing?'Edit':'Add'} Doctrine`,content:`<div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-bold mb-1">Topic / Article</label><input id="doc-art" value="${Security.escapeHTML(d.article||d.topic||'')}" class="w-full p-2.5 border rounded-lg"></div><div><label class="block text-sm font-bold mb-1">Subject</label><select id="doc-subject" class="w-full p-2.5 border rounded-lg bg-white">${options}</select></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Leading Case / Label</label><input id="doc-title" value="${Security.escapeHTML(d.caseTitle||'')}" class="w-full p-2.5 border rounded-lg"></div><div><label class="block text-sm font-bold mb-1">Citation</label><input id="doc-cite" value="${Security.escapeHTML(d.citation||'')}" class="w-full p-2.5 border rounded-lg"></div></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Definition / Core Doctrine</label><textarea id="doc-definition" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.definition||d.doctrine||'')}</textarea></div><div class="mt-3"><label class="block text-sm font-bold mb-1">General Rule</label><textarea id="doc-rule" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.generalRule||'')}</textarea></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Requisites / Elements</label><textarea id="doc-req" rows="4" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.requisites||'')}</textarea></div><div><label class="block text-sm font-bold mb-1">Exceptions / Qualifications</label><textarea id="doc-exc" rows="4" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.exceptions||'')}</textarea></div></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Related Cases <span class="text-xs text-slate-400 font-normal">one per line</span></label><textarea id="doc-cases" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML((d.cases||[]).join('\n'))}</textarea></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Application</label><textarea id="doc-app" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.application||'')}</textarea></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Tagalog / Taglish</label><textarea id="doc-tagalog" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.tagalogExplanation||'')}</textarea></div><div><label class="block text-sm font-bold mb-1">Exam Tip</label><textarea id="doc-tip" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.examTip||'')}</textarea></div></div>`,submitText:existing?'Update Doctrine':'Save Doctrine',onSubmit:async()=>{const art=document.getElementById('doc-art').value.trim()||'General',def=document.getElementById('doc-definition').value.trim();if(!def)throw new Error('Definition/Core Doctrine is required.');const sel=document.getElementById('doc-subject'),sid=sel.value,sname=sel.options[sel.selectedIndex]?.dataset.name||sel.options[sel.selectedIndex]?.text||'';const payload={article:art,topic:art,caseTitle:document.getElementById('doc-title').value.trim(),citation:document.getElementById('doc-cite').value.trim(),definition:def,doctrine:def,generalRule:document.getElementById('doc-rule').value.trim(),requisites:document.getElementById('doc-req').value.trim(),exceptions:document.getElementById('doc-exc').value.trim(),cases:document.getElementById('doc-cases').value.split(/\n+/).map(v=>v.trim()).filter(Boolean),application:document.getElementById('doc-app').value.trim(),tagalogExplanation:document.getElementById('doc-tagalog').value.trim(),examTip:document.getElementById('doc-tip').value.trim(),subjectName:sname&&sname!=='Unassigned'?sname:'',primarySubjectId:sid||'',subjectIds:sid?[sid]:[],schemaVersion:2,updated:serverTimestamp()};if(existing)await AppDB.update('doctrines',existing.id,payload);else await AppDB.add('doctrines',{...payload,created:serverTimestamp()});}});
             },
-            
+            addDoctrine: () => window.appHandlers.doctrineEditor(null),
+            editDoctrineById: (id) => { const d=views.matrix.doctrines.find(x=>x.id===id); if(d)window.appHandlers.doctrineEditor(d); },
+            editDoctrine: (id) => window.appHandlers.editDoctrineById(id),
+            saveDoctrineToVault: (id) => { const d=views.matrix.doctrines.find(x=>x.id===id); if(!d)return; const content=[`Definition: ${d.definition||d.doctrine||''}`,d.generalRule?`General Rule: ${d.generalRule}`:'',d.requisites?`Requisites: ${d.requisites}`:'',d.exceptions?`Exceptions: ${d.exceptions}`:'',d.application?`Application: ${d.application}`:'',d.tagalogExplanation?`Tagalog: ${d.tagalogExplanation}`:'',d.examTip?`Exam Tip: ${d.examTip}`:''].filter(Boolean).join('\n\n'); window.appHandlers.saveToKnowledgeVault({title:d.article||d.topic||d.caseTitle||'Doctrine',topic:d.article||d.topic||'',subjectName:d.subjectName||'',subjectId:d.primarySubjectId||'',content,sourceType:'doctrine',sourceId:d.id,sourceLabel:d.caseTitle||d.citation||'Doctrine Library'}); },
+            openLexTutorForDoctrine: (id) => { const d=views.matrix.doctrines.find(x=>x.id===id); if(!d)return; window.appHandlers.openLexTutor(); document.getElementById('ask-lex-input').value=`Explain and test me on this doctrine: ${d.article||d.topic||d.definition||d.doctrine}`; },
             deleteDoctrine: (id) => { Modal.show({ title: '<i class="fas fa-trash text-red-500"></i> Delete Doctrine', content: '<p>Are you sure you want to remove this doctrine from your matrix?</p>', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('doctrines', id) }); },
 
             printDoctrine: (article, caseTitle, citation, doctrine, application) => {
@@ -5700,7 +6456,7 @@ deleteAdvocacyDraft: (id) => {
             },
             openAISettings: () => {
                 const savedKey = localStorage.getItem('gemini_api_key') || '';
-                Modal.show({ title: '<i class="fas fa-key text-amber-500 mr-2"></i>AI Configuration', content: `<div class="space-y-4"><div><label class="block text-sm font-bold text-slate-700 mb-1">Gemini API Key</label><input type="password" id="global-gemini-api-key" value="${Security.escapeHTML(savedKey)}" class="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Paste your Google AI Studio Gemini key"></div><div class="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-900"><b>One key for all AI tools.</b> Case Digester, Legal Research, Study Lab, Advocacy Lab, and Subject Materials use this shared browser setting.</div></div>`, submitText: 'Save AI Settings', onSubmit: async () => { const key=document.getElementById('global-gemini-api-key').value.trim(); if(key)localStorage.setItem('gemini_api_key',key);else localStorage.removeItem('gemini_api_key'); ['gemini-api-key','review-api-key','search-api-key','tree-api-key','mnem-api-key','advocacy-api-key','material-api-key'].forEach(id=>{const input=document.getElementById(id);if(input)input.value=key;}); } });
+                Modal.show({ title: '<i class="fas fa-key text-amber-500 mr-2"></i>AI Configuration', content: `<div class="space-y-4"><div><label class="block text-sm font-bold text-slate-700 mb-1">Gemini API Key</label><input type="password" id="global-gemini-api-key" value="${Security.escapeHTML(savedKey)}" class="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Paste your Google AI Studio Gemini key"></div><div class="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-900"><b>One key for all AI tools.</b> Ask Lex, Case Digester, Legal Research, Legal Dictionary, Doctrine Library, Study Lab, Advocacy Lab, and Subject Materials use this shared browser setting.</div></div>`, submitText: 'Save AI Settings', onSubmit: async () => { const key=document.getElementById('global-gemini-api-key').value.trim(); if(key)localStorage.setItem('gemini_api_key',key);else localStorage.removeItem('gemini_api_key'); ['gemini-api-key','review-api-key','search-api-key','tree-api-key','mnem-api-key','advocacy-api-key','material-api-key'].forEach(id=>{const input=document.getElementById(id);if(input)input.value=key;}); } });
             },
             navigate: (viewId) => { 
                 if (viewId === 'codals') return;
@@ -6690,7 +7446,7 @@ initPomoPosition: () => {
                 const sourceLabel = pages.length ? pages.map(page => `p. ${page}`).join(', ') : 'No page references';
                 const safeHtml = Security.sanitizeAI(html);
                 window.appHandlers.currentMaterialOutput = { materialId: material.id, materialTitle: material.title, title: suggestedTitle, html: safeHtml, outputType, sectionId, sourcePages: pages };
-                output.innerHTML = `<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 pb-4 mb-5"><div><p class="text-xs font-bold uppercase tracking-widest text-emerald-600">${Security.escapeHTML(outputType)}</p><h4 class="text-xl font-bold text-slate-800 serif-text mt-1">${Security.escapeHTML(title)}</h4><p class="text-xs text-slate-500 mt-2"><i class="fas fa-file-pdf mr-1"></i>${Security.escapeHTML(material.title)} • Sources: ${Security.escapeHTML(sourceLabel)}</p></div><button onclick="window.appHandlers.saveMaterialOutputToNotebook()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex-shrink-0"><i class="fas fa-floppy-disk mr-2"></i>Save to Notebook</button></div><div class="material-generated-content prose max-w-none text-sm leading-relaxed text-slate-700">${safeHtml}</div><div class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Source pages used</p><div class="flex flex-wrap gap-2 mt-2">${pages.length ? pages.map(page => `<span class="bg-white border border-slate-200 px-2 py-1 rounded text-xs text-slate-600">Page ${page}</span>`).join('') : '<span class="text-xs text-slate-400">No page references available.</span>'}</div></div>`;
+                output.innerHTML = `<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 pb-4 mb-5"><div><p class="text-xs font-bold uppercase tracking-widest text-emerald-600">${Security.escapeHTML(outputType)}</p><h4 class="text-xl font-bold text-slate-800 serif-text mt-1">${Security.escapeHTML(title)}</h4><p class="text-xs text-slate-500 mt-2"><i class="fas fa-file-pdf mr-1"></i>${Security.escapeHTML(material.title)} • Sources: ${Security.escapeHTML(sourceLabel)}</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.saveMaterialOutputToVault()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex-shrink-0"><i class="fas fa-vault mr-2"></i>Save to Vault</button><button onclick="window.appHandlers.saveMaterialOutputToNotebook()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex-shrink-0"><i class="fas fa-floppy-disk mr-2"></i>Save to Notebook</button></div></div><div class="material-generated-content prose max-w-none text-sm leading-relaxed text-slate-700">${safeHtml}</div><div class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Source pages used</p><div class="flex flex-wrap gap-2 mt-2">${pages.length ? pages.map(page => `<span class="bg-white border border-slate-200 px-2 py-1 rounded text-xs text-slate-600">Page ${page}</span>`).join('') : '<span class="text-xs text-slate-400">No page references available.</span>'}</div></div>`;
             },
 
             askSubjectMaterial: async (id) => {
@@ -6724,6 +7480,7 @@ initPomoPosition: () => {
             html = `<div class="p-4 bg-amber-50 border border-amber-200 rounded-lg"><b>Relevant passages found:</b><p class="mt-2">Add a Gemini API key for a synthesized answer. For now, review the extracted passages below.</p></div>${chunks.map(chunk => `<blockquote><b>${MaterialUtils.pageLabel(chunk)}</b><br>${Security.escapeHTML(Utils.excerpt(chunk.text, 1800))}</blockquote>`).join('')}`;
         }
         window.appHandlers.renderMaterialAssistantResult(material, 'Answer from Selected Material', html, chunks, 'Material Q&A', `Material Q&A — ${question.slice(0, 70)}`, 'class_notes');
+        await window.appHandlers.saveMaterialChatTurn(material, question, html, chunks);
     } catch (error) {
         output.innerHTML = `<div class="p-5 bg-red-50 border border-red-200 text-red-700 rounded-xl">${Security.escapeHTML(error.message)}</div>`;
     } finally { button.disabled = false; button.innerHTML = '<i class="fas fa-message mr-2"></i>Answer from PDF'; }
@@ -7491,7 +8248,7 @@ sendBarExamMessage: async () => {
                                 <button onclick="window.appHandlers.printNote('${safeTitleForPrint}')" class="text-slate-400 hover:text-blue-600 p-2" title="Print"><i class="fas fa-print"></i></button>
                                 <button onclick="window.appHandlers.downloadNoteAsPDF('${safeTitleForPrint}')" class="text-slate-400 hover:text-emerald-600 p-2" title="Save as PDF"><i class="fas fa-file-pdf"></i></button>
                                 <button onclick="window.appHandlers.downloadText('${safeTitleForPrint}.txt', document.getElementById('note-content-editor').innerText)" class="text-slate-400 hover:text-slate-600 p-2" title="Download Text"><i class="fas fa-file-alt"></i></button>
-                                <button onclick="window.appHandlers.saveNote('${noteId}', false)" class="text-slate-400 hover:text-green-600 p-2" title="Force Save"><i class="fas fa-save"></i></button>
+                                <button onclick="window.appHandlers.saveCurrentNoteToVault('${noteId}')" class="text-slate-400 hover:text-violet-600 p-2" title="Save this page to Knowledge Vault"><i class="fas fa-vault"></i></button><button onclick="window.appHandlers.saveNote('${noteId}', false)" class="text-slate-400 hover:text-green-600 p-2" title="Force Save"><i class="fas fa-save"></i></button>
                                 <button onclick="window.appHandlers.toggleNoteToolbar()" class="text-slate-400 hover:text-blue-600 p-2" title="Minimize / maximize toolbar (like Word)"><i class="fas fa-chevron-up" id="note-toolbar-toggle-icon"></i></button>
                             </div>
                         </div>                           
@@ -9023,13 +9780,14 @@ OUTPUT RULES:
             }
         }
 
+        views.case_digester.digestedData = { ...digestData };
         await AppDB.add('digests', digestData);
 
         const myNotesPreview = DigestUtils.myNotesText(digestData);
         area.innerHTML = `<div class="space-y-4">
             <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm">
                 <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to the Case Library and linked to the selected notebook. ${window.appHandlers.digestMeta?.pageCount ? `Full PDF analyzed: ${window.appHandlers.digestMeta.pageCount} pages` : 'Full supplied text analyzed'} • ${intelligence.chunkCount} analysis section${intelligence.chunkCount===1?'':'s'}.</p></div>
-                <button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View Table</button>
+                <div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.saveLatestDigestToVault()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-vault mr-1"></i>Save Doctrine to Vault</button><button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View Table</button></div>
             </div>
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-600 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(facts)}</p></div>
             <div class="bg-white p-5 rounded-xl shadow-sm border border-blue-200"><h4 class="font-bold text-blue-700 text-xs tracking-wider uppercase mb-2">Issue</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(issue)}</p></div>
@@ -9237,7 +9995,7 @@ generateReview: async () => {
         window.appHandlers.pdfText = '';
     }
 },
-            evaluateAnswer: async (index, docId) => { const apiKey = localStorage.getItem('gemini_api_key'); if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; } const isLive = docId === null; const answerId = isLive ? `live-exam-answer-${index}` : `saved-exam-answer-${docId}-${index}`; const btnId = isLive ? `btn-eval-live-${index}` : `btn-eval-${docId}-${index}`; const resultId = isLive ? `eval-result-live-${index}` : `eval-result-${docId}-${index}`; const answerEl = document.getElementById(answerId); const userAnswer = answerEl.value.trim(); if (!userAnswer) { alert("Please type an answer first."); return; } const btn = document.getElementById(btnId); const resultDiv = document.getElementById(resultId); let reviewData; if (isLive && window.appHandlers.currentReviewData) { reviewData = window.appHandlers.currentReviewData.content[index]; } else if (!isLive && window.appHandlers.savedExamData[docId]) { reviewData = window.appHandlers.savedExamData[docId][index]; } if(!reviewData) return; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...'; resultDiv.classList.remove('hidden'); resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`; try { const promptText = `You are a strict but fair law professor grading a student's answer to a Bar Exam question. Question: ${reviewData.question} Suggested Correct Answer / Rubric: ${reviewData.suggested_answer} Student's Answer: ${userAnswer} Task: Provide a brief, constructive evaluation. Mention what they got right (Issue spotting, Rule application). Mention what they missed. Give a final score out of 100%. Keep formatting clean using basic HTML tags like <b> and <br>, do NOT use code blocks or markdown backticks.`; const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] }); let feedback = Security.sanitizeAI(GeminiService.text(data)); resultDiv.innerHTML = `<div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans mt-2"><h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>${feedback}</div>`; } catch (error) { resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer'; } },
+            evaluateAnswer: async (index, docId) => { const apiKey = localStorage.getItem('gemini_api_key'); if (!apiKey) { alert("Please enter your Gemini API Key at the top of the page."); return; } const isLive = docId === null; const answerId = isLive ? `live-exam-answer-${index}` : `saved-exam-answer-${docId}-${index}`; const btnId = isLive ? `btn-eval-live-${index}` : `btn-eval-${docId}-${index}`; const resultId = isLive ? `eval-result-live-${index}` : `eval-result-${docId}-${index}`; const answerEl = document.getElementById(answerId); const userAnswer = answerEl.value.trim(); if (!userAnswer) { alert("Please type an answer first."); return; } const btn = document.getElementById(btnId); const resultDiv = document.getElementById(resultId); let reviewData; if (isLive && window.appHandlers.currentReviewData) { reviewData = window.appHandlers.currentReviewData.content[index]; } else if (!isLive && window.appHandlers.savedExamData[docId]) { reviewData = window.appHandlers.savedExamData[docId][index]; } if(!reviewData) return; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Grading...'; resultDiv.classList.remove('hidden'); resultDiv.innerHTML = `<div class="p-4 bg-slate-50 rounded-lg text-sm text-slate-500 animate-pulse border border-slate-200">Professor Gemini is reviewing your answer...</div>`; try { const promptText = `You are a strict but fair law professor grading a student's answer to a Bar Exam question. Question: ${reviewData.question} Suggested Correct Answer / Rubric: ${reviewData.suggested_answer} Student's Answer: ${userAnswer} Task: Provide a brief, constructive evaluation. Mention what they got right (Issue spotting, Rule application). Mention what they missed. Give a final score out of 100%. Keep formatting clean using basic HTML tags like <b> and <br>, do NOT use code blocks or markdown backticks.`; const data = await GeminiService.generate(apiKey, { contents: [{ role: "user", parts: [{ text: promptText }] }] }); let rawFeedback = GeminiService.text(data); let feedback = Security.sanitizeAI(rawFeedback); const scoreMatch = rawFeedback.match(/(?:score[^0-9]{0,10})?(100|[1-9]?[0-9])\s*%/i); if(scoreMatch){ StudyEngine.recordAttempt({sourceType:'mock_exam',subjectName:'General',topic:reviewData.question?.slice(0,80)||'Mock Exam',score:Number(scoreMatch[1]),detail:'Mock Review'}); } resultDiv.innerHTML = `<div class="p-5 bg-blue-50 border border-blue-200 rounded-xl shadow-inner text-sm text-slate-800 leading-relaxed font-sans mt-2"><h5 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 uppercase tracking-wider text-xs"><i class="fas fa-marker mr-1"></i> Professor's Feedback</h5>${feedback}</div>`; } catch (error) { resultDiv.innerHTML = `<div class="p-4 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">Error grading answer: ${error.message}</div>`; } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-1"></i> Check Answer'; } },
           rateFlashcard: async (reviewId, cardIndex, quality) => { 
     try { 
         const reviewContent = window.appHandlers.savedReviewData[reviewId]; 
