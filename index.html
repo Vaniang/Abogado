@@ -626,6 +626,113 @@
   #ask-lex-drawer { width: 100vw; }
 }
 
+/* ============================================================
+   LEX V5.2 — MULTI-PAGE WORKSPACE TABS
+   ============================================================ */
+#lex-workspace-tabs {
+  min-height: 42px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: end;
+  gap: .25rem;
+  padding: .35rem .75rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  flex-shrink: 0;
+}
+#lex-workspace-tabs::-webkit-scrollbar { height: 5px; }
+#lex-workspace-tabs::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.lex-workspace-tab {
+  max-width: 220px;
+  min-width: 120px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  padding: 0 .65rem;
+  border: 1px solid #e2e8f0;
+  border-bottom: 0;
+  border-radius: .75rem .75rem 0 0;
+  background: #eef2f7;
+  color: #64748b;
+  font-size: .75rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.lex-workspace-tab:hover {
+  background: #fff;
+  color: #334155;
+}
+.lex-workspace-tab.active {
+  background: #fff;
+  color: #1d4ed8;
+  border-color: #cbd5e1;
+  box-shadow: 0 -3px 10px rgba(15,23,42,.04);
+}
+.lex-workspace-tab .tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lex-workspace-tab .tab-close {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+.lex-workspace-tab .tab-close:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+#lex-tab-actions {
+  position: sticky;
+  right: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  padding-left: .35rem;
+  background: linear-gradient(90deg, rgba(248,250,252,0), #f8fafc 25%);
+  flex-shrink: 0;
+}
+.lex-tab-action-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: .55rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lex-tab-action-btn:hover {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+@media (max-width: 768px) {
+  #lex-workspace-tabs {
+    min-height: 40px;
+    padding-left: .4rem;
+    padding-right: .4rem;
+  }
+  .lex-workspace-tab {
+    min-width: 105px;
+    max-width: 165px;
+  }
+}
+
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex overflow-hidden">
@@ -679,6 +786,7 @@
                 <span id="header-clock" class="text-sm font-mono text-slate-500 bg-slate-100 px-3 py-1 rounded">00:00:00</span>
             </div>
         </header>
+        <div id="lex-workspace-tabs" aria-label="Open Lex pages"></div>
         <div id="content-area" class="flex-1 overflow-y-auto p-8 relative">
             <div class="flex items-center justify-center h-full"><div class="loader"></div></div>
         </div>
@@ -2588,6 +2696,16 @@ async ocrPdf(file, onProgress = () => {}) {
             init(subjectId, subjectName) {
                 this.subjectId = subjectId;
                 this.subjectName = subjectName;
+                const workspaceTab = LexWorkspaceTabs.tabs.find(tab => tab.key === LexWorkspaceTabs.activeKey);
+                if (workspaceTab && workspaceTab.viewId === 'subject_notebook') {
+                    workspaceTab.title = subjectName || workspaceTab.title;
+                    workspaceTab.context = {
+                        ...(workspaceTab.context || {}),
+                        subjectId,
+                        subjectName
+                    };
+                    LexWorkspaceTabs.render();
+                }
                 this.activeNoteId = null;
                 this.activePanel = 'overview';
                 this.notesData = [];
@@ -4155,6 +4273,394 @@ const cleanAiJsonResponse = (text) => {
             });
             if (typeof view.destroy === 'function') {
                 try { view.destroy(); } catch (error) { console.warn('View cleanup failed:', error); }
+            }
+        };
+
+        const LexWorkspaceTabs = {
+            tabs: [],
+            activeKey: null,
+            maxTabs: 12,
+
+            iconFor(viewId) {
+                const nav = navItems.find(item => item.id === viewId);
+                if (nav?.icon) return nav.icon;
+
+                const map = {
+                    subject_notebook: 'fa-book-open',
+                    case_digester: 'fa-wand-magic-sparkles',
+                    digests: 'fa-folder-open',
+                    case_recitation: 'fa-microphone-lines',
+                    doctrine_library: 'fa-scale-balanced',
+                    matrix: 'fa-scale-balanced',
+                    knowledge_graph: 'fa-share-nodes',
+                    knowledge_vault: 'fa-vault',
+                    adaptive_study: 'fa-chart-line',
+                    lex_vocab: 'fa-book-open',
+                    review: 'fa-graduation-cap',
+                    saved_reviews: 'fa-clock-rotate-left',
+                    codal_trainer: 'fa-eye-slash',
+                    mnemonic: 'fa-lightbulb',
+                    issue_tree: 'fa-diagram-project',
+                    resources: 'fa-toolbox',
+                    ai_search: 'fa-magnifying-glass',
+                    advocacy_lab: 'fa-comments'
+                };
+                return map[viewId] || 'fa-file-lines';
+            },
+
+            defaultTitle(viewId) {
+                return viewLabels[viewId] ||
+                    navItems.find(item => item.id === viewId)?.label ||
+                    'Lex Page';
+            },
+
+            captureActiveState() {
+                if (!this.activeKey) return;
+                const tab = this.tabs.find(item => item.key === this.activeKey);
+                if (!tab) return;
+
+                tab.scrollTop = Number(contentArea?.scrollTop || 0);
+
+                if (tab.viewId === 'subject_notebook') {
+                    tab.context = {
+                        ...(tab.context || {}),
+                        subjectId: views.subject_notebook.subjectId || tab.context?.subjectId || '',
+                        subjectName: views.subject_notebook.subjectName || tab.context?.subjectName || tab.title,
+                        activePanel: views.subject_notebook.activePanel || 'overview',
+                        activeNoteId: views.subject_notebook.activeNoteId || null,
+                        currentMaterialId: views.subject_notebook.currentMaterialId || null
+                    };
+                }
+
+                // Preserve simple form controls where practical.
+                const controls = {};
+                contentArea?.querySelectorAll('input[id], textarea[id], select[id]').forEach(el => {
+                    if (!el.id) return;
+                    if (el.type === 'file' || el.type === 'password') return;
+                    controls[el.id] = el.type === 'checkbox' || el.type === 'radio'
+                        ? { checked: Boolean(el.checked) }
+                        : { value: el.value };
+                });
+                tab.controls = controls;
+            },
+
+            restoreControls(tab) {
+                const controls = tab?.controls || {};
+                Object.entries(controls).forEach(([id, state]) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if ('checked' in state) el.checked = Boolean(state.checked);
+                    else if ('value' in state) el.value = state.value ?? '';
+                });
+            },
+
+            saveSession() {
+                try {
+                    const safeTabs = this.tabs.map(tab => ({
+                        key: tab.key,
+                        viewId: tab.viewId,
+                        title: tab.title,
+                        context: tab.context || {},
+                        scrollTop: Number(tab.scrollTop || 0)
+                    }));
+                    sessionStorage.setItem(
+                        'lex_workspace_tabs_v1',
+                        JSON.stringify({
+                            tabs: safeTabs,
+                            activeKey: this.activeKey
+                        })
+                    );
+                } catch (error) {
+                    console.warn('Could not save Lex workspace tabs:', error);
+                }
+            },
+
+            restoreSession() {
+                if (this.tabs.length) return;
+                try {
+                    const parsed = JSON.parse(
+                        sessionStorage.getItem('lex_workspace_tabs_v1') || 'null'
+                    );
+                    if (!parsed?.tabs?.length) return;
+
+                    this.tabs = parsed.tabs
+                        .filter(tab => tab?.key && tab?.viewId && views[tab.viewId])
+                        .slice(0, this.maxTabs)
+                        .map(tab => ({
+                            ...tab,
+                            controls: {}
+                        }));
+
+                    this.activeKey =
+                        this.tabs.some(tab => tab.key === parsed.activeKey)
+                            ? parsed.activeKey
+                            : this.tabs[0]?.key || null;
+                } catch (error) {
+                    console.warn('Could not restore Lex workspace tabs:', error);
+                    this.tabs = [];
+                    this.activeKey = null;
+                }
+            },
+
+            render() {
+                const strip = document.getElementById('lex-workspace-tabs');
+                if (!strip) return;
+
+                if (!this.tabs.length) {
+                    strip.innerHTML = `
+                        <div class="text-xs text-slate-400 px-2 py-2">
+                            Open a Lex page to begin your workspace.
+                        </div>`;
+                    return;
+                }
+
+                strip.innerHTML = `
+                    ${this.tabs.map(tab => `
+                        <button
+                            class="lex-workspace-tab ${tab.key === this.activeKey ? 'active' : ''}"
+                            onclick="window.appHandlers.switchWorkspaceTab('${Security.escapeHTML(tab.key).replace(/'/g, "\\'")}')"
+                            title="${Security.escapeHTML(tab.title)}">
+                            <i class="fas ${this.iconFor(tab.viewId)} text-[11px] flex-shrink-0"></i>
+                            <span class="tab-label">${Security.escapeHTML(tab.title)}</span>
+                            ${tab.key !== 'view:dashboard'
+                                ? `<span
+                                    class="tab-close"
+                                    onclick="event.stopPropagation(); window.appHandlers.closeWorkspaceTab('${Security.escapeHTML(tab.key).replace(/'/g, "\\'")}')"
+                                    title="Close page">
+                                    <i class="fas fa-xmark text-[10px]"></i>
+                                   </span>`
+                                : ''}
+                        </button>
+                    `).join('')}
+                    <div id="lex-tab-actions">
+                        <button
+                            class="lex-tab-action-btn"
+                            onclick="window.appHandlers.showOpenPages()"
+                            title="Open pages">
+                            <i class="fas fa-layer-group text-xs"></i>
+                        </button>
+                        <button
+                            class="lex-tab-action-btn"
+                            onclick="window.appHandlers.closeOtherWorkspaceTabs()"
+                            title="Close other pages">
+                            <i class="fas fa-compress text-xs"></i>
+                        </button>
+                    </div>`;
+            },
+
+            ensureTab({ key, viewId, title, context = {} }) {
+                let tab = this.tabs.find(item => item.key === key);
+                if (tab) {
+                    tab.title = title || tab.title;
+                    tab.context = { ...(tab.context || {}), ...context };
+                    return tab;
+                }
+
+                if (this.tabs.length >= this.maxTabs) {
+                    const removable = this.tabs.find(
+                        item => item.key !== this.activeKey && item.key !== 'view:dashboard'
+                    );
+                    if (removable) {
+                        this.tabs = this.tabs.filter(item => item.key !== removable.key);
+                    } else {
+                        alert(`Lex can keep up to ${this.maxTabs} pages open at once.`);
+                        return null;
+                    }
+                }
+
+                tab = {
+                    key,
+                    viewId,
+                    title: title || this.defaultTitle(viewId),
+                    context: { ...context },
+                    scrollTop: 0,
+                    controls: {}
+                };
+                this.tabs.push(tab);
+                return tab;
+            },
+
+            openView(viewId, options = {}) {
+                if (!views[viewId]) return;
+                const key = options.key || `view:${viewId}`;
+                const title = options.title || this.defaultTitle(viewId);
+                const context = options.context || {};
+
+                this.captureActiveState();
+
+                const tab = this.ensureTab({
+                    key,
+                    viewId,
+                    title,
+                    context
+                });
+                if (!tab) return;
+
+                this.switchTo(key, { alreadyCaptured: true });
+            },
+
+            openSubject(subjectId, subjectName) {
+                if (!subjectId) return;
+                this.openView('subject_notebook', {
+                    key: `subject:${subjectId}`,
+                    title: subjectName || 'Subject Notebook',
+                    context: {
+                        subjectId,
+                        subjectName: subjectName || 'Subject Notebook',
+                        activePanel: 'overview'
+                    }
+                });
+            },
+
+            switchTo(key, options = {}) {
+                const tab = this.tabs.find(item => item.key === key);
+                if (!tab) return;
+
+                if (!options.alreadyCaptured) this.captureActiveState();
+
+                closeResponsiveOverlays();
+
+                if (currentView && views[currentView]) {
+                    cleanupView(views[currentView]);
+                }
+
+                this.activeKey = key;
+                currentView = tab.viewId;
+
+                renderSidebar();
+                updateMobileNav();
+                this.render();
+
+                pageTitle.innerText = tab.title || this.defaultTitle(tab.viewId);
+
+                if (tab.viewId === 'subject_notebook') {
+                    const context = tab.context || {};
+                    const subjectId = context.subjectId;
+                    const subjectName = context.subjectName || tab.title;
+
+                    if (!subjectId) {
+                        contentArea.innerHTML = `
+                            <div class="p-8 text-center text-slate-400">
+                                This subject page can no longer be opened.
+                            </div>`;
+                    } else {
+                        views.subject_notebook.init(subjectId, subjectName);
+
+                        const desiredPanel = context.activePanel || 'overview';
+                        const desiredNoteId = context.activeNoteId || null;
+                        const desiredMaterialId = context.currentMaterialId || null;
+
+                        setTimeout(() => {
+                            if (desiredMaterialId && desiredPanel === 'materials') {
+                                views.subject_notebook.showMaterialWorkspace(desiredMaterialId);
+                            } else if (desiredNoteId && desiredPanel === 'overview') {
+                                const note = views.subject_notebook.notesData.find(item => item.id === desiredNoteId);
+                                if (note) views.subject_notebook.openNote(note);
+                                else views.subject_notebook.showOverview();
+                            } else if (desiredPanel === 'materials') {
+                                views.subject_notebook.showMaterials();
+                            } else if (desiredPanel === 'digests') {
+                                views.subject_notebook.showDigests();
+                            } else if (desiredPanel === 'doctrines') {
+                                views.subject_notebook.showDoctrines();
+                            } else if (desiredPanel === 'syllabus' && typeof views.subject_notebook.showSyllabusTracker === 'function') {
+                                views.subject_notebook.showSyllabusTracker();
+                            } else {
+                                views.subject_notebook.showOverview();
+                            }
+
+                            this.restoreControls(tab);
+                            contentArea.scrollTop = Number(tab.scrollTop || 0);
+                        }, 180);
+                    }
+                } else {
+                    contentArea.innerHTML = views[tab.viewId].render();
+                    contentArea.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+                    if (views[tab.viewId].init) views[tab.viewId].init();
+
+                    setTimeout(() => {
+                        this.restoreControls(tab);
+                        contentArea.scrollTop = Number(tab.scrollTop || 0);
+                    }, 60);
+                }
+
+                this.saveSession();
+            },
+
+            close(key) {
+                const index = this.tabs.findIndex(item => item.key === key);
+                if (index < 0 || key === 'view:dashboard') return;
+
+                const wasActive = this.activeKey === key;
+
+                if (wasActive) {
+                    this.captureActiveState();
+                    if (currentView && views[currentView]) cleanupView(views[currentView]);
+                }
+
+                this.tabs.splice(index, 1);
+
+                if (!this.tabs.length) {
+                    this.ensureTab({
+                        key: 'view:dashboard',
+                        viewId: 'dashboard',
+                        title: 'Dashboard'
+                    });
+                }
+
+                if (wasActive) {
+                    const next =
+                        this.tabs[Math.min(index, this.tabs.length - 1)] ||
+                        this.tabs[0];
+
+                    if (next) {
+                        this.activeKey = null;
+                        this.switchTo(next.key, { alreadyCaptured: true });
+                    }
+                } else {
+                    this.render();
+                    this.saveSession();
+                }
+            },
+
+            closeOthers() {
+                if (!this.activeKey) return;
+                this.captureActiveState();
+
+                const active = this.tabs.find(item => item.key === this.activeKey);
+                const dashboard = this.tabs.find(item => item.key === 'view:dashboard');
+
+                this.tabs = [
+                    ...(dashboard && dashboard.key !== active?.key ? [dashboard] : []),
+                    ...(active ? [active] : [])
+                ];
+
+                this.render();
+                this.saveSession();
+            },
+
+            showOpenPages() {
+                const rows = this.tabs.map(tab => `
+                    <button
+                        onclick="document.getElementById('app-modal').classList.add('hidden'); window.appHandlers.switchWorkspaceTab('${Security.escapeHTML(tab.key).replace(/'/g, "\\'")}')"
+                        class="w-full text-left flex items-center gap-3 p-3 rounded-xl border ${tab.key === this.activeKey ? 'border-blue-200 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}">
+                        <div class="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600">
+                            <i class="fas ${this.iconFor(tab.viewId)}"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="font-bold text-sm text-slate-800 truncate">${Security.escapeHTML(tab.title)}</p>
+                            <p class="text-[10px] uppercase tracking-wider text-slate-400">${Security.escapeHTML(this.defaultTitle(tab.viewId))}</p>
+                        </div>
+                        ${tab.key === this.activeKey ? '<i class="fas fa-circle text-blue-500 text-[8px]"></i>' : ''}
+                    </button>
+                `).join('');
+
+                Modal.show({
+                    title: '<i class="fas fa-layer-group text-blue-600 mr-2"></i>Open Lex Pages',
+                    content: `<div class="space-y-2">${rows}</div>
+                        <p class="text-xs text-slate-400 mt-4">Lex keeps up to ${this.maxTabs} pages open in one workspace. Subject notebooks can each have their own tab.</p>`,
+                    hideSubmit: true
+                });
             }
         };
 
@@ -6467,19 +6973,13 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
             },
             navigate: (viewId) => { 
                 if (viewId === 'codals') return;
-                closeResponsiveOverlays();
-                cleanupView(views[currentView]);
-                currentView = viewId;
-                renderSidebar();
-                updateMobileNav();
-                const item = navItems.find(i => i.id === viewId);
-                pageTitle.innerText = viewLabels[viewId] || (item ? item.label : 'LEX');
-                if (views[viewId]) {
-                    contentArea.innerHTML = views[viewId].render();
-                    contentArea.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-                    if (views[viewId].init) views[viewId].init();
-                }
+                LexWorkspaceTabs.openView(viewId);
             },
+
+            switchWorkspaceTab: (key) => LexWorkspaceTabs.switchTo(key),
+            closeWorkspaceTab: (key) => LexWorkspaceTabs.close(key),
+            closeOtherWorkspaceTabs: () => LexWorkspaceTabs.closeOthers(),
+            showOpenPages: () => LexWorkspaceTabs.showOpenPages(),
             
             updatePomoUI: () => { const mins = Math.floor(currentPomoSeconds / 60).toString().padStart(2, '0'); const secs = (currentPomoSeconds % 60).toString().padStart(2, '0'); const el = document.getElementById('pomo-time'); if(el) el.innerText = `${mins}:${secs}`; },
             startPomo: () => { if(isPomoRunning) return; isPomoRunning = true; document.getElementById('btn-pomo-start').classList.add('hidden'); document.getElementById('btn-pomo-pause').classList.remove('hidden'); if(pomoInterval) clearInterval(pomoInterval); pomoInterval = setInterval(() => { currentPomoSeconds--; window.appHandlers.updatePomoUI(); if(currentPomoSeconds <= 0) { clearInterval(pomoInterval); isPomoRunning = false; document.getElementById('btn-pomo-start').classList.remove('hidden'); document.getElementById('btn-pomo-pause').classList.add('hidden'); if(currentPomoMode === 'focus') { if(currentUser) { AppDB.add('focus_sessions', { minutes: POMO_FOCUS_MINS, created: serverTimestamp() }); } alert("Great job! Focus session complete. Time for a break."); window.appHandlers.setPomoMode('break'); } else { alert("Break is over! Time to get back to the grind."); window.appHandlers.setPomoMode('focus'); } } }, 1000); },
@@ -6844,7 +7344,9 @@ initPomoPosition: () => {
             archiveSubject: (id) => { Modal.show({ title: '<i class="fas fa-box-archive text-amber-500"></i> Archive Subject', content: '<p>Archive this subject notebook? Its pages will not be deleted.</p>', submitText: 'Archive', submitClass: 'px-4 py-2 bg-amber-600 text-white rounded-lg', onSubmit: async () => await AppDB.update('subjects', id, { archived: true, updated: serverTimestamp() }) }); },
             deleteSubject: (id) => window.appHandlers.archiveSubject(id),
             assignSubjectToActive: async (id) => { if (!AppState.activeSemesterId) return; await AppDB.update('subjects', id, { semesterId: AppState.activeSemesterId, updated: serverTimestamp() }); },
-            openSubject: (id, name) => { closeResponsiveOverlays(); cleanupView(views[currentView]); currentView = 'subject_notebook'; renderSidebar(); updateMobileNav(); pageTitle.innerText = 'Notebook'; contentArea.scrollTo({ top: 0, left: 0, behavior: 'auto' }); views.subject_notebook.init(id, name); },
+            openSubject: (id, name) => {
+                LexWorkspaceTabs.openSubject(id, name);
+            },
             showSubjectOverview: () => views.subject_notebook.showOverview(),
             showSubjectMaterials: () => views.subject_notebook.showMaterials(),
             openSubjectMaterial: (id) => views.subject_notebook.showMaterialWorkspace(id),
@@ -10041,7 +10543,21 @@ generateReview: async () => {
             if (user) {
                 currentUser = user; document.getElementById('user-display').innerText = user.displayName || "Counsel";
                 loginScreen.classList.add('opacity-0', 'pointer-events-none'); setTimeout(() => loginScreen.classList.add('hidden'), 300);
-                AppState.init().finally(() => { LexAlarmService.start(); window.appHandlers.navigate('dashboard'); window.appHandlers.updatePomoUI(); });
+                AppState.init().finally(() => {
+                    LexAlarmService.start();
+                    LexWorkspaceTabs.restoreSession();
+
+                    if (LexWorkspaceTabs.activeKey && LexWorkspaceTabs.tabs.length) {
+                        LexWorkspaceTabs.switchTo(
+                            LexWorkspaceTabs.activeKey,
+                            { alreadyCaptured: true }
+                        );
+                    } else {
+                        window.appHandlers.navigate('dashboard');
+                    }
+
+                    window.appHandlers.updatePomoUI();
+                });
             } else {
                 cleanupView(views[currentView]); AdvocacyReminderService.stop(); LexAlarmService.stop(); currentUser = null; AppState.activeSemesterId = null; AppState.activeSemester = null;
                 loginScreen.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
