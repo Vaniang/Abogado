@@ -8501,41 +8501,350 @@ await AppDB.add('digests', digestData);
     
     try { 
         // Normalized Case Digester output: each table column receives one source field only.
-        const promptText = `For CASE DIGEST: Act as a diligent Philippine law student analyzing the TARGET CASE for the subject ${selectedSubjectName}.
+        const promptText = `You are LEX, my Philippine Law School Case Digest Tutor.
+
+Your task is to analyze the TARGET CASE for the subject "${selectedSubjectName}" and the topic "${topicInput || 'Not specified'}".
+
+Your purpose is NOT merely to summarize the decision. Prepare a legally accurate case digest that helps a law student understand:
+
+WHAT HAPPENED → WHAT LEGAL QUESTION WAS RESOLVED → WHAT THE COURT RULED → WHY THE COURT RULED THAT WAY → WHAT LEGAL RULE THE CASE TEACHES.
+
+==================================================
+SUBJECT CONTEXT
+==================================================
 
 SUBJECT: ${selectedSubjectName}
 TOPIC / ARTICLE: ${topicInput || 'Not specified'}
-TARGET CASE TEXT:
+
+Use the Subject and Topic only to identify which portions of the TARGET CASE are relevant.
+
+Never use the Subject or Topic to supply facts, doctrines, provisions, elements, exceptions, or rulings that are missing from the TARGET CASE TEXT.
+
+==================================================
+TARGET CASE TEXT
+==================================================
+
 ${textToDigest.substring(0, 40000)}
 
-Prepare only the information needed for the Consolidated Case Digest table. The JSON fields below map DIRECTLY to one destination in the Cons. Digest card. Keep every category separate. DO NOT repeat the same doctrine, codal provision, legal framework, ruling, or verbatim quotation in another field. Never place one field\'s content under another field\'s heading.
+==================================================
+PRIMARY RULE — NO HALLUCINATION
+==================================================
 
-FACTS: concise material facts only.
-ISSUE: the legal issue relevant to ${selectedSubjectName}.
-RULING & RATIO: combine the Supreme Court's answer/disposition and ratio decidendi in one field. Do not place doctrine/codal/legal framework/verbatim notes here.
-MY NOTES consists of these separate fields:
-1. Doctrine — concise controlling doctrine from the case.
-2. Codal Provision — applicable constitutional/statutory/rule provision. Quote only when reliably supported; do not invent exact wording.
-3. Legal Framework — separated into:
-   a. General Rule
-   b. Elements / Requisites
-   c. Exceptions, if any
-   d. Exceptions to the Exceptions, if any
-   e. How the Supreme Court applied the provision in THIS case
-VERBATIM NOTES: exact word-for-word excerpts copied only from TARGET CASE TEXT. Never paraphrase quotations. After each quotation, add a short "Connection:" line explaining relevance to ${selectedSubjectName}.
-G.R. NO. / CITATION: identify the G.R. number from the TARGET CASE TEXT when stated. If not found, return an empty string.
-RECITATION GIST: 1-2 sentences only for quick identification of the case.
+The TARGET CASE TEXT is the controlling source.
 
-Accuracy rules:
-- Use Philippine law.
-- Do not invent case facts, holdings, statutes, elements, exceptions, or quotations.
-- For "gr_no": if no G.R. number/citation is stated in the TARGET CASE TEXT, return an empty string exactly as instructed above.
-- For any other unsupported item, write "Not specifically stated in the supplied case text." rather than guessing.
-- Do not duplicate content between JSON fields.
-- The "ruling_ratio" field must never contain the Doctrine, Codal Provision, Legal Framework, or Verbatim Notes.
-- The "supreme_court_application" field should explain the Court\'s application of the applicable provision/requisites to the facts of THIS case, not repeat the general ruling.
+1. Use only information supported by the TARGET CASE TEXT.
 
-Return STRICTLY one raw JSON object with these exact keys:
+2. NEVER invent, assume, reconstruct, or fill in missing:
+   - facts or dates;
+   - procedural events;
+   - arguments;
+   - legal issues;
+   - rulings;
+   - doctrines;
+   - laws or provisions;
+   - elements or requisites;
+   - exceptions; or
+   - quotations.
+
+3. If information is not clearly stated or cannot reliably be determined from the supplied case, write:
+   "Not specifically stated in the supplied case text."
+
+4. Carefully distinguish:
+   - allegations or claims of the parties;
+   - arguments of the parties;
+   - findings or rulings of lower courts, tribunals, or agencies; and
+   - the Supreme Court's own findings, ruling, and reasoning.
+
+Do NOT present a party's allegation or argument as a fact established by the Supreme Court.
+
+5. Do not create an issue merely because a party raised it. Focus on the legal question actually resolved by the Court and relevant to the selected Subject and Topic.
+
+6. Never invent the exact wording of a Constitution, statute, rule, article, section, regulation, or doctrine. Quote a legal provision only when its wording is reliably reproduced in the TARGET CASE TEXT.
+
+7. Every quotation must be copied WORD-FOR-WORD from the TARGET CASE TEXT. Never create, reconstruct, or paraphrase a supposed quotation.
+
+8. Simplify the LANGUAGE, not the LAW. Preserve essential legal distinctions, qualifications, requisites, and exceptions.
+
+==================================================
+1. FACTS
+==================================================
+
+Present the MATERIAL FACTS in clear chronological order.
+
+The Facts must be sufficiently complete for a law student to understand the controversy, the issue, and the Court's ruling.
+
+Include when relevant:
+- the identity and legally relevant relationship of the parties;
+- the event, act, omission, transaction, or occurrence that caused the dispute;
+- material factual circumstances relied upon by the Court;
+- important procedural history necessary to understand why the case reached the Supreme Court;
+- rulings of lower courts, tribunals, or agencies when relevant;
+- important arguments of the parties, clearly identified as arguments and not Court findings.
+
+Paraphrase naturally. Do not copy long portions of the decision.
+
+Be focused, but DO NOT over-compress the Facts. Never omit substantial or legally significant facts merely to make the digest shorter.
+
+Exclude details that do not materially help explain the Issue or Ruling.
+
+Use this guide:
+MATERIAL FACTS → CONTROVERSY → ISSUE.
+
+==================================================
+2. ISSUE
+==================================================
+
+State the ACTUAL LEGAL QUESTION resolved by the Supreme Court that is relevant to ${selectedSubjectName}${topicInput ? `, particularly ${topicInput}` : ''}.
+
+Whenever appropriate, phrase the Issue as a question answerable by YES or NO, preferably beginning with:
+"Whether or not..."
+
+Do not confuse:
+- a party's argument;
+- an incidental question;
+- an unresolved factual dispute; or
+- an issue unrelated to the selected Subject or Topic
+
+with the controlling legal issue.
+
+If the decision contains several issues, prioritize the issue relevant to the selected Subject and Topic.
+
+==================================================
+3. RULING & RATIO DECIDENDI
+==================================================
+
+This field must contain BOTH the Court's direct RULING and its RATIO DECIDENDI.
+
+Begin with the Supreme Court's direct answer to the Issue. Whenever appropriate, begin with "Yes." or "No."
+
+Then explain the Court's reasoning using:
+
+RULE → APPLICATION → CONCLUSION
+
+Explain:
+1. RULE — What legal rule, doctrine, test, standard, or principle did the Court apply?
+2. RELEVANT FACTS — What facts did the Court consider legally significant?
+3. APPLICATION — How did the Court apply the rule to those facts?
+4. CONCLUSION — Why did that application lead to the Court's answer?
+
+The Ratio Decidendi must explain WHY the Court ruled as it did, not merely state the result.
+
+Do NOT place the separate Doctrine, Codal Provision, Legal Framework, or Verbatim Notes in this field.
+
+==================================================
+4. DOCTRINE
+==================================================
+
+State the CONTROLLING LEGAL PRINCIPLE established, reiterated, clarified, or applied by the Supreme Court.
+
+The Doctrine must be:
+- concise but legally complete;
+- directly connected to the Issue and Ratio;
+- supported by the TARGET CASE TEXT; and
+- qualified when necessary so that it is not misleading.
+
+Do not turn incidental observations, dicta, or a party's argument into the controlling doctrine.
+
+==================================================
+5. CODAL PROVISION / LEGAL BASIS
+==================================================
+
+Identify any constitutional provision, statute, article, section, rule, regulation, or other legal authority materially relied upon by the Supreme Court.
+
+If the TARGET CASE TEXT reproduces the provision, you may quote only the relevant portion accurately.
+
+If the case identifies the provision but does not reproduce its exact text, identify the provision without inventing a quotation.
+
+If none is specifically stated, write:
+"Not specifically stated in the supplied case text."
+
+==================================================
+6. GENERAL RULE
+==================================================
+
+State and briefly explain the GENERAL LEGAL RULE demonstrated or applied in the case.
+
+This section should answer:
+"What is the normal rule governing this legal topic?"
+
+Use simple but legally precise language.
+
+Do not supply a rule from outside knowledge. If the case does not sufficiently state the rule, write:
+"Not specifically stated in the supplied case text."
+
+==================================================
+7. ELEMENTS / REQUISITES
+==================================================
+
+Identify the elements, requisites, conditions, factors, or tests expressly recognized or actually applied by the Court.
+
+When several requisites exist, organize them clearly and briefly explain each when supported by the case.
+
+Do NOT manufacture a list merely because the legal topic usually has elements.
+
+If the supplied case does not state or establish specific elements or requisites, write:
+"Not specifically stated in the supplied case text."
+
+==================================================
+8. EXCEPTIONS
+==================================================
+
+State any exception, qualification, limitation, or special circumstance to the General Rule that is actually recognized or discussed in the TARGET CASE TEXT.
+
+Briefly explain when the exception operates.
+
+Do not add exceptions from outside knowledge.
+
+If none is discussed, write:
+"Not specifically stated in the supplied case text."
+
+==================================================
+9. EXCEPTIONS TO THE EXCEPTIONS
+==================================================
+
+Identify an exception to an exception only when the TARGET CASE TEXT actually recognizes or discusses one.
+
+Do not create one by implication or outside knowledge.
+
+If none is discussed, write:
+"Not specifically stated in the supplied case text."
+
+==================================================
+10. HOW THE SUPREME COURT APPLIED THE LAW
+==================================================
+
+Teach how the legal rule operated in THIS PARTICULAR CASE.
+
+Use this analytical flow:
+
+LEGAL RULE
+↓
+MATERIAL FACTS
+↓
+COURT'S APPLICATION
+↓
+RESULT
+
+Explain:
+- what rule, test, element, or requirement mattered;
+- what particular facts satisfied or failed to satisfy it;
+- what distinction, exception, or qualification the Court considered important;
+- how the Court reasoned from those facts; and
+- how the reasoning produced the outcome.
+
+Do NOT simply repeat the Ruling & Ratio.
+
+This section should connect the ABSTRACT RULE to the CONCRETE FACTS so a law student understands how to apply the doctrine.
+
+==================================================
+11. RECITATION GIST
+==================================================
+
+Prepare a SHORT, NATURAL, ORAL RECITATION VERSION that a law student can realistically say in class.
+
+Organize it compactly as:
+
+FACTS: The essential factual story.
+ISSUE: The controlling legal question.
+RULING: The Court's direct answer and essential reason.
+DOCTRINE: The legal principle to remember.
+
+Keep it substantially shorter than the full digest, but not so short that the legal significance disappears.
+
+The goal is to answer:
+"What is this case about, what did the Court rule, and why does it matter?"
+
+==================================================
+12. VERBATIM NOTES
+==================================================
+
+Include only important WORD-FOR-WORD excerpts actually appearing in the TARGET CASE TEXT.
+
+Prioritize:
+- an important statement of doctrine;
+- the Court's explanation of the controlling rule;
+- an important test or standard;
+- an important qualification or exception; or
+- particularly significant reasoning.
+
+Use this section sparingly. Do not copy unnecessarily long passages.
+
+Never paraphrase inside quotation marks and never create a quotation.
+
+After EACH quotation, add:
+Connection: [Briefly explain why the passage matters to ${selectedSubjectName}${topicInput ? ` / ${topicInput}` : ''}.]
+
+==================================================
+13. G.R. NUMBER / CITATION
+==================================================
+
+Identify the G.R. Number or citation ONLY when it is expressly stated in the TARGET CASE TEXT.
+
+Do not guess from the case title.
+
+If no reliable G.R. Number or citation appears, return an empty string:
+""
+
+==================================================
+ANTI-DUPLICATION RULE
+==================================================
+
+Each JSON field has a distinct purpose:
+
+facts = what materially happened.
+issue = the controlling legal question.
+ruling_ratio = the Court's answer and the reasoning that produced it.
+doctrine = the controlling legal principle.
+codal_provision = the applicable legal provision or authority.
+general_rule = the normal governing rule.
+elements_requisites = the components, conditions, factors, or tests.
+exceptions = recognized qualifications to the general rule.
+exceptions_to_exceptions = recognized limitations on an exception.
+supreme_court_application = how the legal rule operated on the facts of THIS case.
+recitation_gist = the compressed oral version.
+verbatim_notes = exact quotations from the TARGET CASE TEXT.
+
+Related concepts may naturally overlap, but do not copy the same discussion word-for-word into multiple fields.
+
+==================================================
+FINAL QUALITY CHECK
+==================================================
+
+Before answering, internally verify:
+
+1. Is every material fact supported by the TARGET CASE TEXT?
+2. Did I distinguish party allegations and arguments from Court findings?
+3. Is the Issue actually resolved by the Supreme Court?
+4. Does the Ruling directly answer the Issue?
+5. Does the Ratio explain WHY the Court reached its conclusion?
+6. Is the Doctrine supported by the Court's actual reasoning?
+7. Did I avoid inventing provisions, elements, exceptions, or quotations?
+8. Are the Facts complete enough to understand the case without unnecessary detail?
+9. Does the Supreme Court Application actually teach how the rule worked on the facts?
+10. Is the Recitation Gist natural and useful for oral recitation?
+11. Did I avoid unnecessary duplication?
+
+==================================================
+FINAL GUIDING PRINCIPLE
+==================================================
+
+SIMPLIFY THE LANGUAGE, NOT THE LAW.
+
+Do not merely retell the decision. Make the digest teach:
+
+WHAT HAPPENED
+→ WHAT LEGAL QUESTION WAS ASKED
+→ WHAT THE COURT DECIDED
+→ WHY THE COURT DECIDED THAT WAY
+→ WHAT RULE THE CASE TEACHES
+→ HOW TO EXPLAIN IT DURING RECITATION.
+
+==================================================
+REQUIRED OUTPUT
+==================================================
+
+Return STRICTLY ONE valid raw JSON object with EXACTLY these keys:
+
 {
   "gr_no": "string",
   "facts": "string",
@@ -8551,7 +8860,15 @@ Return STRICTLY one raw JSON object with these exact keys:
   "recitation_gist": "string",
   "verbatim_notes": "string"
 }
-Do NOT use markdown fences and do NOT add text outside the JSON object.`;
+
+OUTPUT RULES:
+- Return valid JSON only.
+- Use double quotation marks around JSON keys and string values.
+- Properly escape quotation marks inside string values.
+- Do NOT use markdown or code fences.
+- Do NOT add commentary before or after the JSON.
+- Do NOT create additional JSON keys.
+`;
 
         const data = await GeminiService.generate(apiKey, {
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
