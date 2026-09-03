@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lex: Law School Companion V2.9.1</title>
+    <title>Lex: Law School Companion V4.0</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -589,6 +589,7 @@
         </div>
         <nav class="flex-1 overflow-y-auto py-4 space-y-1 px-3"></nav>
         <div class="p-4 border-t border-slate-800 space-y-3">
+            <button onclick="window.appHandlers.openAISettings()" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition"><i class="fas fa-key text-amber-400"></i> AI Settings</button>
             <div class="flex items-center justify-between px-3 py-2 rounded bg-slate-800">
                 <div class="flex items-center gap-3 overflow-hidden">
                     <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center"><i class="fas fa-user text-xs"></i></div>
@@ -725,85 +726,40 @@ getRedirectResult(auth)
   });
 
 // ==========================
-// CLOUDINARY FILE STORAGE (Supports files up to 100 MB)
+// CLOUDINARY FILE STORAGE — CLIENT-SAFE UNSIGNED MODE
+// No Cloudinary API secret is stored in the browser.
+// Configure limits/security inside the unsigned "lex_materials" preset.
 // ==========================
 const CLOUDINARY_CLOUD_NAME = "zhgwa2ng";
 const CLOUDINARY_UPLOAD_PRESET = "lex_materials";
-const CLOUDINARY_API_KEY = "829349181351689";
-const CLOUDINARY_API_SECRET = "V0eBE85avCZMefFtby-VxluoyOI"; // ⚠️ MUST NOT BE EMPTY
-const CLOUDINARY_UNSIGNED_MAX = 10 * 1024 * 1024; // 10 MB
-const CLOUDINARY_CHUNK_SIZE = 6 * 1024 * 1024;    // 6 MB chunks
 
 const CloudStorage = {
-  async sha1Hex(text) {
-    const data = new TextEncoder().encode(text);
-    const digest = await crypto.subtle.digest("SHA-1", data);
-    return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
-  },
-  async signedParams(extra = {}) {
-    const params = { ...extra, timestamp: Math.floor(Date.now() / 1000) };
-    const toSign = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join("&");
-    params.signature = await this.sha1Hex(toSign + CLOUDINARY_API_SECRET);
-    params.api_key = CLOUDINARY_API_KEY;
-    return params;
-  },
   async upload(file) {
-    if (file.size > CLOUDINARY_UNSIGNED_MAX && (!CLOUDINARY_API_SECRET || CLOUDINARY_API_SECRET.startsWith("PASTE_"))) {
-      throw new Error("This PDF is over 10 MB. Paste your Cloudinary API Secret into the code to enable large uploads, or compress the PDF first.");
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+    formData.append("folder", "lex_materials");
+    formData.append("return_delete_token", "true");
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
+    if (!response.ok) {
+      let message = `Cloudinary upload failed (HTTP ${response.status}).`;
+      try { const payload = await response.json(); if (payload?.error?.message) message = payload.error.message; } catch (_) {}
+      throw new Error(message + " Check the unsigned upload preset limits.");
     }
-
-    if (file.size <= CLOUDINARY_UNSIGNED_MAX) {
-      // Small files → fast unsigned upload
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-      formData.append("folder", "lex_materials");
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, { method: "POST", body: formData });
-      if (!response.ok) throw new Error(`Cloudinary upload failed (HTTP ${response.status}).`);
-      const result = await response.json();
-      return { downloadURL: result.secure_url, storagePath: result.public_id, deleteToken: result.delete_token || "", resourceType: result.resource_type || "raw" };
-    }
-
-    // Large files → signed chunked upload
-    const uniqueToken = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    let result = null;
-    for (let start = 0; start < file.size; start += CLOUDINARY_CHUNK_SIZE) {
-      const end = Math.min(start + CLOUDINARY_CHUNK_SIZE, file.size);
-      const params = await this.signedParams({ folder: "lex_materials", return_delete_token: true });
-      const formData = new FormData();
-      Object.entries(params).forEach(([key, value]) => formData.append(key, String(value)));
-      formData.append("file", file.slice(start, end), file.name);
-      
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`, {
-        method: "POST",
-        headers: {
-          "X-Unique-Upload-Id": uniqueToken,
-          "Content-Range": `bytes ${start}-${end - 1}/${file.size}`
-        },
-        body: formData
-      });
-      
-      if (!response.ok) {
-         const err = await response.json().catch(() => ({}));
-         throw new Error(err?.error?.message || `Cloudinary chunk upload failed (HTTP ${response.status}).`);
-      }
-      result = await response.json();
-    }
-    
+    const result = await response.json();
     return { downloadURL: result.secure_url, storagePath: result.public_id, deleteToken: result.delete_token || "", resourceType: result.resource_type || "raw" };
   },
-  async remove(storagePath, deleteToken, resourceType = "raw") {
-    if (!storagePath || !deleteToken) return;
+  async remove(storagePath, deleteToken) {
+    if (!deleteToken) return;
     try {
       const formData = new FormData();
-      formData.append("public_id", storagePath);
       formData.append("token", deleteToken);
-      await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/destroy`, { method: "POST", body: formData });
-    } catch (error) { console.warn("Cloudinary delete failed:", error); }
+      await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/delete_by_token`, { method: "POST", body: formData });
+    } catch (error) { console.warn("Cloudinary delete-by-token failed:", error); }
   }
 };
-                
-       let currentUser = null;
+
+let currentUser = null;
         let currentView = 'dashboard';
         let vibrationEnabled = false; // <--- ADDED THIS
         
@@ -901,6 +857,23 @@ const CloudStorage = {
                     }
                 }
                 return unique.join('\n\n');
+            },
+
+            validateVerbatimNotes(value = '', sourceText = '') {
+                const cleaned = this.cleanVerbatimNotes(value);
+                const source = this.text(sourceText);
+                if (!cleaned || !source) return '';
+                const normalize = input => String(input || '').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
+                const normalizedSource = normalize(source);
+                const blocks = cleaned.split(/\n\s*\n+/).map(block => block.trim()).filter(Boolean);
+                const valid = [];
+                for (const block of blocks) {
+                    const match = block.match(/[“"]([\s\S]+?)[”"]/);
+                    if (!match) continue;
+                    const quote = normalize(match[1]);
+                    if (quote.length >= 12 && normalizedSource.includes(quote)) valid.push(block);
+                }
+                return this.cleanVerbatimNotes(valid.join('\n\n'));
             },
 
             looksLegacyBundle(value = '') {
@@ -1231,6 +1204,70 @@ const CloudStorage = {
                     ?.map(part => part?.text || '')
                     .join('')
                     .trim() || '';
+            }
+        };
+
+        // V4 — Full-document intelligence: cover the whole source without silent truncation.
+        const FullTextIntelligence = {
+            pageRange(text = '') {
+                const pages = [...String(text || '').matchAll(/\[PAGE\s+(\d+)\]/gi)].map(m => Number(m[1])).filter(Number.isFinite);
+                if (!pages.length) return 'pasted text';
+                const unique = [...new Set(pages)].sort((a,b)=>a-b);
+                return unique.length === 1 ? `page ${unique[0]}` : `pages ${unique[0]}–${unique[unique.length - 1]}`;
+            },
+            units(text = '') {
+                const source = String(text || '').trim(); if (!source) return [];
+                const matches = [...source.matchAll(/\[PAGE\s+\d+\]/gi)];
+                if (matches.length) {
+                    const units=[];
+                    for (let i=0;i<matches.length;i++) {
+                        const start=matches[i].index; const end=i+1<matches.length?matches[i+1].index:source.length;
+                        units.push(source.slice(start,end).trim());
+                    }
+                    return units.filter(Boolean);
+                }
+                return source.split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);
+            },
+            chunks(text = '', maxChunks = 10) {
+                const source=String(text||'').trim(); if (!source) return [];
+                const units=this.units(source); if (!units.length) return [source];
+                const target=Math.min(50000,Math.max(24000,Math.ceil(source.length/Math.max(1,maxChunks))));
+                const chunks=[]; let current='';
+                for (const unit of units) {
+                    if (current && current.length+unit.length+2>target) { chunks.push(current.trim()); current=''; }
+                    current += (current?'\n\n':'')+unit;
+                }
+                if (current.trim()) chunks.push(current.trim());
+                while (chunks.length>maxChunks) {
+                    let bi=0, smallest=Infinity;
+                    for (let i=0;i<chunks.length-1;i++) { const size=chunks[i].length+chunks[i+1].length; if (size<smallest){smallest=size;bi=i;} }
+                    chunks.splice(bi,2,`${chunks[bi]}\n\n${chunks[bi+1]}`);
+                }
+                return chunks;
+            },
+            async caseEvidence(apiKey,text,subject,topic,onProgress=()=>{}) {
+                const source=String(text||'').trim(); if (!source) throw new Error('No case text was supplied.');
+                if (source.length<=52000) return {context:source,mode:'full_text_direct',chunkCount:1,originalCharacters:source.length};
+                const chunks=this.chunks(source,10), memos=[];
+                for (let i=0;i<chunks.length;i++) {
+                    const chunk=chunks[i], range=this.pageRange(chunk); onProgress(i+1,chunks.length,range);
+                    const prompt=`You are an evidence extractor for a Philippine Supreme Court case.\n\nThis is CHUNK ${i+1} OF ${chunks.length}, covering ${range}.\nSubject focus: ${subject||'Not specified'}\nTopic focus: ${topic||'Not specified'}\n\nSTRICT SOURCE RULE: Use ONLY this chunk. Do not use outside knowledge. Do not create the final digest yet. If absent, write \"None in this chunk.\"\n\nCreate a compact CASE EVIDENCE MEMO with: MATERIAL FACTS; PROCEDURAL HISTORY; PARTY ARGUMENTS/CLAIMS; LEGAL ISSUES MENTIONED; SUPREME COURT FINDINGS/REASONING; RULES/DOCTRINES/TESTS/REQUISITES/EXCEPTIONS/PROVISIONS ACTUALLY STATED; DISPOSITION/RESULT; and at most 2 short EXACT EXCERPTS preserving the nearest [PAGE n] marker. Keep party arguments, lower-court findings, and Supreme Court reasoning distinct.\n\nSOURCE CHUNK:\n${chunk}`;
+                    const data=await GeminiService.generate(apiKey,{contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.05}});
+                    memos.push(`===== EVIDENCE CHUNK ${i+1}/${chunks.length} — ${range} =====\n${GeminiService.text(data)}`);
+                }
+                return {context:memos.join('\n\n'),mode:'full_case_chunked',chunkCount:chunks.length,originalCharacters:source.length};
+            },
+            async studyContext(apiKey,text,purpose='review',onProgress=()=>{}) {
+                const source=String(text||'').trim(); if (!source) throw new Error('No study material was supplied.');
+                if (source.length<=50000) return {context:source,mode:'full_text_direct',chunkCount:1};
+                const chunks=this.chunks(source,8), notes=[];
+                for (let i=0;i<chunks.length;i++) {
+                    const range=this.pageRange(chunks[i]); onProgress(i+1,chunks.length,range);
+                    const prompt=`Extract study-worthy legal content from this source chunk for ${purpose}. Use ONLY the chunk. Preserve definitions, general rules, elements/requisites, exceptions, important distinctions, named cases/doctrines, and legally significant examples. Do not add outside law. Be compact but do not omit expressly stated rules.\n\nSOURCE (${range}):\n${chunks[i]}`;
+                    const data=await GeminiService.generate(apiKey,{contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.1}});
+                    notes.push(`SOURCE NOTE ${i+1}/${chunks.length} — ${range}\n${GeminiService.text(data)}`);
+                }
+                return {context:notes.join('\n\n'),mode:'full_material_chunked',chunkCount:chunks.length};
             }
         };
 
@@ -2074,10 +2111,10 @@ async ocrPdf(file, onProgress = () => {}) {
 
         // --- View Classes ---
        class DashboardView {
-            constructor() { this.unsubscribeReminders = null; this.unsubscribeSchedule = null; this.unsubscribePomoStats = null; this.clockInterval = null; this.classes = []; }
+            constructor() { this.unsubscribeReminders = null; this.unsubscribeSchedule = null; this.unsubscribePomoStats = null; this.unsubscribeReviewQueue = null; this.unsubscribeWeakness = null; this.clockInterval = null; this.classes = []; this.dueReviewCount = 0; this.weakPracticeCount = 0; }
             render() {
                 const verse = Utils.getDailyVerse();
-              return `<div class="max-w-6xl mx-auto pb-24"><div class="grid grid-cols-1 lg:grid-cols-3 gap-6"><div class="lg:col-span-2 space-y-6"><div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden"><i class="fas fa-balance-scale text-white opacity-5 text-9xl absolute -right-10 -bottom-10"></i><h3 class="text-2xl font-bold serif-text mb-2 relative z-10">Welcome back, Counsel.</h3><p class="text-blue-200 mb-6 relative z-10">Your journey to the Bar continues today.</p><div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm relative z-10"><p class="serif-text italic text-lg mb-2">"${verse.text}"</p><p class="text-sm text-amber-400 font-bold text-right">— ${verse.ref}</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full"><div class="flex items-center justify-between mb-4"><h4 class="font-bold text-slate-700"><i class="fas fa-calendar-week text-blue-600 mr-2"></i> Schedule</h4><div class="flex gap-2"><button onclick="window.appHandlers.openAlarmSettings()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded hover:bg-amber-200 transition font-bold" title="Alarm settings"><i class="fas fa-bell"></i></button><button onclick="window.appHandlers.addClass()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition font-bold"><i class="fas fa-plus"></i></button></div></div><div id="dashboard-schedule-list" class="space-y-3 flex-1 overflow-y-auto max-h-[250px] pr-2"><div class="text-center py-8 text-slate-400 text-sm"><div class="loader mx-auto mb-2"></div>Loading...</div></div></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center items-center h-full"><div class="w-full flex items-center justify-between mb-2"><h4 class="font-bold text-slate-700"><i class="fas fa-stopwatch text-amber-500 mr-2"></i> Study Tracker</h4><button onclick="window.appHandlers.startBarExam()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded hover:bg-purple-200 transition font-bold" title="Bar Exam Practice"><i class="fas fa-gavel"></i></button></div><div class="text-center mt-4"><span id="dash-study-time" class="text-5xl font-bold text-slate-800 font-mono">0<span class="text-2xl text-slate-400">h</span> 0<span class="text-2xl text-slate-400">m</span></span><p id="dash-study-sessions" class="text-sm font-medium text-blue-600 mt-3 bg-blue-50 px-4 py-1.5 rounded-full inline-block">0 Focus Sessions Logged</p><p class="text-xs text-slate-400 mt-4 leading-relaxed max-w-[200px] mx-auto">Use the floating timer in the bottom right to track your deep work.</p></div></div></div></div><div class="lg:col-span-1"><div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col"><div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl"><h4 class="font-bold text-slate-700"><i class="fas fa-tasks text-amber-500 mr-2"></i> Reminders</h4><button onclick="window.appHandlers.addReminder()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-200 transition font-bold"><i class="fas fa-plus mr-1"></i> Add Task</button></div><div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[600px]"></div></div></div></div></div>`;
+              return `<div class="max-w-6xl mx-auto pb-24"><div class="grid grid-cols-1 lg:grid-cols-3 gap-6"><div class="lg:col-span-2 space-y-6"><div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden"><i class="fas fa-balance-scale text-white opacity-5 text-9xl absolute -right-10 -bottom-10"></i><h3 class="text-2xl font-bold serif-text mb-2 relative z-10">Welcome back, Counsel.</h3><p class="text-blue-200 mb-6 relative z-10">Your journey to the Bar continues today.</p><div class="bg-white/10 p-4 rounded-lg border border-white/10 backdrop-blur-sm relative z-10"><p class="serif-text italic text-lg mb-2">"${verse.text}"</p><p class="text-sm text-amber-400 font-bold text-right">— ${verse.ref}</p></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full"><div class="flex items-center justify-between mb-4"><h4 class="font-bold text-slate-700"><i class="fas fa-calendar-week text-blue-600 mr-2"></i> Schedule</h4><div class="flex gap-2"><button onclick="window.appHandlers.openAlarmSettings()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded hover:bg-amber-200 transition font-bold" title="Alarm settings"><i class="fas fa-bell"></i></button><button onclick="window.appHandlers.addClass()" class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition font-bold"><i class="fas fa-plus"></i></button></div></div><div id="dashboard-schedule-list" class="space-y-3 flex-1 overflow-y-auto max-h-[250px] pr-2"><div class="text-center py-8 text-slate-400 text-sm"><div class="loader mx-auto mb-2"></div>Loading...</div></div></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center items-center h-full"><div class="w-full flex items-center justify-between mb-2"><h4 class="font-bold text-slate-700"><i class="fas fa-stopwatch text-amber-500 mr-2"></i> Study Tracker</h4><button onclick="window.appHandlers.startBarExam()" class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded hover:bg-purple-200 transition font-bold" title="Bar Exam Practice"><i class="fas fa-gavel"></i></button></div><div class="text-center mt-4"><span id="dash-study-time" class="text-5xl font-bold text-slate-800 font-mono">0<span class="text-2xl text-slate-400">h</span> 0<span class="text-2xl text-slate-400">m</span></span><p id="dash-study-sessions" class="text-sm font-medium text-blue-600 mt-3 bg-blue-50 px-4 py-1.5 rounded-full inline-block">0 Focus Sessions Logged</p><p class="text-xs text-slate-400 mt-4 leading-relaxed max-w-[200px] mx-auto">Use the floating timer in the bottom right to track your deep work.</p></div></div></div><div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4"><div><h4 class="font-bold text-slate-700"><i class="fas fa-brain text-emerald-600 mr-2"></i>Smart Review Queue</h4><p class="text-xs text-slate-400 mt-1">Due flashcards and weak practice signals are surfaced automatically.</p></div><button onclick="window.appHandlers.navigate('study_lab')" class="text-xs bg-emerald-50 text-emerald-700 px-3 py-2 rounded-lg hover:bg-emerald-100 font-bold">Open Study Lab <i class="fas fa-arrow-right ml-1"></i></button></div><div id="dash-smart-review" class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div class="text-sm text-slate-400">Loading review priorities…</div></div></div></div><div class="lg:col-span-1"><div class="bg-white rounded-xl shadow-sm border border-slate-100 h-full flex flex-col"><div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl"><h4 class="font-bold text-slate-700"><i class="fas fa-tasks text-amber-500 mr-2"></i> Reminders</h4><button onclick="window.appHandlers.addReminder()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-200 transition font-bold"><i class="fas fa-plus mr-1"></i> Add Task</button></div><div id="reminder-list" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[600px]"></div></div></div></div></div>`;
             }
             async init() {
                 const clockEl = document.getElementById('header-clock');
@@ -2149,6 +2186,14 @@ async ocrPdf(file, onProgress = () => {}) {
                     });
                 });
                 this.unsubscribePomoStats = AppDB.subscribe('focus_sessions', (snapshot) => { const timeEl = document.getElementById('dash-study-time'); const sessionsEl = document.getElementById('dash-study-sessions'); if (!timeEl || !sessionsEl) return; let totalMinutes = 0; let totalSessions = 0; if (!snapshot.empty) { snapshot.forEach(doc => { totalMinutes += doc.data().minutes; totalSessions++; }); } const hours = Math.floor(totalMinutes / 60); const mins = totalMinutes % 60; timeEl.innerHTML = `${hours}<span class="text-2xl text-slate-400">h</span> ${mins}<span class="text-2xl text-slate-400">m</span>`; sessionsEl.innerText = `${totalSessions} Focus Sessions Logged`; });
+                const renderSmartReview = () => {
+                    const box = document.getElementById('dash-smart-review'); if (!box) return;
+                    const due = Number(this.dueReviewCount || 0), weak = Number(this.weakPracticeCount || 0);
+                    if (!due && !weak) { box.innerHTML = `<div class="sm:col-span-2 p-4 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 text-sm"><i class="fas fa-circle-check mr-2"></i><b>You are caught up.</b> No due flashcards or low-score advocacy sessions are currently flagged.</div>`; return; }
+                    box.innerHTML = `<button onclick="window.appHandlers.navigate('saved_reviews')" class="text-left p-4 rounded-xl border border-amber-200 bg-amber-50 hover:shadow-sm transition"><p class="text-[10px] uppercase tracking-widest font-black text-amber-700">Spaced Repetition</p><p class="text-2xl font-black text-slate-800 mt-1">${due}</p><p class="text-xs text-slate-500 mt-1">flashcard${due===1?'':'s'} due now</p></button><button onclick="window.appHandlers.navigate('advocacy_lab')" class="text-left p-4 rounded-xl border border-rose-200 bg-rose-50 hover:shadow-sm transition"><p class="text-[10px] uppercase tracking-widest font-black text-rose-700">Weakness Signal</p><p class="text-2xl font-black text-slate-800 mt-1">${weak}</p><p class="text-xs text-slate-500 mt-1">completed practice${weak===1?'':'s'} below 75%</p></button>`;
+                };
+                this.unsubscribeReviewQueue = AppDB.subscribe('reviews', snapshot => { let due=0; const now=Date.now(); snapshot.forEach(record=>{ const data=record.data(); if(data.type!=='recit'||!Array.isArray(data.content)) return; data.content.forEach(card=>{ const next=Number(card?.nextReview??0); if(!next||next<=now) due+=1; }); }); this.dueReviewCount=due; renderSmartReview(); });
+                this.unsubscribeWeakness = AppDB.subscribe('advocacy_sessions', snapshot => { let weak=0; snapshot.forEach(record=>{ const data=record.data(); if(data.status==='completed'&&Number.isFinite(Number(data.overallScore))&&Number(data.overallScore)<75) weak+=1; }); this.weakPracticeCount=weak; renderSmartReview(); });
             }
             destroy() { if (this.clockInterval) { clearInterval(this.clockInterval); this.clockInterval = null; } }
         }
@@ -2218,7 +2263,7 @@ async ocrPdf(file, onProgress = () => {}) {
                 return `<div class="max-w-6xl mx-auto pb-24">
                     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <div><div class="flex items-center gap-2"><h3 class="text-xl font-bold text-slate-700">Current Semester Subjects</h3><span class="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded">${Security.escapeHTML(AppState.activeLabel())}</span></div><p class="text-sm text-slate-500 mt-1">Each subject contains standardized notebook sections and page templates.</p></div>
-                        <div class="flex gap-2"><button onclick="window.appHandlers.navigate('semesters')" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-calendar mr-2"></i>Semesters</button><button onclick="window.appHandlers.addSubject()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>New Subject</button></div>
+                        <div class="flex gap-2"><button onclick="window.appHandlers.navigate('semesters')" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-calendar mr-2"></i>Manage Semesters</button><button onclick="window.appHandlers.addSubject()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow-md"><i class="fas fa-plus mr-2"></i>New Subject</button></div>
                     </div>
                     <div id="subjects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
                     <div id="legacy-subjects-section" class="hidden mt-10"><div class="flex items-center gap-3 mb-4"><h4 class="font-bold text-slate-600">Unassigned Legacy Notebooks</h4><span class="text-xs text-slate-400">Created before semester organization</span></div><div id="legacy-subjects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div></div>
@@ -2704,18 +2749,9 @@ async ocrPdf(file, onProgress = () => {}) {
                     : ''
             }
 
-            <!-- API KEY -->
-            <div class="bg-white border rounded-xl p-5 shadow-sm">
-                <label class="block text-xs font-bold uppercase text-slate-500 mb-2">
-                    Gemini API Key (Optional)
-                </label>
-                <input
-                    type="password"
-                    id="material-api-key"
-                    value="${Security.escapeHTML(savedKey)}"
-                    class="w-full p-3 border rounded-lg"
-                    placeholder="Paste your Gemini API Key">
-            </div>
+            <!-- Shared AI configuration -->
+            <input type="hidden" id="material-api-key" value="${Security.escapeHTML(savedKey)}">
+            <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800 flex items-center justify-between gap-3"><span><i class="fas fa-key mr-1"></i>Uses the shared Gemini key from AI Settings.</span><button onclick="window.appHandlers.openAISettings()" class="font-bold hover:underline">Configure</button></div>
             <!-- ASK -->
             <div class="bg-white border rounded-xl p-5 shadow-sm">
                 <h4 class="font-bold">
@@ -3050,13 +3086,13 @@ async ocrPdf(file, onProgress = () => {}) {
 
         class MnemonicView {
             constructor() { this.unsubscribe = null; this.generatedTitle = ""; this.generatedContent = ""; this.subjects = []; }
-            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-lightbulb text-amber-500"></i> AI Mnemonic Maker</h3><p class="text-xs text-slate-500 mt-1">Turn boring legal elements into unforgettable stories and acronyms.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="mnem-api-key" class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Concept / Topic</label><input type="text" id="mnem-topic" placeholder="e.g., Requisites of Fortuitous Event" class="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Elements to Memorize</label><textarea id="mnem-elements" rows="5" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-amber-500" placeholder="1. Independent of human will\n2. Unforeseeable or unavoidable..."></textarea></div><button onclick="window.appHandlers.generateMnemonic()" id="btn-generate-mnem" class="mt-auto w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Create Mnemonic</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="mnem-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-brain text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Enter your elements on the left.</p></div></div></div></div>`; }
+            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-lightbulb text-amber-500"></i> AI Mnemonic Maker</h3><p class="text-xs text-slate-500 mt-1">Turn boring legal elements into unforgettable stories and acronyms.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><input type="hidden" id="mnem-api-key" value="${savedKey}"><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 flex justify-between gap-2"><span><i class="fas fa-key mr-1"></i>Shared AI key</span><button onclick="window.appHandlers.openAISettings()" class="font-bold hover:underline">Settings</button></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Concept / Topic</label><input type="text" id="mnem-topic" placeholder="e.g., Requisites of Fortuitous Event" class="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Elements to Memorize</label><textarea id="mnem-elements" rows="5" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-amber-500" placeholder="1. Independent of human will\n2. Unforeseeable or unavoidable..."></textarea></div><button onclick="window.appHandlers.generateMnemonic()" id="btn-generate-mnem" class="mt-auto w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Create Mnemonic</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto flex flex-col relative" id="mnem-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-brain text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Enter your elements on the left.</p></div></div></div></div>`; }
             init() { this.unsubscribe = AppDB.subscribe('subjects', (snapshot) => { this.subjects = []; if (!snapshot.empty) { snapshot.forEach(doc => this.subjects.push({ id: doc.id, ...doc.data() })); } const select = document.getElementById('mnem-subject-select'); if (select) { const currentVal = select.value; select.innerHTML = '<option value="">Select Notebook to Save...</option>' + this.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join(''); select.value = currentVal; } }); }
         }
 
         class IssueTreeView {
             constructor() { this.unsubscribe = null; }
-            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-project-diagram text-blue-600"></i> AI Issue Trees</h3><p class="text-xs text-slate-500 mt-1">Generate visual mental maps of rules, elements, and exceptions.</p></div></div><div class="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="tree-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Topic to Map</label><textarea id="tree-topic" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Article 1170 (Breach of Obligations)"></textarea></div><button onclick="window.appHandlers.generateTree()" id="btn-generate-tree" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-sitemap mr-1"></i> Draw Visual Tree</button></div><div class="md:col-span-3 bg-white border border-slate-200 rounded-xl p-6 overflow-auto relative shadow-inner" id="tree-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-project-diagram text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide a topic on the left to map it out.</p></div></div></div></div>`; }
+            render() { const savedKey = localStorage.getItem('gemini_api_key') || ''; return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-project-diagram text-blue-600"></i> AI Issue Trees</h3><p class="text-xs text-slate-500 mt-1">Generate visual mental maps of rules, elements, and exceptions.</p></div></div><div class="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><input type="hidden" id="tree-api-key" value="${savedKey}"><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 flex justify-between gap-2"><span><i class="fas fa-key mr-1"></i>Shared AI key</span><button onclick="window.appHandlers.openAISettings()" class="font-bold hover:underline">Settings</button></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Legal Topic to Map</label><textarea id="tree-topic" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Article 1170 (Breach of Obligations)"></textarea></div><button onclick="window.appHandlers.generateTree()" id="btn-generate-tree" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-sitemap mr-1"></i> Draw Visual Tree</button></div><div class="md:col-span-3 bg-white border border-slate-200 rounded-xl p-6 overflow-auto relative shadow-inner" id="tree-output-area"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-project-diagram text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide a topic on the left to map it out.</p></div></div></div></div>`; }
         }
 
         class AiSearchView {
@@ -3067,8 +3103,8 @@ async ocrPdf(file, onProgress = () => {}) {
                     <div class="max-w-5xl mx-auto h-[calc(100vh-8rem)] flex flex-col pb-4">
                         <div class="flex justify-between items-center mb-6 flex-shrink-0">
                             <div>
-                                <h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-search text-blue-600"></i> AI Legal Search</h3>
-                                <p class="text-xs text-slate-500 mt-1">Chat with Gemini. Anchored in Philippine Law and strict ALAC formatting.</p>
+                                <h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-search text-blue-600"></i> Legal Research</h3>
+                                <p class="text-xs text-slate-500 mt-1">Research and analyze Philippine-law questions with a consistent structured answer format.</p>
                             </div>
                             <button onclick="window.appHandlers.clearAiSearch()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold transition shadow-sm">
                                 <i class="fas fa-broom mr-1"></i> Clear Chat
@@ -3076,10 +3112,7 @@ async ocrPdf(file, onProgress = () => {}) {
                         </div>
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
                             <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4 h-full overflow-y-auto">
-                                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg flex-shrink-0">
-                                    <label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label>
-                                    <input type="password" id="search-api-key" class="w-full p-2 border border-blue-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}">
-                                </div>
+                                <input type="hidden" id="search-api-key" value="${savedKey}"><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 flex justify-between gap-2"><span><i class="fas fa-key mr-1"></i>Shared AI Settings</span><button onclick="window.appHandlers.openAISettings()" class="font-bold hover:underline">Configure</button></div>
                                 <div class="flex-1 flex flex-col min-h-[200px]">
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Your Question or Scenario</label>
                                     <textarea id="search-query" class="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500 flex-1 shadow-inner" placeholder="e.g. Maya Man traveled to Italy to marry... Is Maha Dera entitled to damages? OR 'What are the elements of delay?'"></textarea>
@@ -3176,12 +3209,12 @@ async ocrPdf(file, onProgress = () => {}) {
             const subjectOptions = userSubjects.length 
                 ? userSubjects.map(s => `<option value="${s.id}" data-name="${Security.escapeHTML(s.name)}">${Security.escapeHTML(s.name)}</option>`).join('')
                 : `<option value="">Please create a subject first</option>`;
-            return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-magic text-amber-500"></i> AI Case Digester</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="gemini-api-key" placeholder="Paste key here..." class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${savedKey}"></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+            return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-magic text-amber-500"></i> AI Case Digester</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><input type="hidden" id="gemini-api-key" value="${savedKey}"><div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900"><div class="flex items-center justify-between gap-2"><span class="font-bold"><i class="fas fa-brain mr-1"></i>Full Case Intelligence</span><button onclick="window.appHandlers.openAISettings()" class="font-bold text-blue-700 hover:underline">AI Settings</button></div><p class="mt-1">Uploaded PDFs are read page-by-page in full. Long decisions are analyzed in grounded chunks before the final digest.</p></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
             <div class="grid grid-cols-1 gap-3 border-t border-slate-100 pt-3">
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook Subject <span class="text-red-500">*</span></label><select id="digest-subject" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white">${subjectOptions}</select></div>
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article <span class="text-xs text-slate-400 font-normal">(Optional)</span></label><input type="text" id="digest-topic" placeholder="e.g. Art. 1156 or Delay" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
             </div>
-            <div class="border-t border-slate-100 pt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Full Text</label><textarea id="digest-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Paste case text here..."></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative"><input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)"><i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i><p class="text-xs text-slate-500">Click to upload PDF</p></div><div id="digest-filename" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div></div><button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-3 rounded-lg text-sm font-bold hover:bg-slate-700 transition shadow-md mt-auto"><i class="fas fa-robot mr-1"></i> Digest & Auto-Save</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area"><div class="h-full flex flex-col items-center justify-center text-slate-400 text-center"><i class="fas fa-brain text-5xl mb-4 opacity-20"></i><p class="text-sm font-medium">Provide the case text and your API key.</p><p class="text-xs mt-1">Gemini will read it, extract the core elements, and automatically save it.</p></div></div></div></div>`;
+            <div class="border-t border-slate-100 pt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Full Text</label><textarea id="digest-textarea" rows="4" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Paste case text here..."></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative"><input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleDigestUpload(this)"><i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i><p class="text-xs text-slate-500">Click to upload PDF</p></div><div id="digest-filename" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div></div><button onclick="window.appHandlers.processDigest()" id="btn-process-digest" class="w-full bg-slate-800 text-white py-3 rounded-lg text-sm font-bold hover:bg-slate-700 transition shadow-md mt-auto"><i class="fas fa-robot mr-1"></i> Digest & Auto-Save</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto" id="digest-results-area"><div class="h-full flex flex-col items-center justify-center text-slate-400 text-center"><i class="fas fa-brain text-5xl mb-4 opacity-20"></i><p class="text-sm font-medium">Provide the case text or upload the complete PDF.</p><p class="text-xs mt-1">Lex reads the complete decision, builds grounded evidence across the whole case, and automatically saves one digest.</p></div></div></div></div>`;
             }
             init() {
             const selectEl = document.getElementById('digest-subject');
@@ -3635,7 +3668,7 @@ const cleanAiJsonResponse = (text) => {
                     answerArea = `<label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Your ALAC Answer</label><textarea id="adv-free-answer" rows="14" class="w-full p-4 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 serif-text leading-relaxed" placeholder="Write one continuous answer. Begin with a direct answer, state the legal basis, apply it to the facts, and conclude."></textarea>`;
                 }
                 const microphoneButtons = ['oral_alac', 'read_aloud'].includes(practice.practiceType) ? `<div class="w-full md:w-auto"><div class="flex flex-col sm:flex-row gap-2"><button id="adv-mic-start" onclick="window.appHandlers.startAdvocacySpeech()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-microphone mr-2"></i>Start Microphone</button><button id="adv-mic-stop" onclick="window.appHandlers.stopAdvocacySpeech()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-stop mr-2"></i>Stop</button><select id="adv-speech-language" class="p-2 border border-slate-200 rounded-lg bg-white text-sm" title="Speech recognition language"><option value="en-PH">English (Philippines)</option><option value="en-US">English (United States)</option><option value="en-GB">English (United Kingdom)</option></select></div><div id="adv-speech-status" class="mt-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><i class="fas fa-circle-info mr-1"></i>Tap Start Microphone, wait for “Listening,” then begin speaking immediately.</div></div>` : '';
-                container.innerHTML = `<div class="space-y-5"><div class="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><p class="text-xs font-bold text-indigo-600 uppercase tracking-wider"><i class="fas ${type.icon} mr-2"></i>${type.label}</p><h4 class="text-xl font-bold text-slate-800 mt-1">${Security.escapeHTML(practice.title)}</h4></div><button onclick="window.appHandlers.showAdvocacyChooser()" class="text-sm text-slate-500 hover:text-indigo-600 font-bold"><i class="fas fa-arrow-left mr-1"></i>Choose Another Mode</button></div><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select id="adv-practice-subject" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white">${subjectOptions}</select></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Topic</label><input id="adv-practice-topic" value="${Security.escapeHTML(practice.topic)}" class="w-full p-2.5 border border-slate-200 rounded-lg" placeholder="e.g. Delay, Due Process"></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Difficulty</label><select id="adv-practice-difficulty" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white"><option>Basic</option><option ${practice.difficulty === 'Intermediate' ? 'selected' : ''}>Intermediate</option><option>Bar-Level</option></select></div></div><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key mr-1"></i>Gemini API Key — model selected automatically</label><input type="password" id="advocacy-api-key" value="${Security.escapeHTML(localStorage.getItem('gemini_api_key') || '')}" class="w-full p-2 border border-blue-200 rounded-lg text-sm" placeholder="Optional — local feedback works without a key"></div><div><div class="flex justify-between items-center mb-2"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Question or Exercise</label><button onclick="window.appHandlers.generateAdvocacyQuestion()" id="adv-generate-question" class="text-xs font-bold text-indigo-600 hover:text-indigo-800"><i class="fas fa-wand-magic-sparkles mr-1"></i>Generate Question</button></div><textarea id="adv-question" rows="4" class="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter a legal question, hypothetical, or reading passage.">${Security.escapeHTML(practice.question)}</textarea></div>${answerArea}<div class="flex flex-col md:flex-row justify-between gap-3 pt-2">${microphoneButtons}<div class="flex gap-2 ml-auto"><button onclick="window.appHandlers.saveAdvocacyDraft()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-floppy-disk mr-2"></i>Save Draft</button><button onclick="window.appHandlers.evaluateAdvocacyPractice()" id="adv-evaluate-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-check-double mr-2"></i>Evaluate & Complete</button></div></div><div id="adv-feedback" class="hidden"></div></div>`;
+                container.innerHTML = `<div class="space-y-5"><div class="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><p class="text-xs font-bold text-indigo-600 uppercase tracking-wider"><i class="fas ${type.icon} mr-2"></i>${type.label}</p><h4 class="text-xl font-bold text-slate-800 mt-1">${Security.escapeHTML(practice.title)}</h4></div><button onclick="window.appHandlers.showAdvocacyChooser()" class="text-sm text-slate-500 hover:text-indigo-600 font-bold"><i class="fas fa-arrow-left mr-1"></i>Choose Another Mode</button></div><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Subject</label><select id="adv-practice-subject" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white">${subjectOptions}</select></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Topic</label><input id="adv-practice-topic" value="${Security.escapeHTML(practice.topic)}" class="w-full p-2.5 border border-slate-200 rounded-lg" placeholder="e.g. Delay, Due Process"></div><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Difficulty</label><select id="adv-practice-difficulty" class="w-full p-2.5 border border-slate-200 rounded-lg bg-white"><option>Basic</option><option ${practice.difficulty === 'Intermediate' ? 'selected' : ''}>Intermediate</option><option>Bar-Level</option></select></div></div><input type="hidden" id="advocacy-api-key" value="${Security.escapeHTML(localStorage.getItem('gemini_api_key') || '')}"><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 flex justify-between gap-2"><span><i class="fas fa-key mr-1"></i>AI feedback uses shared settings; local feedback still works without a key.</span><button onclick="window.appHandlers.openAISettings()" class="font-bold hover:underline">Settings</button></div><div><div class="flex justify-between items-center mb-2"><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Question or Exercise</label><button onclick="window.appHandlers.generateAdvocacyQuestion()" id="adv-generate-question" class="text-xs font-bold text-indigo-600 hover:text-indigo-800"><i class="fas fa-wand-magic-sparkles mr-1"></i>Generate Question</button></div><textarea id="adv-question" rows="4" class="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter a legal question, hypothetical, or reading passage.">${Security.escapeHTML(practice.question)}</textarea></div>${answerArea}<div class="flex flex-col md:flex-row justify-between gap-3 pt-2">${microphoneButtons}<div class="flex gap-2 ml-auto"><button onclick="window.appHandlers.saveAdvocacyDraft()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-floppy-disk mr-2"></i>Save Draft</button><button onclick="window.appHandlers.evaluateAdvocacyPractice()" id="adv-evaluate-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-check-double mr-2"></i>Evaluate & Complete</button></div></div><div id="adv-feedback" class="hidden"></div></div>`;
                 const savedSpeechLanguage = localStorage.getItem('lex_speech_language');
                 const speechLanguageSelect = document.getElementById('adv-speech-language');
                 if (speechLanguageSelect && savedSpeechLanguage && Array.from(speechLanguageSelect.options).some(option => option.value === savedSpeechLanguage)) {
@@ -3722,49 +3755,66 @@ const cleanAiJsonResponse = (text) => {
             }
         };
 
+        class CaseCenterView {
+            constructor(){ this.unsubscribeDigests=null; this.unsubscribeDoctrines=null; }
+            render(){
+                const card=(view,icon,title,copy)=>`<button onclick="window.appHandlers.navigate('${view}')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md hover:border-blue-300 transition group"><div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl"><i class="fas ${icon}"></i></div><h4 class="font-black text-slate-800 mt-4">${title}</h4><p class="text-sm text-slate-500 mt-2 leading-relaxed">${copy}</p><p class="text-xs font-bold text-blue-600 mt-4">Open <i class="fas fa-arrow-right ml-1"></i></p></button>`;
+                return `<div class="max-w-6xl mx-auto pb-24"><div class="bg-gradient-to-r from-slate-900 to-amber-900 rounded-2xl p-7 text-white shadow-lg mb-6"><p class="text-xs uppercase tracking-[.2em] text-amber-200 font-black">Case Intelligence Workspace</p><div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mt-2"><div><h3 class="text-3xl font-black serif-text">Case Center</h3><p class="text-sm text-amber-50/80 mt-2 max-w-2xl">Digest complete decisions, organize authorities, compare doctrines, and practice professor-style recitation from the same saved case records.</p></div><div class="flex gap-2"><span id="case-center-digest-count" class="bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-xs font-bold">Cases: —</span><span id="case-center-doctrine-count" class="bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-xs font-bold">Doctrines: —</span></div></div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${card('case_digester','fa-wand-magic-sparkles','Digest a Case','Full Case Intelligence reads the complete text/PDF and separates Facts, Issue, Ruling, Ratio, Doctrine, and legal framework.')}${card('digests','fa-folder-open','Case Library','Browse, search, edit, print, and export consolidated case digests without duplicate copies.')}${card('case_recitation','fa-microphone-lines','Recitation Coach','Practice Facts → Issue → Ruling → Ratio → Doctrine with feedback grounded in your saved digest.')}${card('matrix','fa-table-cells-large','Doctrine Matrix','Track doctrines, provisions, and applications across subjects.')}<button onclick="window.appHandlers.navigate('subjects')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md hover:border-violet-300 transition"><div class="w-12 h-12 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center text-xl"><i class="fas fa-code-compare"></i></div><h4 class="font-black text-slate-800 mt-4">Compare Cases</h4><p class="text-sm text-slate-500 mt-2">Open a Subject Notebook and use the built-in Case Comparison page template.</p><p class="text-xs font-bold text-violet-600 mt-4">Open Subjects <i class="fas fa-arrow-right ml-1"></i></p></button></div></div>`;
+            }
+            init(){ this.unsubscribeDigests=AppDB.subscribe('digests',s=>{const e=document.getElementById('case-center-digest-count');if(e)e.textContent=`Cases: ${s.size}`;}); this.unsubscribeDoctrines=AppDB.subscribe('doctrines',s=>{const e=document.getElementById('case-center-doctrine-count');if(e)e.textContent=`Doctrines: ${s.size}`;}); }
+        }
+
+        class StudyLabView {
+            constructor(){this.unsubscribeReviews=null;}
+            render(){ const cards=[['codal_trainer','fa-eye-slash','Codal Trainer','Flashcards, recitation, exams, and provision comparisons.'],['review','fa-graduation-cap','Mock Review','Generate flashcards or Bar-style problems from notes and complete PDFs.'],['saved_reviews','fa-clock-rotate-left','Review Queue','Open saved reviews and answer due spaced-repetition cards.'],['mnemonic','fa-lightbulb','Mnemonic Mode','Create recall devices for elements and requisites.'],['issue_tree','fa-diagram-project','Visual Maps','Turn rules, elements, and exceptions into issue trees.'],['lex_vocab','fa-language','Lex-Vocab','Review Latin maxims and legal terminology.']]; return `<div class="max-w-6xl mx-auto pb-24"><div class="bg-gradient-to-r from-emerald-800 to-slate-900 rounded-2xl p-7 text-white shadow-lg mb-6"><p class="text-xs uppercase tracking-[.2em] text-emerald-200 font-black">Active Recall & Examination Prep</p><div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-2"><div><h3 class="text-3xl font-black serif-text">Study Lab</h3><p class="text-sm text-emerald-50/80 mt-2">Recall, mock exams, spaced repetition, mnemonics, visual maps, and vocabulary in one hub.</p></div><span id="study-lab-due" class="bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-xs font-bold">Due cards: —</span></div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${cards.map(([v,i,t,c])=>`<button onclick="window.appHandlers.navigate('${v}')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md hover:border-emerald-300 transition"><div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl"><i class="fas ${i}"></i></div><h4 class="font-black text-slate-800 mt-4">${t}</h4><p class="text-sm text-slate-500 mt-2">${c}</p><p class="text-xs font-bold text-emerald-600 mt-4">Open <i class="fas fa-arrow-right ml-1"></i></p></button>`).join('')}</div></div>`; }
+            init(){ this.unsubscribeReviews=AppDB.subscribe('reviews',s=>{let due=0,now=Date.now();s.forEach(r=>{const d=r.data();if(d.type!=='recit'||!Array.isArray(d.content))return;d.content.forEach(c=>{const n=Number(c?.nextReview??0);if(!n||n<=now)due++;});});const e=document.getElementById('study-lab-due');if(e)e.textContent=`Due cards: ${due}`;}); }
+        }
+
+        class ResourcesView {
+            render(){const hasKey=Boolean(localStorage.getItem('gemini_api_key'));return `<div class="max-w-5xl mx-auto pb-24"><div class="mb-6"><h3 class="text-2xl font-black text-slate-800">Resources & Settings</h3><p class="text-sm text-slate-500 mt-1">External legal resources and shared configuration for Lex.</p></div><div class="grid grid-cols-1 md:grid-cols-2 gap-5"><button onclick="window.open('https://' + 'www.ecodalplus.com/ecodals', '_blank')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:border-blue-300 hover:shadow-md transition"><div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fas fa-scale-balanced text-xl"></i></div><h4 class="font-black text-slate-800 mt-4">eCodal+ / Codals</h4><p class="text-sm text-slate-500 mt-2">Open the external codal reference in a new tab.</p></button><button onclick="window.appHandlers.openAISettings()" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:border-emerald-300 hover:shadow-md transition"><div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fas fa-key text-xl"></i></div><h4 class="font-black text-slate-800 mt-4">AI Configuration</h4><p class="text-sm text-slate-500 mt-2">One Gemini API key is shared by all AI tools.</p><p class="text-xs mt-3 font-bold ${hasKey?'text-emerald-600':'text-amber-600'}">${hasKey?'API key configured':'API key not configured'}</p></button><div class="md:col-span-2 bg-amber-50 border border-amber-200 rounded-2xl p-6"><h4 class="font-black text-amber-900"><i class="fas fa-shield-halved mr-2"></i>Storage Security Updated</h4><p class="text-sm text-amber-900/80 mt-2">Lex V4 no longer stores a Cloudinary API secret in client-side HTML. Uploads use the unsigned preset; privileged signing or permanent deletion belongs on a trusted backend/serverless function.</p></div></div></div>`;}
+            init(){}
+        }
+
+        class CaseRecitationCoachView {
+            constructor(){this.unsubscribe=null;this.digests=[];this.questions=[];this.index=0;this.active=null;}
+            render(){return `<div class="max-w-5xl mx-auto pb-24"><div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6"><div><h3 class="text-2xl font-black text-slate-800"><i class="fas fa-microphone-lines text-indigo-600 mr-2"></i>Case Recitation Coach</h3><p class="text-sm text-slate-500 mt-1">Professor-style practice grounded only in your saved digest.</p></div><button onclick="window.appHandlers.navigate('case_center')" class="text-sm font-bold text-slate-500 hover:text-indigo-600"><i class="fas fa-arrow-left mr-1"></i>Case Center</button></div><div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm"><label class="block text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Choose a Saved Case</label><div class="flex flex-col md:flex-row gap-3"><select id="recit-case-select" class="flex-1 p-3 border border-slate-200 rounded-xl bg-white"><option value="">Loading cases…</option></select><button onclick="window.appHandlers.startCaseRecitation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-bold"><i class="fas fa-play mr-2"></i>Start Recitation</button></div></div><div id="case-recit-workspace" class="mt-6"><div class="text-center py-16 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><i class="fas fa-comments text-5xl opacity-20 mb-4"></i><p>Select a case to begin.</p></div></div></div>`;}
+            init(){this.unsubscribe=AppDB.subscribe('digests',s=>{this.digests=[];s.forEach(r=>this.digests.push(DigestUtils.normalize({id:r.id,...r.data()})));this.digests.sort((a,b)=>(a.title||'').localeCompare(b.title||'',undefined,{sensitivity:'base'}));const e=document.getElementById('recit-case-select');if(e)e.innerHTML=this.digests.length?'<option value="">Select a case…</option>'+this.digests.map(d=>`<option value="${d.id}">${Security.escapeHTML(d.title||'Untitled Case')}</option>`).join(''):'<option value="">No saved cases yet</option>';});}
+            start(id){const d=this.digests.find(x=>x.id===id);if(!d)throw new Error('Select a saved case first.');this.active=d;this.index=0;this.questions=[['Facts','Counsel, give me the material facts of the case in chronological order.',d.facts],['Issue','What was the controlling legal issue resolved by the Court?',d.issue],['Ruling','How did the Supreme Court rule on that issue?',d.ruling],['Ratio Decidendi','Why did the Court rule that way? Explain the ratio decidendi.',d.ratioDecidendi],['Doctrine','What controlling doctrine should you remember from this case?',d.doctrine],['Application','How did the Court apply the governing rule to the material facts?',d.supremeCourtApplication]].filter(x=>DigestUtils.text(x[2])).map(x=>({label:x[0],question:x[1],expected:x[2]}));this.renderQuestion();}
+            renderQuestion(){const q=this.questions[this.index],w=document.getElementById('case-recit-workspace');if(!q||!w||!this.active)return;w.innerHTML=`<div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden"><div class="bg-gradient-to-r from-indigo-700 to-slate-900 text-white p-6"><p class="text-[10px] uppercase tracking-[.2em] text-indigo-200 font-black">${Security.escapeHTML(this.active.title||'Case')}</p><div class="flex items-center justify-between gap-3 mt-2"><h4 class="text-xl font-black">${q.label}</h4><span class="text-xs bg-white/10 px-3 py-1.5 rounded-full">${this.index+1} / ${this.questions.length}</span></div><p class="mt-4 text-indigo-50 leading-relaxed">${q.question}</p></div><div class="p-6"><textarea id="case-recit-answer" rows="7" class="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Answer as if you were speaking to your professor…"></textarea><div class="flex flex-wrap gap-2 mt-4"><button onclick="window.appHandlers.evaluateCaseRecitation()" id="case-recit-evaluate" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-check-double mr-1"></i>Evaluate</button><button onclick="window.appHandlers.showCaseRecitationModel()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-eye mr-1"></i>Model Answer</button><button onclick="window.appHandlers.nextCaseRecitation()" class="ml-auto bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold">Next <i class="fas fa-arrow-right ml-1"></i></button></div><div id="case-recit-feedback" class="mt-5 hidden"></div></div></div>`;}
+            async evaluate(){const q=this.questions[this.index],answer=document.getElementById('case-recit-answer')?.value.trim()||'';if(!q||!answer)throw new Error('Give your answer first.');const f=document.getElementById('case-recit-feedback'),b=document.getElementById('case-recit-evaluate');f.classList.remove('hidden');b.disabled=true;b.innerHTML='<i class="fas fa-spinner fa-spin mr-1"></i>Evaluating…';try{const apiKey=localStorage.getItem('gemini_api_key')||'';if(!apiKey){const tok=v=>new Set(String(v||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>4)),e=tok(q.expected),a=tok(answer),hits=[...e].filter(w=>a.has(w)).length,c=e.size?Math.min(100,Math.round(hits/e.size*100)):0;f.innerHTML=`<div class="p-5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-950"><p class="font-black">Local coverage check: ${c}%</p><p class="mt-2">Configure Gemini in Resources → AI Configuration for detailed professor-style feedback.</p></div>`;return;}const prompt=`You are a strict but constructive Philippine law professor conducting recitation. Evaluate the student's answer ONLY against the SAVED CASE DIGEST below. Do not add outside facts or law.\n\nCASE: ${this.active.title}\nAREA: ${q.label}\nQUESTION: ${q.question}\n\nGROUND-TRUTH ANSWER:\n${q.expected}\n\nSTUDENT ANSWER:\n${answer}\n\nGive concise clean-HTML feedback on directness, accuracy, important omissions, and a better 2–4 sentence oral answer. Do not invent beyond the saved digest.`;const data=await GeminiService.generate(apiKey,{contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.15}});f.innerHTML=`<div class="p-5 rounded-xl bg-indigo-50 border border-indigo-200 text-sm text-slate-800 leading-relaxed">${Security.sanitizeAI(GeminiService.text(data))}</div>`;}finally{b.disabled=false;b.innerHTML='<i class="fas fa-check-double mr-1"></i>Evaluate';}}
+            showModel(){const q=this.questions[this.index],f=document.getElementById('case-recit-feedback');if(!q||!f)return;f.classList.remove('hidden');f.innerHTML=`<div class="p-5 rounded-xl bg-emerald-50 border border-emerald-200"><p class="text-xs font-black uppercase tracking-widest text-emerald-700 mb-2">Grounded Model Answer</p><p class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${Security.escapeHTML(q.expected)}</p></div>`;}
+            next(){if(!this.questions.length)return;this.index=(this.index+1)%this.questions.length;this.renderQuestion();}
+        }
+
         // --- PASTE THIS MISSING CLASS HERE ---
         class ReviewView {
             constructor() { this.unsubscribe = null; }
-            render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review</h3><p class="text-xs text-slate-500 mt-1">Generate flashcards or mock bar exams from your notes.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><div class="p-3 bg-blue-50 border border-blue-200 rounded-lg"><label class="block text-xs font-bold text-blue-800 mb-1"><i class="fas fa-key"></i> Gemini API Key <span class="font-normal">(automatic model)</span></label><input type="password" id="review-api-key" class="w-full p-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" value="${localStorage.getItem('gemini_api_key') || ''}"></div><div><label class="block text-sm font-medium text-slate-700 mb-2">Review Mode</label><div class="flex gap-2"><button id="btn-recit" onclick="window.appHandlers.setMode('recit')" class="flex-1 px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Flashcards</button><button id="btn-exam" onclick="window.appHandlers.setMode('exam')" class="flex-1 px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Mock Exam</button></div></div><div class="border-t border-slate-100 pt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Material</label><textarea id="review-textarea" rows="6" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste your notes or codal provisions here..."></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative"><input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)"><i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i><p class="text-xs text-slate-500">Click to upload PDF</p></div><div id="file-name-display" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div></div><button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Generate AI Review</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto relative" id="review-output"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-graduation-cap text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide material to generate a review.</p></div></div></div></div>`; }
+            render() { return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><div><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-graduation-cap text-blue-600"></i> AI Mock Review</h3><p class="text-xs text-slate-500 mt-1">Generate flashcards or mock bar exams from your notes.</p></div></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><input type="hidden" id="review-api-key" value="${localStorage.getItem('gemini_api_key') || ''}"><div class="p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 flex justify-between gap-2"><span><i class="fas fa-key mr-1"></i>Uses shared AI Settings</span><button onclick="window.appHandlers.openAISettings()" class="font-bold hover:underline">Configure</button></div><div><label class="block text-sm font-medium text-slate-700 mb-2">Review Mode</label><div class="flex gap-2"><button id="btn-recit" onclick="window.appHandlers.setMode('recit')" class="flex-1 px-4 py-2 rounded border border-slate-200 text-sm font-medium bg-slate-800 text-white transition">Flashcards</button><button id="btn-exam" onclick="window.appHandlers.setMode('exam')" class="flex-1 px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition">Mock Exam</button></div></div><div class="border-t border-slate-100 pt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Paste Material</label><textarea id="review-textarea" rows="6" class="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Paste your notes or codal provisions here..."></textarea></div><div class="text-center text-xs text-slate-400 font-bold uppercase tracking-wider my-1">- OR -</div><div><label class="block text-sm font-medium text-slate-700 mb-1">Upload PDF</label><div class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition cursor-pointer relative"><input type="file" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="window.appHandlers.handleFileUpload(this)"><i class="fas fa-file-pdf text-2xl text-red-400 mb-1"></i><p class="text-xs text-slate-500">Click to upload PDF</p></div><div id="file-name-display" class="text-xs text-blue-600 mt-2 truncate hidden font-medium"></div></div><button onclick="window.appHandlers.generateReview()" id="btn-generate" class="mt-auto w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-bold shadow-md transition"><i class="fas fa-magic mr-1"></i> Generate AI Review</button></div><div class="md:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-6 overflow-y-auto relative" id="review-output"><div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><i class="fas fa-graduation-cap text-6xl mb-4 opacity-20"></i><p class="font-medium text-slate-500">Provide material to generate a review.</p></div></div></div></div>`; }
             init() { window.appHandlers.reviewMode = 'recit'; }
         }
         // ------------------------------------
         
        const views = {
-            dashboard: new DashboardView(), semesters: new SemestersView(), subjects: new SubjectsView(), subject_notebook: new SubjectNotebookView(), advocacy_lab: new AdvocacyLabView(), matrix: new DoctrineMatrixView(),
-            lex_vocab: new LexVocabView(), // <-- ADD THIS LINE HERE
-            codal_trainer: new CodalTrainerView(), mnemonic: new MnemonicView(), issue_tree: new IssueTreeView(), ai_search: new AiSearchView(), digests: new DigestsView(),
-            case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView(),
-            codals: { render: () => { return `<div class="text-center mt-20 text-slate-500">Opening eCodal+ in a new tab...</div>`; }, init: () => {} }
+            dashboard: new DashboardView(), subjects: new SubjectsView(), case_center: new CaseCenterView(), case_recitation: new CaseRecitationCoachView(), study_lab: new StudyLabView(), ai_search: new AiSearchView(), advocacy_lab: new AdvocacyLabView(), resources: new ResourcesView(),
+            semesters: new SemestersView(), subject_notebook: new SubjectNotebookView(), matrix: new DoctrineMatrixView(), lex_vocab: new LexVocabView(), codal_trainer: new CodalTrainerView(), mnemonic: new MnemonicView(), issue_tree: new IssueTreeView(), digests: new DigestsView(), case_digester: new CaseDigesterView(), review: new ReviewView(), saved_reviews: new SavedReviewsView(),
+            codals: { render: () => `<div class="text-center mt-20 text-slate-500">Open Codals from Resources.</div>`, init: () => {} }
         };
-        
+
         const sidebarNav = document.querySelector('nav'); const contentArea = document.getElementById('content-area'); const pageTitle = document.getElementById('page-title');
         
        const navItems = [
-            { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' }, { id: 'semesters', label: 'Semesters', icon: 'fa-calendar-days' }, { id: 'subjects', label: 'Subjects', icon: 'fa-book' }, { id: 'advocacy_lab', label: 'Advocacy Lab', icon: 'fa-comments' }, { id: 'matrix', label: 'Doctrine Matrix', icon: 'fa-table' },
-            { id: 'lex_vocab', label: 'Lex-Vocab', icon: 'fa-language' }, // <-- ADD THIS LINE HERE
-            { id: 'codals', label: 'Codals', icon: 'fa-balance-scale' }, { id: 'codal_trainer', label: 'Codal Trainer', icon: 'fa-eye-slash' }, { id: 'mnemonic', label: 'Mnemonic Maker', icon: 'fa-lightbulb' },
-            { id: 'issue_tree', label: 'Issue Trees', icon: 'fa-project-diagram' }, { id: 'ai_search', label: 'AI Legal Search', icon: 'fa-search' }, { id: 'digests', label: 'Cons. Digests', icon: 'fa-gavel' }, 
-            { id: 'case_digester', label: 'Case Digester', icon: 'fa-magic' }, { id: 'review', label: 'Mock Review', icon: 'fa-graduation-cap' }, { id: 'saved_reviews', label: 'Saved Reviews', icon: 'fa-archive' }
+            { id: 'dashboard', label: 'Dashboard', icon: 'fa-home' },
+            { id: 'subjects', label: 'Subjects', icon: 'fa-book' },
+            { id: 'case_center', label: 'Case Center', icon: 'fa-gavel' },
+            { id: 'ai_search', label: 'Legal Research', icon: 'fa-magnifying-glass' },
+            { id: 'study_lab', label: 'Study Lab', icon: 'fa-brain' },
+            { id: 'advocacy_lab', label: 'Advocacy Lab', icon: 'fa-comments' },
+            { id: 'resources', label: 'Resources', icon: 'fa-toolbox' }
         ];
-
-       function renderSidebar() {
-            sidebarNav.innerHTML = navItems.map(item => {
-                if (item.id === 'codals') {
-                    // SECURE URL: Split to prevent Markdown conversion during copy-paste
-                    return `<a href="#" onclick="event.preventDefault(); window.open('https://' + 'www.ecodalplus.com/ecodals', '_blank');" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 text-slate-300 hover:bg-slate-800 hover:text-white"><i class="fas ${item.icon} w-5 text-center"></i>${item.label}</a>`;
-                } else {
-                    return `<a href="#" data-nav-id="${item.id}" onclick="event.preventDefault(); window.appHandlers.navigate('${item.id}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 ${currentView === item.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}"><i class="fas ${item.icon} w-5 text-center"></i>${item.label}</a>`;
-                }
-            }).join('');
-        }
-
-        function updateMobileNav() {
-            ['dashboard', 'subjects', 'advocacy_lab'].forEach(id => {
-                const button = document.getElementById(`mobile-nav-${id}`);
-                if (button) button.classList.toggle('mobile-active', currentView === id || (id === 'subjects' && currentView === 'subject_notebook'));
-            });
-        }
+        const parentView = { semesters:'subjects', subject_notebook:'subjects', case_digester:'case_center', digests:'case_center', matrix:'case_center', case_recitation:'case_center', codal_trainer:'study_lab', review:'study_lab', saved_reviews:'study_lab', mnemonic:'study_lab', issue_tree:'study_lab', lex_vocab:'study_lab', codals:'resources' };
+        const viewLabels = { dashboard:'Dashboard', subjects:'Subjects', semesters:'Semesters', subject_notebook:'Subject Notebook', case_center:'Case Center', case_digester:'Case Digester', digests:'Case Library', matrix:'Doctrine Matrix', case_recitation:'Case Recitation Coach', ai_search:'Legal Research', study_lab:'Study Lab', codal_trainer:'Codal Trainer', review:'Mock Review', saved_reviews:'Review Queue', mnemonic:'Mnemonic Mode', issue_tree:'Visual Maps', lex_vocab:'Lex-Vocab', advocacy_lab:'Advocacy Lab', resources:'Resources' };
+       function renderSidebar() { sidebarNav.innerHTML = navItems.map(item => { const active=currentView===item.id||parentView[currentView]===item.id; return `<a href="#" data-nav-id="${item.id}" onclick="event.preventDefault(); window.appHandlers.navigate('${item.id}')" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 ${active?'bg-blue-600 text-white shadow-md':'text-slate-300 hover:bg-slate-800 hover:text-white'}"><i class="fas ${item.icon} w-5 text-center"></i>${item.label}</a>`; }).join(''); }
+        function updateMobileNav() { ['dashboard','subjects','advocacy_lab'].forEach(id=>{ const button=document.getElementById(`mobile-nav-${id}`); const active=currentView===id||parentView[currentView]===id; if(button)button.classList.toggle('mobile-active',active); }); }
 
         function closeResponsiveOverlays() {
             document.getElementById('sidebar')?.classList.remove('mobile-open');
@@ -3859,6 +3909,13 @@ const cleanAiJsonResponse = (text) => {
            MAIN APP HANDLERS OBJECT
            ========================================== */
         window.appHandlers = {
+            digestText: '',
+            digestMeta: null,
+            pdfText: '',
+            startCaseRecitation: () => { const id=document.getElementById('recit-case-select')?.value||''; try{views.case_recitation.start(id);}catch(error){alert(error.message);} },
+            evaluateCaseRecitation: async () => { try{await views.case_recitation.evaluate();}catch(error){alert(error.message);} },
+            showCaseRecitationModel: () => views.case_recitation.showModel(),
+            nextCaseRecitation: () => views.case_recitation.next(),
             clearAiSearch: () => {
                 views.ai_search.searchHistory = []; 
                 views.ai_search.chatHistory = []; 
@@ -5641,6 +5698,10 @@ deleteAdvocacyDraft: (id) => {
                 document.getElementById('notebook-pages-list')?.classList.remove('mobile-open');
                 document.getElementById('notebook-mobile-backdrop')?.classList.remove('mobile-open');
             },
+            openAISettings: () => {
+                const savedKey = localStorage.getItem('gemini_api_key') || '';
+                Modal.show({ title: '<i class="fas fa-key text-amber-500 mr-2"></i>AI Configuration', content: `<div class="space-y-4"><div><label class="block text-sm font-bold text-slate-700 mb-1">Gemini API Key</label><input type="password" id="global-gemini-api-key" value="${Security.escapeHTML(savedKey)}" class="w-full p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Paste your Google AI Studio Gemini key"></div><div class="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-900"><b>One key for all AI tools.</b> Case Digester, Legal Research, Study Lab, Advocacy Lab, and Subject Materials use this shared browser setting.</div></div>`, submitText: 'Save AI Settings', onSubmit: async () => { const key=document.getElementById('global-gemini-api-key').value.trim(); if(key)localStorage.setItem('gemini_api_key',key);else localStorage.removeItem('gemini_api_key'); ['gemini-api-key','review-api-key','search-api-key','tree-api-key','mnem-api-key','advocacy-api-key','material-api-key'].forEach(id=>{const input=document.getElementById(id);if(input)input.value=key;}); } });
+            },
             navigate: (viewId) => { 
                 if (viewId === 'codals') return;
                 closeResponsiveOverlays();
@@ -5649,7 +5710,7 @@ deleteAdvocacyDraft: (id) => {
                 renderSidebar();
                 updateMobileNav();
                 const item = navItems.find(i => i.id === viewId);
-                pageTitle.innerText = item ? item.label : 'App';
+                pageTitle.innerText = viewLabels[viewId] || (item ? item.label : 'LEX');
                 if (views[viewId]) {
                     contentArea.innerHTML = views[viewId].render();
                     contentArea.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -8563,7 +8624,17 @@ await AppDB.add('digests', digestData);
                 window.appHandlers.renderDigestRows(filtered, activeSubject);
             },
 
-            handleDigestUpload: async (input) => { const file = input.files[0]; if (!file) return; const display = document.getElementById('digest-filename'); const btn = document.getElementById('btn-process-digest'); display.innerText = file.name; display.classList.remove('hidden'); btn.innerText = "Reading PDF..."; btn.disabled = true; try { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; let fullText = ""; const maxPages = Math.min(pdf.numPages, 10); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); fullText += textContent.items.map(item => item.str).join(' ') + "\n"; } window.appHandlers.digestText = fullText; document.getElementById('digest-textarea').value = ''; btn.disabled = false; btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; } catch (e) { alert("Failed to read PDF."); btn.innerHTML = "Error"; } },
+            handleDigestUpload: async (input) => {
+                const file = input.files[0]; if (!file) return;
+                const display=document.getElementById('digest-filename'), btn=document.getElementById('btn-process-digest');
+                display.innerText=file.name; display.classList.remove('hidden'); btn.innerText='Reading complete PDF…'; btn.disabled=true;
+                try {
+                    const arrayBuffer=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise; let fullText='';
+                    for(let i=1;i<=pdf.numPages;i++) { btn.innerText=`Reading page ${i} of ${pdf.numPages}…`; const page=await pdf.getPage(i); const tc=await page.getTextContent(); const pageText=tc.items.map(item=>item.str).join(' ').replace(/\s+/g,' ').trim(); fullText += `[PAGE ${i}]\n${pageText}\n\n`; }
+                    if(!fullText.replace(/\[PAGE\s+\d+\]/g,'').trim()) throw new Error('No searchable text was detected in this PDF.');
+                    window.appHandlers.digestText=fullText.trim(); window.appHandlers.digestMeta={fileName:file.name,pageCount:pdf.numPages,characters:fullText.length}; document.getElementById('digest-textarea').value=''; display.innerText=`${file.name} • ${pdf.numPages} page${pdf.numPages===1?'':'s'} • full decision loaded`; btn.disabled=false; btn.innerHTML='<i class="fas fa-robot mr-1"></i> Digest Full Decision';
+                } catch(e) { console.error(e); alert(e?.message||'Failed to read PDF.'); btn.innerHTML='Error'; }
+            },
         processDigest: async () => { 
     const titleInput = document.getElementById('digest-title').value.trim(); 
     const selectEl = document.getElementById('digest-subject');
@@ -8577,9 +8648,8 @@ await AppDB.add('digests', digestData);
     
     const topicInput = document.getElementById('digest-topic').value.trim(); 
     const textAreaInput = document.getElementById('digest-textarea').value.trim(); 
-    const apiKey = document.getElementById('gemini-api-key').value.trim(); 
-    
-    if (!apiKey) { alert("Please enter your Gemini API Key."); return; } 
+    const apiKey = document.getElementById('gemini-api-key')?.value.trim() || localStorage.getItem('gemini_api_key') || '';
+    if (!apiKey) { alert("Configure your Gemini API Key in AI Settings first."); window.appHandlers.openAISettings(); return; } 
     localStorage.setItem('gemini_api_key', apiKey); 
     
     if (!titleInput || !selectedSubjectName) { 
@@ -8600,6 +8670,10 @@ await AppDB.add('digests', digestData);
     area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; 
     
     try { 
+        const intelligence = await FullTextIntelligence.caseEvidence(apiKey, textToDigest, selectedSubjectName, topicInput, (current,total,pageRange) => { btn.innerHTML=`<i class="fas fa-spinner fa-spin mr-1"></i> Reading ${pageRange} • ${current}/${total}`; area.innerHTML=`<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Full Case Intelligence</p><p class="text-slate-500 text-xs mt-1">Extracting grounded evidence from ${Security.escapeHTML(pageRange)} (${current} of ${total})…</p></div>`; });
+        const caseContext = intelligence.context;
+        btn.innerHTML='<i class="fas fa-spinner fa-spin mr-1"></i> Synthesizing Digest…';
+        area.innerHTML=`<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Synthesizing the complete decision…</p><p class="text-slate-500 text-xs mt-1">${intelligence.chunkCount} source section${intelligence.chunkCount===1?'':'s'} analyzed without truncating the case.</p></div>`;
         // Normalized Case Digester output: each table column receives one source field only.
         const promptText = `You are LEX, my Philippine Law School Case Digest Tutor.
 
@@ -8619,10 +8693,13 @@ TOPIC / ARTICLE: ${topicInput || 'Not specified'}
 Use the Subject and Topic only to identify the relevant portion of the case. Never use them to supply information missing from the TARGET CASE TEXT.
 
 ==================================================
-TARGET CASE TEXT
+TARGET CASE SOURCE
 ==================================================
 
-${textToDigest.substring(0, 40000)}
+${caseContext}
+
+IMPORTANT SOURCE NOTE:
+${intelligence.mode === 'full_case_chunked' ? 'The source above contains evidence memos independently extracted from EVERY portion of the supplied decision. Treat those memos as the only evidence for synthesis. Do not invent missing links between chunks.' : 'The complete supplied case text appears above.'}
 
 ==================================================
 PRIMARY RULE — NO HALLUCINATION
@@ -8636,7 +8713,7 @@ The TARGET CASE TEXT is the controlling source.
 - Distinguish party allegations and arguments from lower-court findings and from the Supreme Court's own findings and reasoning.
 - Focus on the issue actually resolved by the Supreme Court and relevant to the selected Subject/Topic.
 - Never invent the wording of a law or legal provision.
-- Every quotation must be copied word-for-word from the TARGET CASE TEXT.
+- Every quotation must be copied word-for-word from the supplied source. Lex will verify returned quotations against the original full case text and discard any quotation that cannot be found.
 - Simplify the language, not the law.
 
 ==================================================
@@ -8902,7 +8979,7 @@ OUTPUT RULES:
         const exceptionsToExceptions = DigestUtils.text(parsedDigest.exceptions_to_exceptions);
         const supremeCourtApplication = DigestUtils.text(parsedDigest.supreme_court_application);
         const gist = DigestUtils.text(parsedDigest.recitation_gist);
-        const verbatimNotes = DigestUtils.cleanVerbatimNotes(parsedDigest.verbatim_notes);
+        const verbatimNotes = DigestUtils.validateVerbatimNotes(parsedDigest.verbatim_notes, textToDigest);
 
         const digestData = {
             title: titleInput,
@@ -8929,7 +9006,8 @@ OUTPUT RULES:
             verbatimNotes,
             personalNotes: '',
             notes: '', // reserved for the user's own notes; never duplicate AI fields here
-            schemaVersion: 4,
+            sourceAnalysis: { mode: intelligence.mode, chunkCount: intelligence.chunkCount, pageCount: Number(window.appHandlers.digestMeta?.pageCount || 0), originalCharacters: Number(intelligence.originalCharacters || textToDigest.length) },
+            schemaVersion: 5,
             created: serverTimestamp(),
             updated: serverTimestamp()
         };
@@ -8950,7 +9028,7 @@ OUTPUT RULES:
         const myNotesPreview = DigestUtils.myNotesText(digestData);
         area.innerHTML = `<div class="space-y-4">
             <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to Consolidated Case Digests and linked to the selected notebook.</p></div>
+                <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to the Case Library and linked to the selected notebook. ${window.appHandlers.digestMeta?.pageCount ? `Full PDF analyzed: ${window.appHandlers.digestMeta.pageCount} pages` : 'Full supplied text analyzed'} • ${intelligence.chunkCount} analysis section${intelligence.chunkCount===1?'':'s'}.</p></div>
                 <button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View Table</button>
             </div>
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-600 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(facts)}</p></div>
@@ -8967,6 +9045,7 @@ OUTPUT RULES:
         btn.disabled = false; 
         btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; 
         window.appHandlers.digestText = ''; 
+        window.appHandlers.digestMeta = null;
     } 
 },
 setMode: (mode) => {
@@ -8981,18 +9060,21 @@ setMode: (mode) => {
         btnRecit.className = "px-4 py-2 rounded border border-slate-200 text-sm font-medium hover:bg-slate-50 text-slate-600 transition";
     }
 },
-            handleFileUpload: async (input) => { const file = input.files[0]; if (!file) return; document.getElementById('file-name-display').innerText = file.name; document.getElementById('file-name-display').classList.remove('hidden'); document.getElementById('btn-generate').innerText = "Processing PDF..."; document.getElementById('review-textarea').value = ''; try { const arrayBuffer = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise; let fullText = ""; const maxPages = Math.min(pdf.numPages, 10); for (let i = 1; i <= maxPages; i++) { const page = await pdf.getPage(i); const textContent = await page.getTextContent(); const pageText = textContent.items.map(item => item.str).join(' '); fullText += pageText + "\n"; } window.appHandlers.pdfText = fullText; document.getElementById('btn-generate').disabled = false; document.getElementById('btn-generate').innerText = "Generate AI Review"; } catch (e) { console.error(e); alert("Error reading PDF."); document.getElementById('btn-generate').innerText = "Error"; } },
+            handleFileUpload: async (input) => {
+                const file=input.files[0]; if(!file)return; const nameEl=document.getElementById('file-name-display'), button=document.getElementById('btn-generate'); nameEl.innerText=file.name; nameEl.classList.remove('hidden'); button.innerText='Reading complete PDF…'; button.disabled=true; document.getElementById('review-textarea').value='';
+                try { const arrayBuffer=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise; let fullText=''; for(let i=1;i<=pdf.numPages;i++){button.innerText=`Reading page ${i} of ${pdf.numPages}…`;const page=await pdf.getPage(i);const tc=await page.getTextContent();const pt=tc.items.map(item=>item.str).join(' ').replace(/\s+/g,' ').trim();fullText+=`[PAGE ${i}]\n${pt}\n\n`;} window.appHandlers.pdfText=fullText.trim(); nameEl.innerText=`${file.name} • ${pdf.numPages} page${pdf.numPages===1?'':'s'} loaded`; button.disabled=false; button.innerText='Generate AI Review'; } catch(e){console.error(e);alert('Error reading PDF.');button.innerText='Error';}
+            },
 
 generateReview: async () => {
     const textAreaInput = document.getElementById('review-textarea').value.trim();
     let text = textAreaInput || window.appHandlers.pdfText;
     const mode = window.appHandlers.reviewMode || 'recit';
     const output = document.getElementById('review-output');
-    const apiKey = document.getElementById('review-api-key').value.trim();
+    const apiKey = document.getElementById('review-api-key')?.value.trim() || localStorage.getItem('gemini_api_key') || '';
     const btn = document.getElementById('btn-generate');
 
     /* --- Validation Phase --- */
-    if (!apiKey) { alert("Please enter your Gemini API Key."); return; }
+    if (!apiKey) { alert("Configure your Gemini API Key in AI Settings first."); window.appHandlers.openAISettings(); return; }
     if (!text) { alert("Please paste text or upload a text-searchable PDF first."); return; }
 
     /* --- Pre-Processing & UI Prep --- */
@@ -9005,12 +9087,13 @@ generateReview: async () => {
         /* --- 1. PROMPT ENGINEERING (Clean & Separate) --- */
         let promptText = '';
         const baseInstructions = 'DO NOT use markdown like \`\`\`json. Output ONLY a raw JSON array.';
-        const truncatedText = text.substring(0, 45000); // Safety constraint
+        const studyIntelligence = await FullTextIntelligence.studyContext(apiKey, text, mode === 'recit' ? 'law-school recitation flashcards' : 'Bar-style essay review', (current,total,pageRange)=>{ btn.innerHTML=`<i class="fas fa-spinner fa-spin mr-1"></i> Studying ${current}/${total}`; output.innerHTML=`<div class="flex justify-center flex-col items-center h-full p-10 text-center"><div class="loader mb-6"></div><p class="text-slate-700 font-bold">Reading the complete material</p><p class="text-slate-500 text-sm mt-1">${Security.escapeHTML(pageRange)} • ${current} of ${total}</p></div>`; });
+        const reviewContext = studyIntelligence.context;
 
         if (mode === 'recit') {
-            promptText = `You are a strict law professor helping a student memorize key concepts. Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. Focus on definitions, elements, exceptions, and core doctrines. Return ONLY a raw JSON array of objects, where each object has a "front" (the question/term) and a "back" (the precise answer/definition). ${baseInstructions} Material: ${truncatedText}`;
+            promptText = `You are a strict law professor helping a student memorize key concepts. Based strictly on the provided text, generate exactly 10 flashcards for recitation prep. Focus on definitions, elements, exceptions, and core doctrines. Return ONLY a raw JSON array of objects, where each object has a "front" (the question/term) and a "back" (the precise answer/definition). ${baseInstructions} Material: ${reviewContext}`;
         } else {
-            promptText = `You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 5 essay-type hypothetical legal problems. These problems must test issue spotting, critical thinking, and the direct application of the rules and jurisprudence found in the text. Return ONLY a raw JSON array of objects, where each object has: "question" (The hypothetical scenario and the specific question asked at the end) and "suggested_answer" (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply). ${baseInstructions} Material: ${truncatedText}`;
+            promptText = `You are a rigorous Bar Examiner. Based strictly on the provided text, generate exactly 5 essay-type hypothetical legal problems. These problems must test issue spotting, critical thinking, and the direct application of the rules and jurisprudence found in the text. Return ONLY a raw JSON array of objects, where each object has: "question" (The hypothetical scenario and the specific question asked at the end) and "suggested_answer" (A brief suggested answer key highlighting the specific legal issue to spot and the rule to apply). ${baseInstructions} Material: ${reviewContext}`;
         }
 
         /* --- 2. API REQUEST PHASE --- */
