@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lex: Law School Companion V5.0</title>
+    <title>Lex: Law School Companion V5.8</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -1836,6 +1836,170 @@ let currentUser = null;
             whereAll: async (collectionName, field, op, value) => { if (!currentUser) return []; const snapshot = await getDocs(query(collection(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName), where(field, op, value))); return snapshot.docs.map(record => ({ id: record.id, ...record.data() })); },
             update: async (collectionName, id, data) => { if (!currentUser) throw new Error("Unauthenticated"); return updateDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id), data); },
             delete: async (collectionName, id) => { if (!currentUser) throw new Error("Unauthenticated"); return deleteDoc(doc(db, 'artifacts', appNamespace, 'users', currentUser.uid, collectionName, id)); }
+        };
+
+        // ============================================================
+        // V5.8 — CASE DIGEST → DOCTRINE LIBRARY + LEGAL DICTIONARY
+        // ============================================================
+        const DigestAutoKnowledge = {
+            canonical(value = '') {
+                return String(value || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+            },
+            meaningful(value = '') {
+                const content = String(value || '').trim();
+                if (!content) return false;
+                return !/^(?:not found\.?|none\.?|n\/a\.?|not applicable\.?|not specifically stated(?: in the supplied case text)?\.?)$/i.test(content);
+            },
+            unique(values = []) {
+                return [...new Set((values || []).map(value => String(value || '').trim()).filter(Boolean))];
+            },
+            practiceAreasForSubject(subjectName = '') {
+                const source = String(subjectName || '').toLowerCase();
+                const areas = [];
+                const add = area => { if (!areas.includes(area)) areas.push(area); };
+                if (/criminal|penal/.test(source)) add('Criminal');
+                if (/civil|obligation|contract|family|succession|property/.test(source)) add('Civil');
+                if (/commercial|corporation|corporate|securities|insurance/.test(source)) add('Commercial');
+                if (/labor|employment/.test(source)) add('Labor');
+                if (/remedial|procedure|evidence/.test(source)) add('Remedial');
+                if (/tax/.test(source)) add('Taxation');
+                if (/administrative|public officer/.test(source)) add('Administrative');
+                if (/political|constitutional/.test(source)) add('Political');
+                if (/ethics|professional responsibility|legal profession/.test(source)) add('Ethics');
+                if (/business/.test(source)) add('Business');
+                if (/real estate|land/.test(source)) add('Real Estate');
+                return areas;
+            },
+            cleanLegalTerms(items = []) {
+                if (!Array.isArray(items)) return [];
+                const seen = new Set();
+                const cleaned = [];
+                for (const raw of items.slice(0, 8)) {
+                    const term = String(raw?.term || '').trim();
+                    const definition = String(raw?.definition || '').trim();
+                    if (!term || !definition) continue;
+                    const key = this.canonical(term);
+                    if (!key || seen.has(key)) continue;
+                    if (/^(petitioner|respondent|plaintiff|defendant|appellant|appellee|court|judge|justice|supreme court|trial court)$/i.test(term)) continue;
+                    seen.add(key);
+                    cleaned.push({
+                        term,
+                        category: ['Latin Maxim','Legal Term','Doctrine','Procedure','Statutory Term','Other'].includes(raw?.category) ? raw.category : 'Legal Term',
+                        definition,
+                        legalBasis: String(raw?.legal_basis || raw?.legalBasis || '').trim(),
+                        application: String(raw?.application || '').trim(),
+                        simpleExplanation: String(raw?.simple_explanation || raw?.simpleExplanation || '').trim(),
+                        tagalogExplanation: String(raw?.tagalog_explanation || raw?.tagalogExplanation || '').trim(),
+                        relatedTerms: this.unique(Array.isArray(raw?.related_terms) ? raw.related_terms : Array.isArray(raw?.relatedTerms) ? raw.relatedTerms : []).slice(0, 8)
+                    });
+                }
+                return cleaned.slice(0, 5);
+            },
+            async syncDoctrine({ digestId, digestData }) {
+                const d = DigestUtils.normalize(digestData);
+                if (!this.meaningful(d.doctrine)) return { status: 'skipped', reason: 'No supported controlling doctrine was extracted.' };
+                const existing = await AppDB.all('doctrines');
+                const caseKey = this.canonical(d.title);
+                const citationKey = this.canonical(d.citation || d.grNo);
+                const doctrineKey = this.canonical(d.doctrine);
+                let match = existing.find(item => this.unique([...(Array.isArray(item.sourceDigestIds) ? item.sourceDigestIds : []), item.sourceDigestId]).includes(digestId));
+                if (!match) {
+                    match = existing.find(item => {
+                        const sameCase = caseKey && this.canonical(item.caseTitle) === caseKey;
+                        if (!sameCase) return false;
+                        const sameCitation = citationKey && this.canonical(item.citation) === citationKey;
+                        const sameDoctrine = doctrineKey && this.canonical(item.definition || item.doctrine) === doctrineKey;
+                        return sameCitation || sameDoctrine;
+                    });
+                }
+                const subjectIds = this.unique([...(Array.isArray(match?.subjectIds) ? match.subjectIds : []), ...(Array.isArray(digestData.subjectIds) ? digestData.subjectIds : []), digestData.primarySubjectId]);
+                const sourceDigestIds = this.unique([...(Array.isArray(match?.sourceDigestIds) ? match.sourceDigestIds : []), match?.sourceDigestId, digestId]);
+                const relatedCases = this.unique([...(Array.isArray(match?.cases) ? match.cases : []), d.title]);
+                const basePayload = {
+                    article: d.topic || d.codalProvision || match?.article || 'General',
+                    topic: d.topic || d.codalProvision || match?.topic || 'General',
+                    caseTitle: d.title || match?.caseTitle || '', citation: d.citation || d.grNo || match?.citation || '',
+                    subjectName: d.subjectName || d.subject || match?.subjectName || '',
+                    primarySubjectId: digestData.primarySubjectId || match?.primarySubjectId || '', subjectIds,
+                    sourceDigestId: digestId, sourceDigestIds, sourceType: 'case_digest', linkedFromCaseDigest: true,
+                    cases: relatedCases, updated: serverTimestamp()
+                };
+                if (match) {
+                    const payload = { ...basePayload };
+                    if (match.autoGeneratedFromDigest) Object.assign(payload, {
+                        definition: d.doctrine, doctrine: d.doctrine, generalRule: d.generalRule,
+                        requisites: d.elementsRequisites, exceptions: d.exceptions,
+                        exceptionsToExceptions: d.exceptionsToExceptions,
+                        application: d.supremeCourtApplication || d.ratioDecidendi, schemaVersion: 3
+                    });
+                    await AppDB.update('doctrines', match.id, payload);
+                    return { status: 'linked', id: match.id };
+                }
+                const ref = await AppDB.add('doctrines', {
+                    ...basePayload, definition: d.doctrine, doctrine: d.doctrine, generalRule: d.generalRule,
+                    requisites: d.elementsRequisites, exceptions: d.exceptions, exceptionsToExceptions: d.exceptionsToExceptions,
+                    application: d.supremeCourtApplication || d.ratioDecidendi,
+                    tagalogExplanation: '', examTip: '', autoGeneratedFromDigest: true, schemaVersion: 3, created: serverTimestamp()
+                });
+                return { status: 'added', id: ref.id };
+            },
+            async syncDictionary({ digestId, digestData, legalTerms = [] }) {
+                const terms = this.cleanLegalTerms(legalTerms);
+                if (!terms.length) return { added: 0, linked: 0, skipped: 0, entries: [] };
+                const d = DigestUtils.normalize(digestData);
+                const existing = await AppDB.all('lex_vocab');
+                const byTerm = new Map(existing.map(item => [this.canonical(item.term || item.word), item]));
+                const sourceLabel = [d.title, d.citation || d.grNo].filter(Boolean).join(', ');
+                const practiceAreas = this.practiceAreasForSubject(d.subjectName || d.subject);
+                const result = { added: 0, linked: 0, skipped: 0, entries: [] };
+                for (const term of terms) {
+                    const key = this.canonical(term.term);
+                    if (!key) { result.skipped += 1; continue; }
+                    const match = byTerm.get(key);
+                    if (match) {
+                        const update = {
+                            sourceDigestIds: this.unique([...(Array.isArray(match.sourceDigestIds) ? match.sourceDigestIds : []), match.sourceDigestId, digestId]),
+                            sourceLabels: this.unique([...(Array.isArray(match.sourceLabels) ? match.sourceLabels : []), sourceLabel]),
+                            linkedFromCaseDigest: true,
+                            practiceAreas: this.unique([...(Array.isArray(match.practiceAreas) ? match.practiceAreas : []), ...practiceAreas]),
+                            updated: serverTimestamp()
+                        };
+                        if (match.sourceStatus === 'ai_draft' || match.autoGeneratedFromDigest) Object.assign(update, {
+                            word: term.term, term: term.term, category: term.category, meaning: term.definition, definition: term.definition,
+                            simpleExplanation: term.simpleExplanation || match.simpleExplanation || '',
+                            tagalogExplanation: term.tagalogExplanation || match.tagalogExplanation || '',
+                            legalBasis: term.legalBasis || match.legalBasis || '', application: term.application || match.application || '',
+                            relatedTerms: this.unique([...(Array.isArray(match.relatedTerms) ? match.relatedTerms : []), ...term.relatedTerms]),
+                            sourceCitation: match.sourceCitation || sourceLabel, subjectTag: match.subjectTag || d.subjectName || d.subject || '',
+                            sourceStatus: 'verified', schemaVersion: 4
+                        });
+                        await AppDB.update('lex_vocab', match.id, update);
+                        result.linked += 1; result.entries.push({ id: match.id, term: term.term, status: 'linked' });
+                        continue;
+                    }
+                    const ref = await AppDB.add('lex_vocab', {
+                        word: term.term, term: term.term, category: term.category, practiceAreas,
+                        meaning: term.definition, definition: term.definition, keyPoints: [],
+                        simpleExplanation: term.simpleExplanation, tagalogExplanation: term.tagalogExplanation,
+                        legalBasis: term.legalBasis, application: term.application, usageExample: '', computationProcess: '',
+                        commonMistakes: [], relatedTopics: [], etymology: '', relatedTerms: term.relatedTerms,
+                        sourceCitation: sourceLabel, sourceStatus: 'verified', subjectTag: d.subjectName || d.subject || '', lookupCount: 0,
+                        sourceDigestId: digestId, sourceDigestIds: [digestId], sourceLabels: [sourceLabel], sourceType: 'case_digest',
+                        linkedFromCaseDigest: true, autoGeneratedFromDigest: true, schemaVersion: 4,
+                        created: serverTimestamp(), updated: serverTimestamp()
+                    });
+                    byTerm.set(key, { id: ref.id, term: term.term, autoGeneratedFromDigest: true, sourceDigestIds: [digestId] });
+                    result.added += 1; result.entries.push({ id: ref.id, term: term.term, status: 'added' });
+                }
+                return result;
+            },
+            async syncAll({ digestId, digestData, legalTerms = [] }) {
+                const [doctrine, dictionary] = await Promise.all([
+                    this.syncDoctrine({ digestId, digestData }),
+                    this.syncDictionary({ digestId, digestData, legalTerms })
+                ]);
+                return { doctrine, dictionary };
+            }
         };
 
         const Utils = {
@@ -3894,7 +4058,7 @@ async ocrPdf(file, onProgress = () => {}) {
             const subjectOptions = userSubjects.length 
                 ? userSubjects.map(s => `<option value="${s.id}" data-name="${Security.escapeHTML(s.name)}">${Security.escapeHTML(s.name)}</option>`).join('')
                 : `<option value="">Please create a subject first</option>`;
-            return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-magic text-amber-500"></i> AI Case Digester</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><input type="hidden" id="gemini-api-key" value="${savedKey}"><div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900"><div class="flex items-center justify-between gap-2"><span class="font-bold"><i class="fas fa-brain mr-1"></i>Full Case Intelligence</span><button onclick="window.appHandlers.openAISettings()" class="font-bold text-blue-700 hover:underline">AI Settings</button></div><p class="mt-1">Uploaded PDFs are read page-by-page in full. Long decisions are analyzed in grounded chunks before the final digest.</p></div><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
+            return `<div class="max-w-5xl mx-auto h-full flex flex-col pb-24"><div class="flex justify-between items-center mb-6"><h3 class="text-xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-magic text-amber-500"></i> AI Case Digester</h3></div><div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden"><div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-y-auto flex flex-col gap-4"><input type="hidden" id="gemini-api-key" value="${savedKey}"><div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900"><div class="flex items-center justify-between gap-2"><span class="font-bold"><i class="fas fa-brain mr-1"></i>Full Case Intelligence</span><button onclick="window.appHandlers.openAISettings()" class="font-bold text-blue-700 hover:underline">AI Settings</button></div><p class="mt-1">Uploaded PDFs are read page-by-page in full. Long decisions are analyzed in grounded chunks before the final digest.</p></div><label class="flex items-start gap-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg cursor-pointer"><input id="digest-auto-knowledge" type="checkbox" checked class="mt-1 accent-indigo-600"><span><span class="block text-xs font-black text-indigo-900"><i class="fas fa-diagram-project mr-1"></i>Auto-build Lex Knowledge</span><span class="block text-[11px] text-indigo-700 mt-1 leading-relaxed">After digesting, automatically add/link the controlling doctrine to Doctrine Library and up to 5 study-worthy legal terms to Legal Dictionary. Existing matches are linked instead of duplicated.</span></span></label><div><label class="block text-sm font-medium text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label><input type="text" id="digest-title" placeholder="e.g. People vs. Example" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
             <div class="grid grid-cols-1 gap-3 border-t border-slate-100 pt-3">
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook Subject <span class="text-red-500">*</span></label><select id="digest-subject" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white">${subjectOptions}</select></div>
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article <span class="text-xs text-slate-400 font-normal">(Optional)</span></label><input type="text" id="digest-topic" placeholder="e.g. Art. 1156 or Delay" class="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"></div>
@@ -4122,6 +4286,12 @@ const cleanAiJsonResponse = (text) => {
                         entry.usageExample ||
                         entry.usage_example
                     ),
+                    computationProcess: value(
+                        entry.computationProcess ||
+                        entry.computation_process ||
+                        entry.process ||
+                        entry.procedure
+                    ),
                     etymology: value(entry.etymology),
                     keyPoints: this.normalizeList(
                         entry.keyPoints ||
@@ -4263,6 +4433,20 @@ const cleanAiJsonResponse = (text) => {
                             </div>
                         </div>
                     </div>
+
+                    <section class="mb-5 bg-slate-900 text-white rounded-2xl p-5 border border-slate-800">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <p class="text-[10px] uppercase tracking-[.2em] text-blue-300 font-black">Lex Dictionary Reference Model</p>
+                                <p class="text-sm text-slate-200 mt-1 leading-relaxed">Browse like a professional legal lexicon, but study like a law student: authoritative basis, key points, process, exam traps, Tagalog explanation, Ask Lex, and spaced repetition in one entry.</p>
+                            </div>
+                            <div class="flex gap-2 text-[10px] font-black uppercase tracking-wider">
+                                <span class="px-2.5 py-1.5 bg-white/10 rounded-lg">Browse</span>
+                                <span class="px-2.5 py-1.5 bg-white/10 rounded-lg">Understand</span>
+                                <span class="px-2.5 py-1.5 bg-white/10 rounded-lg">Practice</span>
+                            </div>
+                        </div>
+                    </section>
 
                     <!-- Term of the Day -->
                     <section class="bg-gradient-to-br from-indigo-50 via-white to-blue-50 border border-indigo-100 rounded-2xl p-6 md:p-7 shadow-sm">
@@ -5777,6 +5961,7 @@ deleteAdvocacyDraft: (id) => {
                     legalBasis: prefill.legalBasis || '',
                     application: prefill.application || '',
                     usageExample: prefill.usageExample || '',
+                    computationProcess: prefill.computationProcess || prefill.computation_process || '',
                     etymology: prefill.etymology || '',
                     keyPoints: Array.isArray(prefill.keyPoints)
                         ? prefill.keyPoints.join('\n')
@@ -5874,6 +6059,11 @@ deleteAdvocacyDraft: (id) => {
                             <textarea id="voc-example" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Example sentence or law-school context...">${Security.escapeHTML(p.usageExample)}</textarea>
                         </div>
 
+                        <div class="mt-3">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Computation / Process <span class="font-normal text-slate-400">(when applicable)</span></label>
+                            <textarea id="voc-process" rows="4" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Steps, sequence, filing process, computation, test, or procedural flow.">${Security.escapeHTML(p.computationProcess)}</textarea>
+                        </div>
+
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                             <div>
                                 <label class="block text-sm font-bold text-slate-700 mb-1">Common Mistakes / Exam Traps</label>
@@ -5967,6 +6157,7 @@ deleteAdvocacyDraft: (id) => {
                             legalBasis: document.getElementById('voc-basis').value.trim(),
                             application: document.getElementById('voc-app').value.trim(),
                             usageExample: document.getElementById('voc-example').value.trim(),
+                            computationProcess: document.getElementById('voc-process').value.trim(),
                             commonMistakes: listFrom('voc-mistakes'),
                             relatedTopics: listFrom('voc-related-topics'),
                             etymology: document.getElementById('voc-etymology').value.trim(),
@@ -6037,6 +6228,7 @@ Return STRICTLY one valid raw JSON object:
   "legal_basis": "string",
   "application": "string",
   "usage_example": "string",
+  "computation_process": "string",
   "common_mistakes": ["string"],
   "related_topics": ["string"],
   "etymology": "string",
@@ -6049,6 +6241,7 @@ Rules:
 - Key points should capture elements, requisites, effects, distinctions, or controlling points only when appropriate.
 - Simple explanation is plain English for a law student.
 - Tagalog explanation must be natural Filipino/Taglish while retaining important legal terminology in English.
+- Computation/process: use only when the term genuinely involves steps, a sequence, a filing process, a legal test, or a computation; otherwise return an empty string.
 - Common mistakes should focus on law-school confusion or exam traps, not invented legal requirements.
 - Related terms/topics: maximum 8 each.
 - Source/citation only when exact under the source rule.
@@ -6096,6 +6289,7 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                                 legalBasis: parsed.legal_basis || '',
                                 application: parsed.application || '',
                                 usageExample: parsed.usage_example || '',
+                                computationProcess: parsed.computation_process || '',
                                 commonMistakes: Array.isArray(parsed.common_mistakes)
                                     ? parsed.common_mistakes
                                     : [],
@@ -6179,15 +6373,22 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                                 ${(d.practiceAreas || []).map(area =>
                                     `<span class="px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(area)}</span>`
                                 ).join('')}
+                                ${d.linkedFromCaseDigest ? '<span class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-link mr-1"></i>Case Digest Source</span>' : ''}
                             </div>
 
                             <div class="mt-5">
                                 <p class="text-[10px] font-black uppercase tracking-[.2em] text-indigo-500">Definition</p>
                                 <p class="text-base md:text-lg leading-8 text-slate-900 mt-2">${Security.escapeHTML(d.definition || d.meaning)}</p>
+                                <div class="mt-3 flex flex-wrap gap-3 text-[10px] font-bold text-slate-400">
+                                    ${d.subjectTag ? `<span><i class="fas fa-book mr-1"></i>${Security.escapeHTML(d.subjectTag)}</span>` : ''}
+                                    <span><i class="fas fa-eye mr-1"></i>${d.lookupCount || 0} lookups</span>
+                                    ${d.sourceCitation ? '<span><i class="fas fa-link mr-1"></i>Source attached</span>' : ''}
+                                </div>
                             </div>
 
-                            ${listBlock('Key Points / Requisites', d.keyPoints, 'blue')}
                             ${block('Legal Basis', d.legalBasis, 'p-4 rounded-xl bg-slate-50 border border-slate-100')}
+                            ${listBlock('Key Points / Requisites', d.keyPoints, 'blue')}
+                            ${block('Computation / Process', d.computationProcess, 'p-4 rounded-xl bg-blue-50 border border-blue-100')}
                             ${block('Simple Explanation', d.simpleExplanation, 'p-4 rounded-xl bg-emerald-50 border border-emerald-100')}
                             ${block('Tagalog / Taglish Explanation', d.tagalogExplanation, 'p-4 rounded-xl bg-amber-50 border border-amber-100')}
                             ${block('Application / Context', d.application)}
@@ -6238,6 +6439,8 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                     `DEFINITION: ${d.definition}`,
                     d.legalBasis ? `LEGAL BASIS: ${d.legalBasis}` : '',
                     d.keyPoints?.length ? `KEY POINTS:\n- ${d.keyPoints.join('\n- ')}` : '',
+                    d.computationProcess ? `COMPUTATION / PROCESS: ${d.computationProcess}` : '',
+                    d.commonMistakes?.length ? `COMMON MISTAKES / EXAM TRAPS:\n- ${d.commonMistakes.join('\n- ')}` : '',
                     d.tagalogExplanation ? `TAGALOG EXPLANATION: ${d.tagalogExplanation}` : ''
                 ].filter(Boolean).join('\n\n');
 
@@ -6320,6 +6523,7 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                                 legalBasis: document.getElementById('voc-basis').value.trim(),
                                 application: document.getElementById('voc-app').value.trim(),
                                 usageExample: document.getElementById('voc-example').value.trim(),
+                                computationProcess: document.getElementById('voc-process').value.trim(),
                                 commonMistakes: listFrom('voc-mistakes'),
                                 relatedTopics: listFrom('voc-related-topics'),
                                 etymology: document.getElementById('voc-etymology').value.trim(),
@@ -6330,7 +6534,8 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                                     sourceCitation && d.sourceStatus !== 'ai_draft'
                                         ? 'verified'
                                         : d.sourceStatus,
-                                schemaVersion: 3,
+                                autoGeneratedFromDigest: false,
+                                schemaVersion: 4,
                                 updated: serverTimestamp()
                             });
 
@@ -6373,6 +6578,9 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                         : '',
                     d.legalBasis
                         ? `Legal basis: ${d.legalBasis}`
+                        : '',
+                    d.computationProcess
+                        ? `Process / computation: ${d.computationProcess}`
                         : ''
                 ].filter(Boolean);
 
@@ -6458,6 +6666,7 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                     ${section('Tagalog / Taglish Explanation', d.tagalogExplanation)}
                     ${section('Application / Context', d.application)}
                     ${section('Usage Example', d.usageExample)}
+                    ${section('Computation / Process', d.computationProcess)}
                     ${list('Common Mistakes / Exam Traps', d.commonMistakes)}
                     ${list('Related Topics', d.relatedTopics)}
                     ${section('Etymology', d.etymology)}
@@ -6629,6 +6838,7 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                         d.legalBasis,
                         d.application,
                         d.usageExample,
+                        d.computationProcess,
                         d.etymology,
                         d.sourceCitation,
                         d.subjectTag,
@@ -7165,7 +7375,7 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                 if(!data.length){list.innerHTML='<div class="xl:col-span-2 p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><i class="fas fa-scale-balanced text-5xl opacity-20 mb-4"></i><p class="font-bold">No doctrines match this view.</p></div>';return;}
                 const esc=value=>Security.escapeHTML(String(value||''));
                 const block=(label,value)=>value?`<div class="mt-3"><p class="text-[10px] uppercase tracking-widest font-black text-slate-400">${label}</p><p class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed mt-1">${esc(value)}</p></div>`:'';
-                list.innerHTML=data.map(d=>`<article class="border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-sm transition bg-white"><div class="flex items-start justify-between gap-3"><div><div class="flex flex-wrap gap-2 mb-2"><span class="px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-black uppercase">${esc(d.article||d.topic||'General')}</span>${d.subjectName?`<span class="px-2 py-1 rounded bg-violet-50 text-violet-700 text-[10px] font-black uppercase">${esc(d.subjectName)}</span>`:''}</div><h4 class="font-black text-slate-900 text-lg serif-text">${esc(d.caseTitle||d.topic||'Doctrine')}</h4>${d.citation?`<p class="text-xs text-slate-500 mt-1">${esc(d.citation)}</p>`:''}</div><div class="flex gap-1"><button onclick="window.appHandlers.saveDoctrineToVault('${d.id}')" class="w-8 h-8 rounded-lg border text-violet-600 hover:bg-violet-50" title="Save to Knowledge Vault"><i class="fas fa-vault"></i></button><button onclick="window.appHandlers.editDoctrineById('${d.id}')" class="w-8 h-8 rounded-lg border text-amber-600 hover:bg-amber-50"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.deleteDoctrine('${d.id}')" class="w-8 h-8 rounded-lg border text-red-500 hover:bg-red-50"><i class="fas fa-trash"></i></button></div></div>${block('Definition',d.definition||d.doctrine)}${block('General Rule',d.generalRule)}${block('Requisites / Elements',d.requisites)}${block('Exceptions / Qualifications',d.exceptions)}${d.cases?.length?block('Related Cases',d.cases.join('\n')):''}${block('Application',d.application)}${block('Tagalog / Taglish',d.tagalogExplanation)}${block('Exam Tip',d.examTip)}<div class="mt-4 pt-3 border-t border-slate-100 flex gap-3"><button onclick="window.appHandlers.openLexTutorForDoctrine('${d.id}')" class="text-xs font-bold text-indigo-700 hover:underline"><i class="fas fa-wand-magic-sparkles mr-1"></i>Ask Lex</button><button onclick="window.appHandlers.saveDoctrineToVault('${d.id}')" class="text-xs font-bold text-violet-700 hover:underline">Save to Vault</button></div></article>`).join('');
+                list.innerHTML=data.map(d=>`<article class="border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-sm transition bg-white"><div class="flex items-start justify-between gap-3"><div><div class="flex flex-wrap gap-2 mb-2"><span class="px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-black uppercase">${esc(d.article||d.topic||'General')}</span>${d.subjectName?`<span class="px-2 py-1 rounded bg-violet-50 text-violet-700 text-[10px] font-black uppercase">${esc(d.subjectName)}</span>`:''}</div><h4 class="font-black text-slate-900 text-lg serif-text">${esc(d.caseTitle||d.topic||'Doctrine')}</h4>${d.citation?`<p class="text-xs text-slate-500 mt-1">${esc(d.citation)}</p>`:''}${d.linkedFromCaseDigest?`<p class="text-[10px] font-bold text-indigo-500 mt-1"><i class="fas fa-link mr-1"></i>Linked from Case Digester</p>`:''}</div><div class="flex gap-1"><button onclick="window.appHandlers.saveDoctrineToVault('${d.id}')" class="w-8 h-8 rounded-lg border text-violet-600 hover:bg-violet-50" title="Save to Knowledge Vault"><i class="fas fa-vault"></i></button><button onclick="window.appHandlers.editDoctrineById('${d.id}')" class="w-8 h-8 rounded-lg border text-amber-600 hover:bg-amber-50"><i class="fas fa-pen"></i></button><button onclick="window.appHandlers.deleteDoctrine('${d.id}')" class="w-8 h-8 rounded-lg border text-red-500 hover:bg-red-50"><i class="fas fa-trash"></i></button></div></div>${block('Definition',d.definition||d.doctrine)}${block('General Rule',d.generalRule)}${block('Requisites / Elements',d.requisites)}${block('Exceptions / Qualifications',d.exceptions)}${d.cases?.length?block('Related Cases',d.cases.join('\n')):''}${block('Application',d.application)}${block('Tagalog / Taglish',d.tagalogExplanation)}${block('Exam Tip',d.examTip)}<div class="mt-4 pt-3 border-t border-slate-100 flex gap-3"><button onclick="window.appHandlers.openLexTutorForDoctrine('${d.id}')" class="text-xs font-bold text-indigo-700 hover:underline"><i class="fas fa-wand-magic-sparkles mr-1"></i>Ask Lex</button><button onclick="window.appHandlers.saveDoctrineToVault('${d.id}')" class="text-xs font-bold text-violet-700 hover:underline">Save to Vault</button></div></article>`).join('');
             },
             filterMatrix: () => {
                 const term=(document.getElementById('matrix-search')?.value||'').toLowerCase(); const subject=document.getElementById('doctrine-subject-filter')?.value||'all';
@@ -7175,7 +7385,7 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
             doctrineEditor: (existing = null) => {
                 const d=existing||{}; const subjects=views.subjects.subjects||[];
                 const options='<option value="">Unassigned</option>'+subjects.map(s=>`<option value="${s.id}" data-name="${Security.escapeHTML(s.name||'')}" ${(Array.isArray(d.subjectIds)&&d.subjectIds.includes(s.id))||d.primarySubjectId===s.id?'selected':''}>${Security.escapeHTML(s.name||'')}</option>`).join('');
-                Modal.show({title:`<i class="fas fa-scale-balanced text-blue-600 mr-2"></i>${existing?'Edit':'Add'} Doctrine`,content:`<div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-bold mb-1">Topic / Article</label><input id="doc-art" value="${Security.escapeHTML(d.article||d.topic||'')}" class="w-full p-2.5 border rounded-lg"></div><div><label class="block text-sm font-bold mb-1">Subject</label><select id="doc-subject" class="w-full p-2.5 border rounded-lg bg-white">${options}</select></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Leading Case / Label</label><input id="doc-title" value="${Security.escapeHTML(d.caseTitle||'')}" class="w-full p-2.5 border rounded-lg"></div><div><label class="block text-sm font-bold mb-1">Citation</label><input id="doc-cite" value="${Security.escapeHTML(d.citation||'')}" class="w-full p-2.5 border rounded-lg"></div></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Definition / Core Doctrine</label><textarea id="doc-definition" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.definition||d.doctrine||'')}</textarea></div><div class="mt-3"><label class="block text-sm font-bold mb-1">General Rule</label><textarea id="doc-rule" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.generalRule||'')}</textarea></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Requisites / Elements</label><textarea id="doc-req" rows="4" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.requisites||'')}</textarea></div><div><label class="block text-sm font-bold mb-1">Exceptions / Qualifications</label><textarea id="doc-exc" rows="4" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.exceptions||'')}</textarea></div></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Related Cases <span class="text-xs text-slate-400 font-normal">one per line</span></label><textarea id="doc-cases" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML((d.cases||[]).join('\n'))}</textarea></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Application</label><textarea id="doc-app" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.application||'')}</textarea></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Tagalog / Taglish</label><textarea id="doc-tagalog" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.tagalogExplanation||'')}</textarea></div><div><label class="block text-sm font-bold mb-1">Exam Tip</label><textarea id="doc-tip" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.examTip||'')}</textarea></div></div>`,submitText:existing?'Update Doctrine':'Save Doctrine',onSubmit:async()=>{const art=document.getElementById('doc-art').value.trim()||'General',def=document.getElementById('doc-definition').value.trim();if(!def)throw new Error('Definition/Core Doctrine is required.');const sel=document.getElementById('doc-subject'),sid=sel.value,sname=sel.options[sel.selectedIndex]?.dataset.name||sel.options[sel.selectedIndex]?.text||'';const payload={article:art,topic:art,caseTitle:document.getElementById('doc-title').value.trim(),citation:document.getElementById('doc-cite').value.trim(),definition:def,doctrine:def,generalRule:document.getElementById('doc-rule').value.trim(),requisites:document.getElementById('doc-req').value.trim(),exceptions:document.getElementById('doc-exc').value.trim(),cases:document.getElementById('doc-cases').value.split(/\n+/).map(v=>v.trim()).filter(Boolean),application:document.getElementById('doc-app').value.trim(),tagalogExplanation:document.getElementById('doc-tagalog').value.trim(),examTip:document.getElementById('doc-tip').value.trim(),subjectName:sname&&sname!=='Unassigned'?sname:'',primarySubjectId:sid||'',subjectIds:sid?[sid]:[],schemaVersion:2,updated:serverTimestamp()};if(existing)await AppDB.update('doctrines',existing.id,payload);else await AppDB.add('doctrines',{...payload,created:serverTimestamp()});}});
+                Modal.show({title:`<i class="fas fa-scale-balanced text-blue-600 mr-2"></i>${existing?'Edit':'Add'} Doctrine`,content:`<div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="block text-sm font-bold mb-1">Topic / Article</label><input id="doc-art" value="${Security.escapeHTML(d.article||d.topic||'')}" class="w-full p-2.5 border rounded-lg"></div><div><label class="block text-sm font-bold mb-1">Subject</label><select id="doc-subject" class="w-full p-2.5 border rounded-lg bg-white">${options}</select></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Leading Case / Label</label><input id="doc-title" value="${Security.escapeHTML(d.caseTitle||'')}" class="w-full p-2.5 border rounded-lg"></div><div><label class="block text-sm font-bold mb-1">Citation</label><input id="doc-cite" value="${Security.escapeHTML(d.citation||'')}" class="w-full p-2.5 border rounded-lg"></div></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Definition / Core Doctrine</label><textarea id="doc-definition" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.definition||d.doctrine||'')}</textarea></div><div class="mt-3"><label class="block text-sm font-bold mb-1">General Rule</label><textarea id="doc-rule" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.generalRule||'')}</textarea></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Requisites / Elements</label><textarea id="doc-req" rows="4" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.requisites||'')}</textarea></div><div><label class="block text-sm font-bold mb-1">Exceptions / Qualifications</label><textarea id="doc-exc" rows="4" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.exceptions||'')}</textarea></div></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Related Cases <span class="text-xs text-slate-400 font-normal">one per line</span></label><textarea id="doc-cases" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML((d.cases||[]).join('\n'))}</textarea></div><div class="mt-3"><label class="block text-sm font-bold mb-1">Application</label><textarea id="doc-app" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.application||'')}</textarea></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"><div><label class="block text-sm font-bold mb-1">Tagalog / Taglish</label><textarea id="doc-tagalog" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.tagalogExplanation||'')}</textarea></div><div><label class="block text-sm font-bold mb-1">Exam Tip</label><textarea id="doc-tip" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(d.examTip||'')}</textarea></div></div>`,submitText:existing?'Update Doctrine':'Save Doctrine',onSubmit:async()=>{const art=document.getElementById('doc-art').value.trim()||'General',def=document.getElementById('doc-definition').value.trim();if(!def)throw new Error('Definition/Core Doctrine is required.');const sel=document.getElementById('doc-subject'),sid=sel.value,sname=sel.options[sel.selectedIndex]?.dataset.name||sel.options[sel.selectedIndex]?.text||'';const payload={article:art,topic:art,caseTitle:document.getElementById('doc-title').value.trim(),citation:document.getElementById('doc-cite').value.trim(),definition:def,doctrine:def,generalRule:document.getElementById('doc-rule').value.trim(),requisites:document.getElementById('doc-req').value.trim(),exceptions:document.getElementById('doc-exc').value.trim(),cases:document.getElementById('doc-cases').value.split(/\n+/).map(v=>v.trim()).filter(Boolean),application:document.getElementById('doc-app').value.trim(),tagalogExplanation:document.getElementById('doc-tagalog').value.trim(),examTip:document.getElementById('doc-tip').value.trim(),subjectName:sname&&sname!=='Unassigned'?sname:'',primarySubjectId:sid||'',subjectIds:sid?[sid]:[],schemaVersion:3,updated:serverTimestamp()};if(existing){payload.autoGeneratedFromDigest=false;await AppDB.update('doctrines',existing.id,payload);}else await AppDB.add('doctrines',{...payload,created:serverTimestamp()});}});
             },
             addDoctrine: () => window.appHandlers.doctrineEditor(null),
             editDoctrineById: (id) => { const d=views.matrix.doctrines.find(x=>x.id===id); if(d)window.appHandlers.doctrineEditor(d); },
@@ -11170,6 +11380,7 @@ await AppDB.add('digests', digestData);
     area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; 
     
     try { 
+        const autoKnowledgeEnabled = document.getElementById('digest-auto-knowledge')?.checked !== false;
         const intelligence = await FullTextIntelligence.caseEvidence(apiKey, textToDigest, selectedSubjectName, topicInput, (current,total,pageRange) => { btn.innerHTML=`<i class="fas fa-spinner fa-spin mr-1"></i> Reading ${pageRange} • ${current}/${total}`; area.innerHTML=`<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Full Case Intelligence</p><p class="text-slate-500 text-xs mt-1">Extracting grounded evidence from ${Security.escapeHTML(pageRange)} (${current} of ${total})…</p></div>`; });
         const caseContext = intelligence.context;
         btn.innerHTML='<i class="fas fa-spinner fa-spin mr-1"></i> Synthesizing Digest…';
@@ -11380,6 +11591,26 @@ Identify the G.R. Number or citation only if expressly stated in the TARGET CASE
 If absent, return an empty string: ""
 
 ==================================================
+15. STUDY-WORTHY LEGAL TERMS
+==================================================
+
+${autoKnowledgeEnabled
+? `Identify up to 5 legal terms, Latin maxims, doctrines-as-terms, procedural concepts, or statutory terms that are ACTUALLY DEFINED, EXPLAINED, DISTINGUISHED, OR MATERIALLY APPLIED in the TARGET CASE TEXT.
+
+For each term:
+- Use only the supplied case source.
+- Do not add a term merely because it appears once.
+- Exclude generic litigation labels such as petitioner, respondent, plaintiff, defendant, court, judge, or justice.
+- "definition" must state the meaning supported by the case.
+- "legal_basis" must be empty if the exact basis is not supported by the case.
+- "application" should briefly connect the term to THIS case when useful.
+- "simple_explanation" may simplify the source-grounded meaning but must not add outside law.
+- "tagalog_explanation" must be a faithful Filipino/Taglish study explanation, not a separate legal rule.
+- "related_terms" may include only concepts actually connected in the supplied case.
+- If there are no genuinely study-worthy terms, return an empty array.`
+: `Automatic knowledge building is disabled. Return an empty "legal_terms" array.`}
+
+==================================================
 ANTI-DUPLICATION RULE
 ==================================================
 
@@ -11398,6 +11629,7 @@ exceptions_to_exceptions = recognized limitations on an exception.
 supreme_court_application = how the rule operated on this case's facts.
 recitation_gist = compressed oral version.
 verbatim_notes = exact quotations only.
+legal_terms = distinct study-worthy terminology grounded in the case only.
 
 Avoid copying the same paragraph across fields.
 
@@ -11418,6 +11650,7 @@ Before answering, internally verify:
 9. Facts are complete enough without unnecessary detail.
 10. Verbatim excerpts are exact and not duplicated.
 11. The Recitation Gist is short and natural.
+12. Every Legal Dictionary term is genuinely explained or materially applied in the supplied case and contains no outside legal rule.
 
 ==================================================
 FINAL GUIDING PRINCIPLE
@@ -11445,7 +11678,19 @@ Return STRICTLY ONE valid raw JSON object with EXACTLY these keys:
   "exceptions_to_exceptions": "string",
   "supreme_court_application": "string",
   "recitation_gist": "string",
-  "verbatim_notes": "string"
+  "verbatim_notes": "string",
+  "legal_terms": [
+    {
+      "term": "string",
+      "category": "Latin Maxim | Legal Term | Doctrine | Procedure | Statutory Term | Other",
+      "definition": "string",
+      "legal_basis": "string",
+      "application": "string",
+      "simple_explanation": "string",
+      "tagalog_explanation": "string",
+      "related_terms": ["string"]
+    }
+  ]
 }
 
 OUTPUT RULES:
@@ -11480,6 +11725,7 @@ OUTPUT RULES:
         const supremeCourtApplication = DigestUtils.text(parsedDigest.supreme_court_application);
         const gist = DigestUtils.text(parsedDigest.recitation_gist);
         const verbatimNotes = DigestUtils.validateVerbatimNotes(parsedDigest.verbatim_notes, textToDigest);
+        const extractedLegalTerms = autoKnowledgeEnabled ? DigestAutoKnowledge.cleanLegalTerms(parsedDigest.legal_terms) : [];
 
         const digestData = {
             title: titleInput,
@@ -11507,7 +11753,9 @@ OUTPUT RULES:
             personalNotes: '',
             notes: '', // reserved for the user's own notes; never duplicate AI fields here
             sourceAnalysis: { mode: intelligence.mode, chunkCount: intelligence.chunkCount, pageCount: Number(window.appHandlers.digestMeta?.pageCount || 0), originalCharacters: Number(intelligence.originalCharacters || textToDigest.length) },
-            schemaVersion: 5,
+            extractedLegalTerms,
+            autoKnowledgeEnabled,
+            schemaVersion: 6,
             created: serverTimestamp(),
             updated: serverTimestamp()
         };
@@ -11523,8 +11771,38 @@ OUTPUT RULES:
             }
         }
 
-        views.case_digester.digestedData = { ...digestData };
-        await AppDB.add('digests', digestData);
+        const digestRef = await AppDB.add('digests', digestData);
+        views.case_digester.digestedData = { id: digestRef.id, ...digestData };
+
+        let autoKnowledgeResult = null;
+        let autoKnowledgeError = '';
+        if (autoKnowledgeEnabled) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Building Doctrine & Dictionary…';
+            try {
+                autoKnowledgeResult = await DigestAutoKnowledge.syncAll({
+                    digestId: digestRef.id,
+                    digestData: { id: digestRef.id, ...digestData },
+                    legalTerms: extractedLegalTerms
+                });
+            } catch (knowledgeError) {
+                console.error('Digest saved, but automatic knowledge sync failed:', knowledgeError);
+                autoKnowledgeError = knowledgeError?.message || 'Automatic knowledge sync failed.';
+            }
+        }
+
+        const doctrineSync = autoKnowledgeResult?.doctrine;
+        const dictionarySync = autoKnowledgeResult?.dictionary;
+        const doctrineStatusText = doctrineSync?.status === 'added'
+            ? 'Doctrine Library: 1 new doctrine added.'
+            : doctrineSync?.status === 'linked'
+            ? 'Doctrine Library: existing doctrine linked to this case.'
+            : 'Doctrine Library: no supported doctrine to add.';
+        const dictionaryStatusText = dictionarySync
+            ? `Legal Dictionary: ${dictionarySync.added || 0} new term${dictionarySync.added === 1 ? '' : 's'} added${dictionarySync.linked ? ` • ${dictionarySync.linked} existing term${dictionarySync.linked === 1 ? '' : 's'} linked` : ''}.`
+            : '';
+        const knowledgeStatusHtml = autoKnowledgeEnabled
+            ? `<div class="${autoKnowledgeError ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-indigo-50 border-indigo-200 text-indigo-900'} border p-4 rounded-xl"><div class="flex items-start gap-3"><i class="fas ${autoKnowledgeError ? 'fa-triangle-exclamation text-amber-600' : 'fa-diagram-project text-indigo-600'} mt-0.5"></i><div><p class="text-xs font-black uppercase tracking-wider">${autoKnowledgeError ? 'Digest Saved — Knowledge Sync Needs Attention' : 'Lex Knowledge Auto-Built'}</p>${autoKnowledgeError ? `<p class="text-sm mt-1">${Security.escapeHTML(autoKnowledgeError)}</p>` : `<p class="text-sm mt-1">${Security.escapeHTML(doctrineStatusText)}</p><p class="text-sm mt-1">${Security.escapeHTML(dictionaryStatusText)}</p>`}</div></div></div>`
+            : '';
 
         const myNotesPreview = DigestUtils.myNotesText(digestData);
         area.innerHTML = `<div class="space-y-4">
@@ -11532,6 +11810,7 @@ OUTPUT RULES:
                 <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to the Case Library and linked to the selected notebook. ${window.appHandlers.digestMeta?.pageCount ? `Full PDF analyzed: ${window.appHandlers.digestMeta.pageCount} pages` : 'Full supplied text analyzed'} • ${intelligence.chunkCount} analysis section${intelligence.chunkCount===1?'':'s'}.</p></div>
                 <div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.saveLatestDigestToVault()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-vault mr-1"></i>Save Doctrine to Vault</button><button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View Table</button></div>
             </div>
+            ${knowledgeStatusHtml}
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-600 text-xs tracking-wider uppercase mb-2">Facts</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(facts)}</p></div>
             <div class="bg-white p-5 rounded-xl shadow-sm border border-blue-200"><h4 class="font-bold text-blue-700 text-xs tracking-wider uppercase mb-2">Issue</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(issue)}</p></div>
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"><h4 class="font-bold text-slate-700 text-xs tracking-wider uppercase mb-2">Ruling</h4><p class="text-sm whitespace-pre-wrap">${Security.escapeHTML(ruling)}</p></div>
