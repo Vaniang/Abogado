@@ -3990,61 +3990,337 @@ const cleanAiJsonResponse = (text) => {
             constructor() {
                 this.unsubscribe = null;
                 this.vocabData = [];
+                this.activePracticeArea = 'all';
                 this.activeCategory = 'all';
             }
 
+            practiceAreas() {
+                return [
+                    'Criminal',
+                    'Civil',
+                    'Commercial',
+                    'Labor',
+                    'Remedial',
+                    'Taxation',
+                    'Administrative',
+                    'Political',
+                    'Ethics',
+                    'Business',
+                    'HR',
+                    'Real Estate'
+                ];
+            }
+
+            inferPracticeAreas(entry = {}) {
+                const direct = Array.isArray(entry.practiceAreas)
+                    ? entry.practiceAreas
+                    : Array.isArray(entry.practice_areas)
+                    ? entry.practice_areas
+                    : [];
+
+                const primary = String(
+                    entry.practiceArea ||
+                    entry.practice_area ||
+                    ''
+                ).trim();
+
+                const source = [
+                    ...direct,
+                    primary,
+                    entry.subjectTag,
+                    entry.subject_tag,
+                    entry.category,
+                    entry.term,
+                    entry.word
+                ].filter(Boolean).join(' ').toLowerCase();
+
+                const inferred = [];
+
+                const add = value => {
+                    if (value && !inferred.includes(value)) inferred.push(value);
+                };
+
+                direct.forEach(value => {
+                    const clean = String(value || '').trim();
+                    const canonical = this.practiceAreas().find(
+                        area => area.toLowerCase() === clean.toLowerCase()
+                    );
+                    if (canonical) add(canonical);
+                });
+
+                const map = [
+                    ['Criminal', /\b(criminal|penal|crime|felony|prosecution)\b/],
+                    ['Civil', /\b(civil|obligation|contract|family|succession|tort|property)\b/],
+                    ['Commercial', /\b(commercial|corporation|corporate|insurance|negotiable|securities)\b/],
+                    ['Labor', /\b(labor|employment|employee|employer|dismissal|wage)\b/],
+                    ['Remedial', /\b(remedial|procedure|evidence|civil procedure|criminal procedure|appeal|certiorari)\b/],
+                    ['Taxation', /\b(tax|taxation|bir|revenue|vat|income tax|estate tax)\b/],
+                    ['Administrative', /\b(administrative|public officer|ombudsman|civil service|agency)\b/],
+                    ['Political', /\b(political|constitutional|constitution|rights|state|government)\b/],
+                    ['Ethics', /\b(ethics|lawyer|attorney|professional responsibility|cpra|disbarment)\b/],
+                    ['Business', /\b(business|enterprise|trade|corporate governance)\b/],
+                    ['HR', /\b(hr|human resources|benefit|leave|workplace)\b/],
+                    ['Real Estate', /\b(real estate|land|title|torrens|lease|ejectment|mortgage|condominium)\b/]
+                ];
+
+                map.forEach(([area, regex]) => {
+                    if (regex.test(source)) add(area);
+                });
+
+                return inferred;
+            }
+
+            timestampMs(value) {
+                if (!value) return 0;
+                try {
+                    if (typeof value.toMillis === 'function') return value.toMillis();
+                    if (value.seconds) return Number(value.seconds) * 1000;
+                    const parsed = new Date(value).getTime();
+                    return Number.isFinite(parsed) ? parsed : 0;
+                } catch (_) {
+                    return 0;
+                }
+            }
+
+            normalizeList(value) {
+                if (Array.isArray(value)) {
+                    return value
+                        .map(item => String(item ?? '').trim())
+                        .filter(Boolean);
+                }
+
+                return String(value ?? '')
+                    .split(/\n+|[;]+/)
+                    .map(item => item.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim())
+                    .filter(Boolean);
+            }
+
             normalizeEntry(entry = {}) {
-                const text = value => String(value ?? '').trim();
+                const value = input => String(input ?? '').trim();
+
                 return {
                     ...entry,
-                    word: text(entry.word || entry.term),
-                    term: text(entry.term || entry.word),
-                    meaning: text(entry.meaning || entry.definition),
-                    definition: text(entry.definition || entry.meaning),
-                    application: text(entry.application || entry.context),
-                    category: text(entry.category || 'Legal Term'),
-                    simpleExplanation: text(entry.simpleExplanation || entry.simple_explanation),
-                    tagalogExplanation: text(entry.tagalogExplanation || entry.tagalog_explanation),
-                    legalBasis: text(entry.legalBasis || entry.legal_basis),
-                    usageExample: text(entry.usageExample || entry.usage_example),
-                    etymology: text(entry.etymology),
+                    word: value(entry.word || entry.term),
+                    term: value(entry.term || entry.word),
+                    meaning: value(entry.meaning || entry.definition),
+                    definition: value(entry.definition || entry.meaning),
+                    application: value(entry.application || entry.context),
+                    category: value(entry.category || 'Legal Term'),
+                    simpleExplanation: value(
+                        entry.simpleExplanation ||
+                        entry.simple_explanation
+                    ),
+                    tagalogExplanation: value(
+                        entry.tagalogExplanation ||
+                        entry.tagalog_explanation
+                    ),
+                    legalBasis: value(
+                        entry.legalBasis ||
+                        entry.legal_basis
+                    ),
+                    usageExample: value(
+                        entry.usageExample ||
+                        entry.usage_example
+                    ),
+                    etymology: value(entry.etymology),
+                    keyPoints: this.normalizeList(
+                        entry.keyPoints ||
+                        entry.key_points
+                    ),
+                    commonMistakes: this.normalizeList(
+                        entry.commonMistakes ||
+                        entry.common_mistakes
+                    ),
+                    relatedTopics: this.normalizeList(
+                        entry.relatedTopics ||
+                        entry.related_topics
+                    ),
                     relatedTerms: Array.isArray(entry.relatedTerms)
                         ? entry.relatedTerms
-                        : text(entry.related_terms)
+                        : value(entry.related_terms)
                             .split(/[,;\n]+/)
-                            .map(value => value.trim())
+                            .map(item => item.trim())
                             .filter(Boolean),
-                    sourceCitation: text(entry.sourceCitation || entry.source_citation),
-                    subjectTag: text(entry.subjectTag || entry.subject_tag),
-                    sourceStatus: text(entry.sourceStatus || entry.source_status || 'personal')
+                    sourceCitation: value(
+                        entry.sourceCitation ||
+                        entry.source_citation
+                    ),
+                    subjectTag: value(
+                        entry.subjectTag ||
+                        entry.subject_tag
+                    ),
+                    sourceStatus: value(
+                        entry.sourceStatus ||
+                        entry.source_status ||
+                        'personal'
+                    ),
+                    practiceAreas: this.inferPracticeAreas(entry),
+                    lookupCount: Math.max(
+                        0,
+                        Number(entry.lookupCount || entry.lookup_count || 0) || 0
+                    ),
+                    createdAtMs: this.timestampMs(entry.created),
+                    updatedAtMs: this.timestampMs(entry.updated),
+                    lastViewedAtMs: this.timestampMs(entry.lastViewedAt)
                 };
             }
 
+            termOfDay() {
+                if (!this.vocabData.length) return null;
+
+                const today = new Date();
+                const key =
+                    today.getFullYear() * 10000 +
+                    (today.getMonth() + 1) * 100 +
+                    today.getDate();
+
+                return this.vocabData[key % this.vocabData.length];
+            }
+
+            recentEntries(limit = 5) {
+                return [...this.vocabData]
+                    .sort((a, b) =>
+                        (b.createdAtMs || b.updatedAtMs || 0) -
+                        (a.createdAtMs || a.updatedAtMs || 0)
+                    )
+                    .slice(0, limit);
+            }
+
+            popularEntries(limit = 5) {
+                const sorted = [...this.vocabData]
+                    .sort((a, b) =>
+                        (b.lookupCount || 0) - (a.lookupCount || 0) ||
+                        (a.term || '').localeCompare(b.term || '')
+                    );
+
+                // Until enough clicks exist, still show useful terms instead of an empty block.
+                return sorted.slice(0, limit);
+            }
+
+            renderFeatured() {
+                const term = this.termOfDay();
+                const termEl = document.getElementById('dict-term-of-day');
+                const recentEl = document.getElementById('dict-recent');
+                const popularEl = document.getElementById('dict-popular');
+
+                if (termEl) {
+                    termEl.innerHTML = term
+                        ? `
+                            <button onclick="window.appHandlers.viewVocab('${term.id}')" class="w-full text-left group">
+                                <div class="flex flex-wrap gap-2 mb-3">
+                                    <span class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(term.category || 'Legal Term')}</span>
+                                    ${(term.practiceAreas || []).slice(0, 2).map(area =>
+                                        `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">${Security.escapeHTML(area)}</span>`
+                                    ).join('')}
+                                </div>
+                                <h4 class="text-2xl md:text-3xl font-black text-slate-900 serif-text group-hover:text-indigo-700 transition">${Security.escapeHTML(term.term)}</h4>
+                                <p class="text-sm text-slate-600 leading-7 mt-3">${Security.escapeHTML(Utils.excerpt(term.definition, 420))}</p>
+                                <p class="text-xs font-black text-indigo-700 mt-4">Ask Lex or read full entry <i class="fas fa-arrow-right ml-1"></i></p>
+                            </button>`
+                        : `<div class="text-sm text-slate-400">Add your first dictionary term to start Term of the Day.</div>`;
+                }
+
+                const compactList = rows => rows.length
+                    ? rows.map(entry => `
+                        <button onclick="window.appHandlers.viewVocab('${entry.id}')" class="w-full text-left py-2.5 border-b border-slate-100 last:border-0 hover:text-indigo-700 group">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="font-black text-sm text-slate-800 group-hover:text-indigo-700 truncate">${Security.escapeHTML(entry.term)}</p>
+                                    <p class="text-[10px] text-slate-400 mt-1">${Security.escapeHTML((entry.practiceAreas || [entry.category]).slice(0, 2).join(' • ') || entry.category)}</p>
+                                </div>
+                                <span class="text-[10px] text-slate-400 flex-shrink-0">${entry.lookupCount || 0} view${entry.lookupCount === 1 ? '' : 's'}</span>
+                            </div>
+                        </button>`).join('')
+                    : '<p class="text-sm text-slate-400">No terms yet.</p>';
+
+                if (recentEl) recentEl.innerHTML = compactList(this.recentEntries());
+                if (popularEl) popularEl.innerHTML = compactList(this.popularEntries());
+            }
+
             render() {
+                const areas = this.practiceAreas();
+
                 return `
                 <div class="max-w-7xl mx-auto pb-24">
-                    <div class="bg-gradient-to-r from-indigo-800 via-slate-900 to-blue-900 rounded-2xl p-7 text-white shadow-lg mb-6">
+                    <div class="mb-7">
                         <div class="flex flex-col xl:flex-row xl:items-end justify-between gap-5">
                             <div>
-                                <p class="text-[10px] uppercase tracking-[.25em] text-indigo-200 font-black">Study Lab • Personal Knowledge Base</p>
-                                <h3 class="text-3xl font-black serif-text mt-2">Legal Dictionary</h3>
-                                <p class="text-sm text-indigo-50/80 mt-2 max-w-3xl">
-                                    Build your own Philippine-law dictionary of legal terms, Latin maxims, doctrines, procedural concepts, and statutory terms.
-                                    Keep definitions tied to legal basis and sources whenever available.
+                                <p class="text-[10px] uppercase tracking-[.25em] text-indigo-600 font-black">Study Lab • Philippine Law Lexicon</p>
+                                <h3 class="text-3xl md:text-4xl font-black text-slate-900 serif-text mt-2">Legal Dictionary</h3>
+                                <p class="text-sm text-slate-500 mt-2 max-w-3xl leading-relaxed">
+                                    Your personal Philippine-law lexicon: legal terms, Latin maxims, doctrines, requisites, procedural concepts,
+                                    and statutory terms — organized for quick lookup and active study.
                                 </p>
                             </div>
+
                             <div class="flex flex-wrap gap-2">
                                 <button onclick="window.appHandlers.aiDefineVocab()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 px-4 py-2.5 rounded-xl text-sm font-black shadow-sm">
                                     <i class="fas fa-wand-magic-sparkles mr-2"></i>Draft with Lex
                                 </button>
-                                <button onclick="window.appHandlers.addVocab()" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2.5 rounded-xl text-sm font-bold">
-                                    <i class="fas fa-plus mr-2"></i>Add Manually
+                                <button onclick="window.appHandlers.addVocab()" class="bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm">
+                                    <i class="fas fa-plus mr-2"></i>Add Term
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <!-- Term of the Day -->
+                    <section class="bg-gradient-to-br from-indigo-50 via-white to-blue-50 border border-indigo-100 rounded-2xl p-6 md:p-7 shadow-sm">
+                        <div class="flex items-center gap-2 mb-4">
+                            <span class="w-9 h-9 rounded-xl bg-indigo-700 text-white flex items-center justify-center"><i class="fas fa-sparkles"></i></span>
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-[.2em] text-indigo-500">Term of the Day</p>
+                                <p class="text-xs text-slate-400">A rotating term from your own saved lexicon.</p>
+                            </div>
+                        </div>
+                        <div id="dict-term-of-day"><div class="loader"></div></div>
+                    </section>
+
+                    <!-- Recently Defined / Most Looked Up -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
+                        <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fas fa-clock"></i></div>
+                                <div>
+                                    <h4 class="font-black text-slate-800">Recently Defined</h4>
+                                    <p class="text-xs text-slate-400">Your newest dictionary entries.</p>
+                                </div>
+                            </div>
+                            <div id="dict-recent"></div>
+                        </section>
+
+                        <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><i class="fas fa-fire"></i></div>
+                                <div>
+                                    <h4 class="font-black text-slate-800">Most Looked Up</h4>
+                                    <p class="text-xs text-slate-400">Terms you return to most often.</p>
+                                </div>
+                            </div>
+                            <div id="dict-popular"></div>
+                        </section>
+                    </div>
+
+                    <!-- Browse by Practice Area -->
+                    <section class="mt-7">
+                        <div class="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-3">
+                            <div>
+                                <h4 class="text-xl font-black text-slate-900">Browse terms by practice area</h4>
+                                <p class="text-sm text-slate-500 mt-1">Filter the lexicon by the legal field you are studying.</p>
+                            </div>
+                            <span id="dict-result-count" class="text-xs font-bold text-slate-400"></span>
+                        </div>
+
+                        <div id="dict-area-buttons" class="flex flex-wrap gap-2">
+                            <button data-dict-area="all" onclick="window.appHandlers.filterDictionaryArea('all')" class="dict-area-btn px-3 py-2 rounded-xl text-xs font-black border bg-indigo-700 text-white border-indigo-700">All</button>
+                            ${areas.map(area => `
+                                <button data-dict-area="${Security.escapeHTML(area)}" onclick="window.appHandlers.filterDictionaryArea('${Security.escapeHTML(area).replace(/'/g, "\\'")}')" class="dict-area-btn px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700">${Security.escapeHTML(area)}</button>
+                            `).join('')}
+                        </div>
+                    </section>
+
+                    <!-- Full Library -->
+                    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-6">
                         <div class="p-4 md:p-5 border-b border-slate-100 bg-slate-50">
                             <div class="flex flex-col lg:flex-row gap-3 lg:items-center">
                                 <div class="relative flex-1">
@@ -4052,13 +4328,13 @@ const cleanAiJsonResponse = (text) => {
                                     <input
                                         type="text"
                                         id="vocab-search"
-                                        placeholder="Search term, definition, legal basis, source, related term..."
+                                        placeholder="Search terms, definitions, legal basis, subjects, related terms..."
                                         class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                                        onkeyup="window.appHandlers.filterVocab()">
+                                        oninput="window.appHandlers.filterVocab()">
                                 </div>
 
-                                <select id="vocab-category-filter" onchange="window.appHandlers.filterVocab()" class="p-2.5 border border-slate-200 rounded-xl text-sm bg-white min-w-[180px]">
-                                    <option value="all">All Categories</option>
+                                <select id="vocab-category-filter" onchange="window.appHandlers.filterVocab()" class="p-2.5 border border-slate-200 rounded-xl text-sm bg-white min-w-[170px]">
+                                    <option value="all">All Types</option>
                                     <option value="Latin Maxim">Latin Maxim</option>
                                     <option value="Legal Term">Legal Term</option>
                                     <option value="Doctrine">Doctrine</option>
@@ -4072,18 +4348,21 @@ const cleanAiJsonResponse = (text) => {
                                 </button>
                             </div>
 
-                            <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-                                <span class="font-bold text-slate-400 uppercase tracking-wider">Source Status:</span>
-                                <span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100"><i class="fas fa-circle-check mr-1"></i>Source-grounded / verified</span>
-                                <span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><i class="fas fa-triangle-exclamation mr-1"></i>AI draft — verify</span>
-                                <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200"><i class="fas fa-pen mr-1"></i>Personal entry</span>
+                            <div class="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
+                                <span class="font-bold text-slate-400 uppercase tracking-wider">Source status</span>
+                                <span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100"><i class="fas fa-circle-check mr-1"></i>Verified</span>
+                                <span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><i class="fas fa-triangle-exclamation mr-1"></i>AI Draft</span>
+                                <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200"><i class="fas fa-pen mr-1"></i>Personal</span>
                             </div>
                         </div>
 
-                        <div id="vocab-list" class="p-4 md:p-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div class="lg:col-span-2 p-10 text-center text-slate-400"><div class="loader mx-auto"></div></div>
+                        <!-- A-Z jump navigation -->
+                        <div id="dict-az" class="px-4 md:px-5 py-3 border-b border-slate-100 flex flex-wrap gap-1 bg-white sticky top-0 z-10"></div>
+
+                        <div id="vocab-list" class="p-4 md:p-6">
+                            <div class="p-10 text-center text-slate-400"><div class="loader mx-auto"></div></div>
                         </div>
-                    </div>
+                    </section>
                 </div>`;
             }
 
@@ -4093,9 +4372,13 @@ const cleanAiJsonResponse = (text) => {
                     if (!list) return;
 
                     this.vocabData = [];
+
                     snapshot.forEach(record => {
                         this.vocabData.push(
-                            this.normalizeEntry({ id: record.id, ...record.data() })
+                            this.normalizeEntry({
+                                id: record.id,
+                                ...record.data()
+                            })
                         );
                     });
 
@@ -4103,10 +4386,14 @@ const cleanAiJsonResponse = (text) => {
                         (a.term || '').localeCompare(
                             b.term || '',
                             undefined,
-                            { numeric: true, sensitivity: 'base' }
+                            {
+                                numeric: true,
+                                sensitivity: 'base'
+                            }
                         )
                     );
 
+                    this.renderFeatured();
                     window.appHandlers.filterVocab();
                 });
             }
@@ -4528,7 +4815,7 @@ const cleanAiJsonResponse = (text) => {
 
         class StudyLabView {
             constructor(){this.unsubscribeReviews=null;}
-            render(){ const cards=[['adaptive_study','fa-chart-line','Adaptive Study','Mastery scores, weakness detection, and today’s recommended study queue.'],['knowledge_vault','fa-vault','Knowledge Vault','Persistent subject/topic knowledge saved from research, cases, notes, doctrines, and codal work.'],['codal_trainer','fa-eye-slash','Codal Trainer','Flashcards, recitation, exams, and provision comparisons.'],['review','fa-graduation-cap','Mock Review','Generate flashcards or Bar-style problems from notes and complete PDFs.'],['saved_reviews','fa-clock-rotate-left','Review Queue','Open saved reviews and answer due spaced-repetition cards.'],['mnemonic','fa-lightbulb','Mnemonic Mode','Create recall devices for elements and requisites.'],['issue_tree','fa-diagram-project','Visual Maps','Turn rules, elements, and exceptions into issue trees.'],['lex_vocab','fa-book-open','Legal Dictionary','Definitions, legal basis, related terms, Tagalog explanations, and flashcards.']]; return `<div class="max-w-6xl mx-auto pb-24"><div class="bg-gradient-to-r from-emerald-800 to-slate-900 rounded-2xl p-7 text-white shadow-lg mb-6"><p class="text-xs uppercase tracking-[.2em] text-emerald-200 font-black">Active Recall & Examination Prep</p><div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-2"><div><h3 class="text-3xl font-black serif-text">Study Lab</h3><p class="text-sm text-emerald-50/80 mt-2">Recall, mock exams, spaced repetition, mnemonics, visual maps, and vocabulary in one hub.</p></div><span id="study-lab-due" class="bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-xs font-bold">Due cards: —</span></div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${cards.map(([v,i,t,c])=>`<button onclick="window.appHandlers.navigate('${v}')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md hover:border-emerald-300 transition"><div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl"><i class="fas ${i}"></i></div><h4 class="font-black text-slate-800 mt-4">${t}</h4><p class="text-sm text-slate-500 mt-2">${c}</p><p class="text-xs font-bold text-emerald-600 mt-4">Open <i class="fas fa-arrow-right ml-1"></i></p></button>`).join('')}</div></div>`; }
+            render(){ const cards=[['adaptive_study','fa-chart-line','Adaptive Study','Mastery scores, weakness detection, and today’s recommended study queue.'],['knowledge_vault','fa-vault','Knowledge Vault','Persistent subject/topic knowledge saved from research, cases, notes, doctrines, and codal work.'],['codal_trainer','fa-eye-slash','Codal Trainer','Flashcards, recitation, exams, and provision comparisons.'],['review','fa-graduation-cap','Mock Review','Generate flashcards or Bar-style problems from notes and complete PDFs.'],['saved_reviews','fa-clock-rotate-left','Review Queue','Open saved reviews and answer due spaced-repetition cards.'],['mnemonic','fa-lightbulb','Mnemonic Mode','Create recall devices for elements and requisites.'],['issue_tree','fa-diagram-project','Visual Maps','Turn rules, elements, and exceptions into issue trees.'],['lex_vocab','fa-book-open','Legal Dictionary','A–Z Philippine-law lexicon with practice areas, Term of the Day, related terms, Tagalog explanations, Ask Lex, and flashcards.']]; return `<div class="max-w-6xl mx-auto pb-24"><div class="bg-gradient-to-r from-emerald-800 to-slate-900 rounded-2xl p-7 text-white shadow-lg mb-6"><p class="text-xs uppercase tracking-[.2em] text-emerald-200 font-black">Active Recall & Examination Prep</p><div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-2"><div><h3 class="text-3xl font-black serif-text">Study Lab</h3><p class="text-sm text-emerald-50/80 mt-2">Recall, mock exams, spaced repetition, mnemonics, visual maps, and vocabulary in one hub.</p></div><span id="study-lab-due" class="bg-white/10 border border-white/10 rounded-lg px-4 py-2 text-xs font-bold">Due cards: —</span></div></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${cards.map(([v,i,t,c])=>`<button onclick="window.appHandlers.navigate('${v}')" class="text-left bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md hover:border-emerald-300 transition"><div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl"><i class="fas ${i}"></i></div><h4 class="font-black text-slate-800 mt-4">${t}</h4><p class="text-sm text-slate-500 mt-2">${c}</p><p class="text-xs font-bold text-emerald-600 mt-4">Open <i class="fas fa-arrow-right ml-1"></i></p></button>`).join('')}</div></div>`; }
             init(){ this.unsubscribeReviews=AppDB.subscribe('reviews',s=>{let due=0,now=Date.now();s.forEach(r=>{const d=r.data();if(d.type!=='recit'||!Array.isArray(d.content))return;d.content.forEach(c=>{const n=Number(c?.nextReview??0);if(!n||n<=now)due++;});});const e=document.getElementById('study-lab-due');if(e)e.textContent=`Due cards: ${due}`;}); }
         }
 
@@ -5473,8 +5760,14 @@ deleteAdvocacyDraft: (id) => {
                 });
                 },
 
-            // --- LEGAL DICTIONARY HANDLERS ---
+            // --- LEXICON LEGAL DICTIONARY HANDLERS ---
             addVocab: (prefill = {}) => {
+                const practiceAreas = Array.isArray(prefill.practiceAreas)
+                    ? prefill.practiceAreas
+                    : Array.isArray(prefill.practice_areas)
+                    ? prefill.practice_areas
+                    : [];
+
                 const p = {
                     term: prefill.term || prefill.word || '',
                     category: prefill.category || 'Legal Term',
@@ -5485,14 +5778,30 @@ deleteAdvocacyDraft: (id) => {
                     application: prefill.application || '',
                     usageExample: prefill.usageExample || '',
                     etymology: prefill.etymology || '',
-                    relatedTerms: Array.isArray(prefill.relatedTerms) ? prefill.relatedTerms.join(', ') : (prefill.relatedTerms || ''),
+                    keyPoints: Array.isArray(prefill.keyPoints)
+                        ? prefill.keyPoints.join('\n')
+                        : (prefill.keyPoints || ''),
+                    commonMistakes: Array.isArray(prefill.commonMistakes)
+                        ? prefill.commonMistakes.join('\n')
+                        : (prefill.commonMistakes || ''),
+                    relatedTopics: Array.isArray(prefill.relatedTopics)
+                        ? prefill.relatedTopics.join('\n')
+                        : (prefill.relatedTopics || ''),
+                    relatedTerms: Array.isArray(prefill.relatedTerms)
+                        ? prefill.relatedTerms.join(', ')
+                        : (prefill.relatedTerms || ''),
                     sourceCitation: prefill.sourceCitation || '',
                     subjectTag: prefill.subjectTag || '',
-                    sourceStatus: prefill.sourceStatus || 'personal'
+                    sourceStatus: prefill.sourceStatus || 'personal',
+                    primaryPracticeArea: practiceAreas[0] || prefill.practiceArea || '',
+                    additionalPracticeAreas: practiceAreas.slice(1).join(', ')
                 };
 
-                const option = (value, label) =>
+                const categoryOption = (value, label) =>
                     `<option value="${value}" ${p.category === value ? 'selected' : ''}>${label}</option>`;
+
+                const areaOption = area =>
+                    `<option value="${area}" ${p.primaryPracticeArea === area ? 'selected' : ''}>${area}</option>`;
 
                 Modal.show({
                     title: '<i class="fas fa-book-open text-indigo-600 mr-2"></i>Add Legal Dictionary Entry',
@@ -5503,21 +5812,40 @@ deleteAdvocacyDraft: (id) => {
                                 <input id="voc-word" value="${Security.escapeHTML(p.term)}" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="e.g., res judicata">
                             </div>
                             <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-1">Category</label>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Entry Type</label>
                                 <select id="voc-category" class="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
-                                    ${option('Latin Maxim', 'Latin Maxim')}
-                                    ${option('Legal Term', 'Legal Term')}
-                                    ${option('Doctrine', 'Doctrine')}
-                                    ${option('Procedure', 'Procedure')}
-                                    ${option('Statutory Term', 'Statutory Term')}
-                                    ${option('Other', 'Other')}
+                                    ${categoryOption('Latin Maxim', 'Latin Maxim')}
+                                    ${categoryOption('Legal Term', 'Legal Term')}
+                                    ${categoryOption('Doctrine', 'Doctrine')}
+                                    ${categoryOption('Procedure', 'Procedure')}
+                                    ${categoryOption('Statutory Term', 'Statutory Term')}
+                                    ${categoryOption('Other', 'Other')}
                                 </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Primary Practice Area</label>
+                                <select id="voc-practice-area" class="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                                    <option value="">General / Not specified</option>
+                                    ${views.lex_vocab.practiceAreas().map(areaOption).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Additional Practice Areas</label>
+                                <input id="voc-practice-extra" value="${Security.escapeHTML(p.additionalPracticeAreas)}" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="e.g., Civil, Remedial">
                             </div>
                         </div>
 
                         <div class="mt-3">
                             <label class="block text-sm font-bold text-slate-700 mb-1">Legal Definition</label>
                             <textarea id="voc-mean" rows="4" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y">${Security.escapeHTML(p.definition)}</textarea>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Key Points / Requisites</label>
+                            <textarea id="voc-key-points" rows="4" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="One key point per line">${Security.escapeHTML(p.keyPoints)}</textarea>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -5543,7 +5871,18 @@ deleteAdvocacyDraft: (id) => {
 
                         <div class="mt-3">
                             <label class="block text-sm font-bold text-slate-700 mb-1">Usage Example</label>
-                            <textarea id="voc-example" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Example sentence or legal context...">${Security.escapeHTML(p.usageExample)}</textarea>
+                            <textarea id="voc-example" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Example sentence or law-school context...">${Security.escapeHTML(p.usageExample)}</textarea>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Common Mistakes / Exam Traps</label>
+                                <textarea id="voc-mistakes" rows="3" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="One item per line">${Security.escapeHTML(p.commonMistakes)}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Related Topics</label>
+                                <textarea id="voc-related-topics" rows="3" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="One topic per line">${Security.escapeHTML(p.relatedTopics)}</textarea>
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -5560,7 +5899,7 @@ deleteAdvocacyDraft: (id) => {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                             <div>
                                 <label class="block text-sm font-bold text-slate-700 mb-1">Source / Citation</label>
-                                <textarea id="voc-source" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Case citation, law, book, class note...">${Security.escapeHTML(p.sourceCitation)}</textarea>
+                                <textarea id="voc-source" rows="2" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Case citation, statute, textbook, class note...">${Security.escapeHTML(p.sourceCitation)}</textarea>
                             </div>
                             <div>
                                 <label class="block text-sm font-bold text-slate-700 mb-1">Subject Tag</label>
@@ -5569,7 +5908,9 @@ deleteAdvocacyDraft: (id) => {
                             </div>
                         </div>
 
-                        ${p.sourceStatus === 'ai_draft' ? `<div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900"><b>AI Draft:</b> verify the legal basis and citation against an authoritative source before treating this entry as verified.</div>` : ''}
+                        ${p.sourceStatus === 'ai_draft'
+                            ? `<div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900"><b>AI Draft:</b> verify the legal basis and citation against an authoritative source before treating this entry as verified.</div>`
+                            : ''}
                     `,
                     submitText: 'Save Entry',
                     onSubmit: async () => {
@@ -5577,17 +5918,37 @@ deleteAdvocacyDraft: (id) => {
                         const meaning = document.getElementById('voc-mean').value.trim();
 
                         if (!word || !meaning) {
-                            alert("Term and Legal Definition are required.");
-                            throw new Error("Validation failed");
+                            throw new Error('Term and Legal Definition are required.');
                         }
+
+                        const listFrom = id => document.getElementById(id).value
+                            .split(/\n+|[;]+/)
+                            .map(value => value.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim())
+                            .filter(Boolean);
 
                         const relatedTerms = document.getElementById('voc-related').value
                             .split(/[,;\n]+/)
                             .map(value => value.trim())
                             .filter(Boolean);
 
+                        const primaryArea = document.getElementById('voc-practice-area').value.trim();
+                        const extraAreas = document.getElementById('voc-practice-extra').value
+                            .split(/[,;\n]+/)
+                            .map(value => value.trim())
+                            .filter(Boolean);
+
+                        const allowedAreas = views.lex_vocab.practiceAreas();
+                        const practiceAreas = [...new Set(
+                            [primaryArea, ...extraAreas]
+                                .map(value => allowedAreas.find(area =>
+                                    area.toLowerCase() === value.toLowerCase()
+                                ))
+                                .filter(Boolean)
+                        )];
+
                         const sourceCitation = document.getElementById('voc-source').value.trim();
                         const currentStatus = document.getElementById('voc-source-status').value || 'personal';
+
                         const sourceStatus =
                             sourceCitation && currentStatus !== 'ai_draft'
                                 ? 'verified'
@@ -5597,19 +5958,24 @@ deleteAdvocacyDraft: (id) => {
                             word,
                             term: word,
                             category: document.getElementById('voc-category').value,
+                            practiceAreas,
                             meaning,
                             definition: meaning,
+                            keyPoints: listFrom('voc-key-points'),
                             simpleExplanation: document.getElementById('voc-simple').value.trim(),
                             tagalogExplanation: document.getElementById('voc-tagalog').value.trim(),
                             legalBasis: document.getElementById('voc-basis').value.trim(),
                             application: document.getElementById('voc-app').value.trim(),
                             usageExample: document.getElementById('voc-example').value.trim(),
+                            commonMistakes: listFrom('voc-mistakes'),
+                            relatedTopics: listFrom('voc-related-topics'),
                             etymology: document.getElementById('voc-etymology').value.trim(),
                             relatedTerms,
                             sourceCitation,
                             subjectTag: document.getElementById('voc-subject').value.trim(),
                             sourceStatus,
-                            schemaVersion: 2,
+                            lookupCount: 0,
+                            schemaVersion: 3,
                             created: serverTimestamp(),
                             updated: serverTimestamp()
                         });
@@ -5621,7 +5987,6 @@ deleteAdvocacyDraft: (id) => {
                 const apiKey = localStorage.getItem('gemini_api_key') || '';
 
                 if (!apiKey) {
-                    alert('Configure your Gemini API Key in AI Settings first.');
                     window.appHandlers.openAISettings();
                     return;
                 }
@@ -5633,10 +5998,13 @@ deleteAdvocacyDraft: (id) => {
                             <label class="block text-sm font-bold text-slate-700 mb-1">Legal Term / Latin Maxim</label>
                             <input id="voc-ai-term" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="e.g., forum shopping">
                         </div>
+
                         <div class="mt-3">
                             <label class="block text-sm font-bold text-slate-700 mb-1">Optional Source Text</label>
-                            <textarea id="voc-ai-source" rows="7" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Paste a codal provision, case excerpt, textbook discussion, or class note if you want the entry grounded only in that source."></textarea>
-                            <p class="text-xs text-slate-400 mt-1">If source text is supplied, Lex must use only that source. Without source text, the result is saved as an AI draft that should be verified.</p>
+                            <textarea id="voc-ai-source" rows="8" class="w-full p-2.5 border border-slate-300 rounded-lg resize-y" placeholder="Paste a codal provision, case excerpt, textbook discussion, or professor's note if you want the entry grounded only in that source."></textarea>
+                            <p class="text-xs text-slate-400 mt-1">
+                                With source text: Lex uses only that source. Without source text: the result stays marked as an AI Draft until you verify it.
+                            </p>
                         </div>
                     `,
                     submitText: 'Draft Entry',
@@ -5647,47 +6015,56 @@ deleteAdvocacyDraft: (id) => {
                         if (!term) throw new Error('Enter a legal term first.');
 
                         const sourceRule = sourceText
-                            ? `Use ONLY the SOURCE TEXT supplied below. Do not add outside facts, law, legal basis, cases, or citations. If a field is not supported by the source, return an empty string.`
-                            : `Use your general Philippine-law knowledge cautiously. Do NOT invent a statute, Rule, article, G.R. number, case name, quotation, or source citation. If you are not confident that a legal basis or source citation is exact, return an empty string for that field.`;
+                            ? `Use ONLY the SOURCE TEXT below. Do not add outside cases, statutes, rules, facts, or citations. If a field is unsupported, return an empty string or empty array.`
+                            : `Use Philippine-law knowledge cautiously. Never invent a statute, Rule, article, G.R. number, case title, quotation, or source. If an exact legal basis or citation is uncertain, leave it blank.`;
 
                         const prompt = `You are LEX, a Philippine law-school legal dictionary assistant.
 
-Create a study-oriented dictionary entry for: "${term}"
+Create a study-oriented legal dictionary entry for:
+"${term}"
 
 ${sourceRule}
 
-Return STRICTLY one valid raw JSON object with exactly these keys:
+Return STRICTLY one valid raw JSON object:
 {
   "term": "string",
   "category": "Latin Maxim | Legal Term | Doctrine | Procedure | Statutory Term | Other",
+  "practice_areas": ["Criminal | Civil | Commercial | Labor | Remedial | Taxation | Administrative | Political | Ethics | Business | HR | Real Estate"],
   "definition": "string",
+  "key_points": ["string"],
   "simple_explanation": "string",
   "tagalog_explanation": "string",
   "legal_basis": "string",
   "application": "string",
   "usage_example": "string",
+  "common_mistakes": ["string"],
+  "related_topics": ["string"],
   "etymology": "string",
   "related_terms": ["string"],
   "source_citation": "string"
 }
 
-Requirements:
-- Definition: legally precise but concise.
-- Simple explanation: plain English for a law student.
-- Tagalog explanation: natural Filipino/Taglish; retain important legal terms in English.
-- Legal basis/source: only if exact and supported under the source rule above.
-- Usage example: educational example, not legal advice.
-- Related terms: maximum 8.
-- No markdown. No commentary outside JSON.
-- Never fabricate citations.
+Rules:
+- Definition must be legally precise but readable.
+- Key points should capture elements, requisites, effects, distinctions, or controlling points only when appropriate.
+- Simple explanation is plain English for a law student.
+- Tagalog explanation must be natural Filipino/Taglish while retaining important legal terminology in English.
+- Common mistakes should focus on law-school confusion or exam traps, not invented legal requirements.
+- Related terms/topics: maximum 8 each.
+- Source/citation only when exact under the source rule.
+- No markdown and no commentary outside JSON.
+- Never fabricate authority.
 
 ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
 
                         const data = await GeminiService.generate(apiKey, {
-                            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                            contents: [{
+                                role: 'user',
+                                parts: [{ text: prompt }]
+                            }],
                             generationConfig: {
                                 responseMimeType: 'application/json',
-                                temperature: sourceText ? 0.05 : 0.15
+                                temperature: sourceText ? 0.05 : 0.12
                             }
                         });
 
@@ -5707,14 +6084,28 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                             window.appHandlers.addVocab({
                                 term: parsed.term || term,
                                 category: parsed.category || 'Legal Term',
+                                practiceAreas: Array.isArray(parsed.practice_areas)
+                                    ? parsed.practice_areas
+                                    : [],
                                 definition: parsed.definition || '',
+                                keyPoints: Array.isArray(parsed.key_points)
+                                    ? parsed.key_points
+                                    : [],
                                 simpleExplanation: parsed.simple_explanation || '',
                                 tagalogExplanation: parsed.tagalog_explanation || '',
                                 legalBasis: parsed.legal_basis || '',
                                 application: parsed.application || '',
                                 usageExample: parsed.usage_example || '',
+                                commonMistakes: Array.isArray(parsed.common_mistakes)
+                                    ? parsed.common_mistakes
+                                    : [],
+                                relatedTopics: Array.isArray(parsed.related_topics)
+                                    ? parsed.related_topics
+                                    : [],
                                 etymology: parsed.etymology || '',
-                                relatedTerms: Array.isArray(parsed.related_terms) ? parsed.related_terms : [],
+                                relatedTerms: Array.isArray(parsed.related_terms)
+                                    ? parsed.related_terms
+                                    : [],
                                 sourceCitation: parsed.source_citation || '',
                                 sourceStatus: sourceText ? 'verified' : 'ai_draft'
                             });
@@ -5723,137 +6114,266 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                 });
             },
 
-            viewVocab: (id) => {
+            viewVocab: async (id) => {
                 const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
                 if (!d) return;
 
-                const status = d.sourceStatus === 'verified'
-                    ? '<span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-circle-check mr-1"></i>Source-grounded</span>'
-                    : d.sourceStatus === 'ai_draft'
-                    ? '<span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-triangle-exclamation mr-1"></i>AI Draft — Verify</span>'
-                    : '<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-pen mr-1"></i>Personal Entry</span>';
+                // Personal "Most Looked Up" analytics.
+                d.lookupCount = Number(d.lookupCount || 0) + 1;
+                d.lastViewedAtMs = Date.now();
+
+                try {
+                    await AppDB.update('lex_vocab', id, {
+                        lookupCount: d.lookupCount,
+                        lastViewedAt: serverTimestamp()
+                    });
+                } catch (error) {
+                    console.warn('Could not update dictionary lookup count:', error);
+                }
+
+                views.lex_vocab.renderFeatured();
+
+                const status =
+                    d.sourceStatus === 'verified'
+                        ? '<span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-circle-check mr-1"></i>Source-grounded</span>'
+                        : d.sourceStatus === 'ai_draft'
+                        ? '<span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-triangle-exclamation mr-1"></i>AI Draft — Verify</span>'
+                        : '<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-pen mr-1"></i>Personal Entry</span>';
 
                 const block = (label, value, extra = '') =>
                     value
-                        ? `<div class="mt-4 ${extra}"><p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">${label}</p><div class="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">${Security.escapeHTML(value)}</div></div>`
+                        ? `<section class="mt-6 ${extra}">
+                            <h5 class="text-xs font-black uppercase tracking-[.18em] text-slate-400 mb-2">${label}</h5>
+                            <div class="text-sm md:text-[15px] text-slate-800 whitespace-pre-wrap leading-7">${Security.escapeHTML(value)}</div>
+                           </section>`
                         : '';
 
-                const related = (d.relatedTerms || [])
-                    .map(term => `<button onclick="document.getElementById('app-modal').classList.add('hidden'); window.appHandlers.searchDictionaryTerm('${Security.escapeHTML(String(term)).replace(/'/g, "\\'")}')" class="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-bold hover:bg-indigo-100">${Security.escapeHTML(term)}</button>`)
+                const listBlock = (label, values, tone = 'slate') =>
+                    Array.isArray(values) && values.length
+                        ? `<section class="mt-6">
+                            <h5 class="text-xs font-black uppercase tracking-[.18em] text-slate-400 mb-3">${label}</h5>
+                            <div class="rounded-xl border border-${tone}-100 bg-${tone}-50/60 p-4">
+                                <ul class="list-disc pl-5 space-y-2.5 text-sm text-slate-700 leading-7">
+                                    ${values.map(value => `<li>${Security.escapeHTML(value)}</li>`).join('')}
+                                </ul>
+                            </div>
+                           </section>`
+                        : '';
+
+                const relatedTerms = (d.relatedTerms || [])
+                    .map(term => `
+                        <button
+                            onclick="document.getElementById('app-modal').classList.add('hidden'); window.appHandlers.searchDictionaryTerm('${Security.escapeHTML(String(term)).replace(/'/g, "\\'")}')"
+                            class="px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-bold hover:bg-indigo-100">
+                            ${Security.escapeHTML(term)}
+                        </button>`)
                     .join('');
 
                 Modal.show({
-                    title: `<i class="fas fa-book-open text-indigo-600 mr-2"></i>${Security.escapeHTML(d.term || d.word)}`,
+                    title: `<i class="fas fa-book-open text-indigo-600 mr-2"></i>${Security.escapeHTML(d.term)}`,
                     content: `
-                        <div class="flex flex-wrap items-center gap-2">
-                            ${status}
-                            ${d.category ? `<span class="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(d.category)}</span>` : ''}
-                            ${d.subjectTag ? `<span class="px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(d.subjectTag)}</span>` : ''}
-                        </div>
+                        <article class="max-w-3xl mx-auto">
+                            <div class="flex flex-wrap items-center gap-2">
+                                ${status}
+                                <span class="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(d.category || 'Legal Term')}</span>
+                                ${(d.practiceAreas || []).map(area =>
+                                    `<span class="px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(area)}</span>`
+                                ).join('')}
+                            </div>
 
-                        ${block('Legal Definition', d.definition || d.meaning)}
-                        ${block('Simple Explanation', d.simpleExplanation, 'bg-slate-50 border border-slate-100 rounded-xl p-4')}
-                        ${block('Tagalog / Taglish Explanation', d.tagalogExplanation, 'bg-amber-50 border border-amber-100 rounded-xl p-4')}
-                        ${block('Legal Basis', d.legalBasis)}
-                        ${block('Application / Context', d.application)}
-                        ${block('Usage Example', d.usageExample)}
-                        ${block('Etymology', d.etymology)}
-                        ${block('Source / Citation', d.sourceCitation)}
-                        ${related ? `<div class="mt-4"><p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Related Terms</p><div class="flex flex-wrap gap-2">${related}</div></div>` : ''}
+                            <div class="mt-5">
+                                <p class="text-[10px] font-black uppercase tracking-[.2em] text-indigo-500">Definition</p>
+                                <p class="text-base md:text-lg leading-8 text-slate-900 mt-2">${Security.escapeHTML(d.definition || d.meaning)}</p>
+                            </div>
 
-                        <div class="mt-5 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
-                            <button onclick="window.appHandlers.dictionaryToFlashcard('${d.id}')" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"><i class="fas fa-clone mr-1"></i>Add to Flashcards</button>
-                            <button onclick="window.appHandlers.editVocabById('${d.id}')" class="px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold"><i class="fas fa-pen mr-1"></i>Edit Entry</button>
-                        </div>
+                            ${listBlock('Key Points / Requisites', d.keyPoints, 'blue')}
+                            ${block('Legal Basis', d.legalBasis, 'p-4 rounded-xl bg-slate-50 border border-slate-100')}
+                            ${block('Simple Explanation', d.simpleExplanation, 'p-4 rounded-xl bg-emerald-50 border border-emerald-100')}
+                            ${block('Tagalog / Taglish Explanation', d.tagalogExplanation, 'p-4 rounded-xl bg-amber-50 border border-amber-100')}
+                            ${block('Application / Context', d.application)}
+                            ${block('Usage Example', d.usageExample)}
+                            ${listBlock('Common Mistakes / Exam Traps', d.commonMistakes, 'rose')}
+                            ${listBlock('Related Topics', d.relatedTopics, 'violet')}
+                            ${block('Etymology', d.etymology)}
+                            ${block('Source / Citation', d.sourceCitation)}
+
+                            ${relatedTerms
+                                ? `<section class="mt-6">
+                                    <h5 class="text-xs font-black uppercase tracking-[.18em] text-slate-400 mb-3">Related Terms</h5>
+                                    <div class="flex flex-wrap gap-2">${relatedTerms}</div>
+                                   </section>`
+                                : ''}
+
+                            <section class="mt-7 p-5 rounded-2xl bg-gradient-to-r from-indigo-700 to-blue-700 text-white">
+                                <p class="font-black">Want to understand this term better?</p>
+                                <p class="text-xs text-indigo-100 mt-1">Ask your contextual Lex tutor to explain, compare, quiz, or apply this saved entry.</p>
+                                <button onclick="document.getElementById('app-modal').classList.add('hidden'); window.appHandlers.openLexTutorForDictionary('${d.id}')" class="mt-3 bg-white text-indigo-700 px-4 py-2 rounded-lg text-xs font-black hover:bg-indigo-50">
+                                    <i class="fas fa-wand-magic-sparkles mr-1"></i>Ask Lex
+                                </button>
+                            </section>
+
+                            <div class="mt-6 pt-4 border-t border-slate-100 flex flex-wrap gap-2">
+                                <button onclick="window.appHandlers.dictionaryToFlashcard('${d.id}')" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"><i class="fas fa-clone mr-1"></i>Add to Flashcards</button>
+                                <button onclick="window.appHandlers.editVocabById('${d.id}')" class="px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold"><i class="fas fa-pen mr-1"></i>Edit Entry</button>
+                                <button onclick="window.appHandlers.printVocabById('${d.id}')" class="px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold"><i class="fas fa-print mr-1"></i>Print</button>
+                                <span class="ml-auto text-[10px] text-slate-400 self-center">${d.lookupCount} lookup${d.lookupCount === 1 ? '' : 's'}</span>
+                            </div>
+                        </article>
                     `,
                     hideSubmit: true
                 });
+            },
+
+            openLexTutorForDictionary: (id) => {
+                const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
+                if (!d) return;
+
+                window.appHandlers.openLexTutor();
+
+                const input = document.getElementById('ask-lex-input');
+                if (!input) return;
+
+                const savedEntry = [
+                    `TERM: ${d.term}`,
+                    `DEFINITION: ${d.definition}`,
+                    d.legalBasis ? `LEGAL BASIS: ${d.legalBasis}` : '',
+                    d.keyPoints?.length ? `KEY POINTS:\n- ${d.keyPoints.join('\n- ')}` : '',
+                    d.tagalogExplanation ? `TAGALOG EXPLANATION: ${d.tagalogExplanation}` : ''
+                ].filter(Boolean).join('\n\n');
+
+                input.value =
+                    `Help me understand this Legal Dictionary entry. Explain it for recitation, distinguish it from related concepts when useful, then ask me one short review question.\n\n${savedEntry}`;
+
+                setTimeout(() => input.focus(), 100);
             },
 
             editVocabById: (id) => {
                 const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
                 if (!d) return;
 
-                const p = d;
-                const option = (value, label) =>
-                    `<option value="${value}" ${p.category === value ? 'selected' : ''}>${label}</option>`;
-
-                Modal.show({
-                    title: '<i class="fas fa-edit text-amber-500 mr-2"></i>Edit Dictionary Entry',
-                    content: `
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div><label class="block text-sm font-bold mb-1">Term</label><input id="voc-word" value="${Security.escapeHTML(p.term)}" class="w-full p-2.5 border rounded-lg"></div>
-                            <div><label class="block text-sm font-bold mb-1">Category</label><select id="voc-category" class="w-full p-2.5 border rounded-lg bg-white">${option('Latin Maxim','Latin Maxim')}${option('Legal Term','Legal Term')}${option('Doctrine','Doctrine')}${option('Procedure','Procedure')}${option('Statutory Term','Statutory Term')}${option('Other','Other')}</select></div>
-                        </div>
-                        <div class="mt-3"><label class="block text-sm font-bold mb-1">Legal Definition</label><textarea id="voc-mean" rows="4" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.definition)}</textarea></div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                            <div><label class="block text-sm font-bold mb-1">Simple Explanation</label><textarea id="voc-simple" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.simpleExplanation)}</textarea></div>
-                            <div><label class="block text-sm font-bold mb-1">Tagalog / Taglish</label><textarea id="voc-tagalog" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.tagalogExplanation)}</textarea></div>
-                        </div>
-                        <div class="mt-3"><label class="block text-sm font-bold mb-1">Legal Basis</label><textarea id="voc-basis" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.legalBasis)}</textarea></div>
-                        <div class="mt-3"><label class="block text-sm font-bold mb-1">Application / Context</label><textarea id="voc-app" rows="3" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.application)}</textarea></div>
-                        <div class="mt-3"><label class="block text-sm font-bold mb-1">Usage Example</label><textarea id="voc-example" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.usageExample)}</textarea></div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                            <div><label class="block text-sm font-bold mb-1">Etymology</label><textarea id="voc-etymology" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.etymology)}</textarea></div>
-                            <div><label class="block text-sm font-bold mb-1">Related Terms</label><textarea id="voc-related" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML((p.relatedTerms || []).join(', '))}</textarea></div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                            <div><label class="block text-sm font-bold mb-1">Source / Citation</label><textarea id="voc-source" rows="2" class="w-full p-2.5 border rounded-lg">${Security.escapeHTML(p.sourceCitation)}</textarea></div>
-                            <div><label class="block text-sm font-bold mb-1">Subject Tag</label><input id="voc-subject" value="${Security.escapeHTML(p.subjectTag)}" class="w-full p-2.5 border rounded-lg"><div class="mt-2"><label class="inline-flex items-center gap-2 text-xs"><input type="checkbox" id="voc-verified" ${p.sourceStatus === 'verified' ? 'checked' : ''}> Mark source/citation as verified</label></div></div>
-                        </div>
-                    `,
-                    submitText: 'Update Entry',
-                    onSubmit: async () => {
-                        const word = document.getElementById('voc-word').value.trim();
-                        const meaning = document.getElementById('voc-mean').value.trim();
-                        if (!word || !meaning) throw new Error('Term and definition are required.');
-
-                        await AppDB.update('lex_vocab', id, {
-                            word,
-                            term: word,
-                            category: document.getElementById('voc-category').value,
-                            meaning,
-                            definition: meaning,
-                            simpleExplanation: document.getElementById('voc-simple').value.trim(),
-                            tagalogExplanation: document.getElementById('voc-tagalog').value.trim(),
-                            legalBasis: document.getElementById('voc-basis').value.trim(),
-                            application: document.getElementById('voc-app').value.trim(),
-                            usageExample: document.getElementById('voc-example').value.trim(),
-                            etymology: document.getElementById('voc-etymology').value.trim(),
-                            relatedTerms: document.getElementById('voc-related').value.split(/[,;\n]+/).map(v => v.trim()).filter(Boolean),
-                            sourceCitation: document.getElementById('voc-source').value.trim(),
-                            subjectTag: document.getElementById('voc-subject').value.trim(),
-                            sourceStatus: document.getElementById('voc-verified').checked
-                                ? 'verified'
-                                : (p.sourceStatus === 'ai_draft' ? 'ai_draft' : 'personal'),
-                            schemaVersion: 2,
-                            updated: serverTimestamp()
-                        });
-                    }
+                window.appHandlers.addVocab({
+                    ...d,
+                    sourceStatus: d.sourceStatus
                 });
+
+                // Convert Add modal into an Update operation without duplicating the long form.
+                const modalTitle = document.getElementById('modal-title');
+                const submit = document.getElementById('modal-submit');
+                if (modalTitle) {
+                    modalTitle.innerHTML =
+                        '<i class="fas fa-edit text-amber-500 mr-2"></i>Edit Dictionary Entry';
+                }
+
+                if (submit) {
+                    submit.textContent = 'Update Entry';
+
+                    // Replace the add handler after the form is rendered.
+                    const cloned = submit.cloneNode(true);
+                    submit.parentNode.replaceChild(cloned, submit);
+
+                    cloned.addEventListener('click', async () => {
+                        try {
+                            cloned.disabled = true;
+
+                            const word = document.getElementById('voc-word').value.trim();
+                            const meaning = document.getElementById('voc-mean').value.trim();
+                            if (!word || !meaning) throw new Error('Term and definition are required.');
+
+                            const listFrom = fieldId =>
+                                document.getElementById(fieldId).value
+                                    .split(/\n+|[;]+/)
+                                    .map(value => value.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim())
+                                    .filter(Boolean);
+
+                            const allowedAreas = views.lex_vocab.practiceAreas();
+                            const primaryArea = document.getElementById('voc-practice-area').value.trim();
+                            const extraAreas = document.getElementById('voc-practice-extra').value
+                                .split(/[,;\n]+/)
+                                .map(value => value.trim())
+                                .filter(Boolean);
+
+                            const practiceAreas = [...new Set(
+                                [primaryArea, ...extraAreas]
+                                    .map(value => allowedAreas.find(area =>
+                                        area.toLowerCase() === value.toLowerCase()
+                                    ))
+                                    .filter(Boolean)
+                            )];
+
+                            const relatedTerms = document.getElementById('voc-related').value
+                                .split(/[,;\n]+/)
+                                .map(value => value.trim())
+                                .filter(Boolean);
+
+                            const sourceCitation = document.getElementById('voc-source').value.trim();
+
+                            await AppDB.update('lex_vocab', id, {
+                                word,
+                                term: word,
+                                category: document.getElementById('voc-category').value,
+                                practiceAreas,
+                                meaning,
+                                definition: meaning,
+                                keyPoints: listFrom('voc-key-points'),
+                                simpleExplanation: document.getElementById('voc-simple').value.trim(),
+                                tagalogExplanation: document.getElementById('voc-tagalog').value.trim(),
+                                legalBasis: document.getElementById('voc-basis').value.trim(),
+                                application: document.getElementById('voc-app').value.trim(),
+                                usageExample: document.getElementById('voc-example').value.trim(),
+                                commonMistakes: listFrom('voc-mistakes'),
+                                relatedTopics: listFrom('voc-related-topics'),
+                                etymology: document.getElementById('voc-etymology').value.trim(),
+                                relatedTerms,
+                                sourceCitation,
+                                subjectTag: document.getElementById('voc-subject').value.trim(),
+                                sourceStatus:
+                                    sourceCitation && d.sourceStatus !== 'ai_draft'
+                                        ? 'verified'
+                                        : d.sourceStatus,
+                                schemaVersion: 3,
+                                updated: serverTimestamp()
+                            });
+
+                            document.getElementById('app-modal')?.classList.add('hidden');
+                        } catch (error) {
+                            alert(error.message);
+                        } finally {
+                            cloned.disabled = false;
+                        }
+                    });
+                }
             },
 
-            // Legacy edit signature retained for old buttons/data compatibility.
-            editVocab: (id) => window.appHandlers.editVocabById(id),
+            // Legacy edit signature.
+            editVocab: id =>
+                window.appHandlers.editVocabById(id),
 
-            deleteVocab: (id) => {
+            deleteVocab: id => {
                 Modal.show({
                     title: '<i class="fas fa-trash text-red-500 mr-2"></i>Delete Dictionary Entry',
                     content: '<p>Are you sure you want to remove this dictionary entry?</p>',
                     submitText: 'Delete',
                     submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg',
-                    onSubmit: async () => await AppDB.delete('lex_vocab', id)
+                    onSubmit: async () =>
+                        await AppDB.delete('lex_vocab', id)
                 });
             },
 
-            dictionaryToFlashcard: async (id) => {
+            dictionaryToFlashcard: async id => {
                 const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
                 if (!d) return;
 
                 const backParts = [
                     d.definition || d.meaning,
-                    d.simpleExplanation ? `Simple explanation: ${d.simpleExplanation}` : '',
-                    d.legalBasis ? `Legal basis: ${d.legalBasis}` : ''
+                    d.keyPoints?.length
+                        ? `Key points:\n- ${d.keyPoints.join('\n- ')}`
+                        : '',
+                    d.simpleExplanation
+                        ? `Simple explanation: ${d.simpleExplanation}`
+                        : '',
+                    d.legalBasis
+                        ? `Legal basis: ${d.legalBasis}`
+                        : ''
                 ].filter(Boolean);
 
                 const card = {
@@ -5870,6 +6390,8 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                     type: 'recit',
                     sourceType: 'legal_dictionary',
                     sourceId: d.id,
+                    subjectName: d.subjectTag || '',
+                    topic: d.term || d.word,
                     content: [card],
                     created: serverTimestamp()
                 });
@@ -5877,17 +6399,42 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                 alert('Dictionary term added to your spaced-repetition Review Queue.');
             },
 
-            searchDictionaryTerm: (term) => {
+            searchDictionaryTerm: term => {
                 window.appHandlers.navigate('lex_vocab');
+
                 setTimeout(() => {
                     const input = document.getElementById('vocab-search');
                     if (!input) return;
                     input.value = term;
+                    views.lex_vocab.activePracticeArea = 'all';
                     window.appHandlers.filterVocab();
-                }, 100);
+                }, 120);
             },
 
-            printVocabById: (id) => {
+            filterDictionaryArea: area => {
+                views.lex_vocab.activePracticeArea = area || 'all';
+
+                document.querySelectorAll('.dict-area-btn').forEach(button => {
+                    const active = button.dataset.dictArea === views.lex_vocab.activePracticeArea;
+                    button.className = active
+                        ? 'dict-area-btn px-3 py-2 rounded-xl text-xs font-black border bg-indigo-700 text-white border-indigo-700'
+                        : 'dict-area-btn px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700';
+                });
+
+                window.appHandlers.filterVocab();
+            },
+
+            jumpDictionaryLetter: letter => {
+                const target = document.getElementById(`dict-letter-${letter}`);
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            },
+
+            printVocabById: id => {
                 const d = views.lex_vocab.vocabData.find(entry => entry.id === id);
                 if (!d) return;
 
@@ -5896,32 +6443,50 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                         ? `<div style="margin-top:20px;"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:5px;">${label}</h3><p style="margin:0;white-space:pre-wrap;">${Security.escapeHTML(value)}</p></div>`
                         : '';
 
+                const list = (label, values) =>
+                    Array.isArray(values) && values.length
+                        ? `<div style="margin-top:20px;"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:5px;">${label}</h3><ul>${values.map(value => `<li>${Security.escapeHTML(value)}</li>`).join('')}</ul></div>`
+                        : '';
+
                 const html = `<div style="font-family:serif;max-width:800px;margin:0 auto;line-height:1.65;">
                     <h1 style="color:#1e3a8a;border-bottom:2px solid #e2e8f0;padding-bottom:10px;">${Security.escapeHTML(d.term)}</h1>
-                    <p style="font-family:sans-serif;font-size:12px;color:#64748b;">${Security.escapeHTML(d.category || '')}${d.subjectTag ? ` • ${Security.escapeHTML(d.subjectTag)}` : ''}</p>
-                    ${section('Legal Definition', d.definition)}
+                    <p style="font-family:sans-serif;font-size:12px;color:#64748b;">${Security.escapeHTML(d.category || '')}${d.practiceAreas?.length ? ` • ${Security.escapeHTML(d.practiceAreas.join(' • '))}` : ''}</p>
+                    ${section('Definition', d.definition)}
+                    ${list('Key Points / Requisites', d.keyPoints)}
+                    ${section('Legal Basis', d.legalBasis)}
                     ${section('Simple Explanation', d.simpleExplanation)}
                     ${section('Tagalog / Taglish Explanation', d.tagalogExplanation)}
-                    ${section('Legal Basis', d.legalBasis)}
                     ${section('Application / Context', d.application)}
                     ${section('Usage Example', d.usageExample)}
+                    ${list('Common Mistakes / Exam Traps', d.commonMistakes)}
+                    ${list('Related Topics', d.relatedTopics)}
                     ${section('Etymology', d.etymology)}
                     ${section('Source / Citation', d.sourceCitation)}
                     ${section('Related Terms', (d.relatedTerms || []).join(', '))}
                 </div>`;
 
-                window.appHandlers.printContent(`Legal Dictionary - ${d.term}`, html);
+                window.appHandlers.printContent(
+                    `Legal Dictionary - ${d.term}`,
+                    html
+                );
             },
 
-            // Legacy print signature retained.
-            printVocab: (word) => {
-                const d = views.lex_vocab.vocabData.find(entry => entry.term === word || entry.word === word);
-                if (d) window.appHandlers.printVocabById(d.id);
+            // Legacy print signature.
+            printVocab: word => {
+                const d = views.lex_vocab.vocabData.find(
+                    entry =>
+                        entry.term === word ||
+                        entry.word === word
+                );
+
+                if (d) {
+                    window.appHandlers.printVocabById(d.id);
+                }
             },
 
             printAllVocab: () => {
-                if (!views.lex_vocab || !views.lex_vocab.vocabData.length) {
-                    alert("No dictionary entries to print.");
+                if (!views.lex_vocab?.vocabData?.length) {
+                    alert('No dictionary entries to print.');
                     return;
                 }
 
@@ -5931,79 +6496,131 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                 views.lex_vocab.vocabData.forEach(d => {
                     html += `<div style="margin-bottom:28px;page-break-inside:avoid;">
                         <h2 style="color:#1e3a8a;margin-bottom:5px;font-size:20px;">${Security.escapeHTML(d.term)}</h2>
-                        <p style="font-family:sans-serif;font-size:11px;color:#64748b;margin:0 0 8px;">${Security.escapeHTML(d.category || 'Legal Term')}${d.subjectTag ? ` • ${Security.escapeHTML(d.subjectTag)}` : ''}</p>
+                        <p style="font-family:sans-serif;font-size:11px;color:#64748b;margin:0 0 8px;">${Security.escapeHTML(d.category || 'Legal Term')}${d.practiceAreas?.length ? ` • ${Security.escapeHTML(d.practiceAreas.join(' • '))}` : ''}</p>
                         <p style="margin:0 0 8px;"><strong>Definition:</strong> ${Security.escapeHTML(d.definition)}</p>
-                        ${d.simpleExplanation ? `<p style="margin:0 0 8px;"><strong>Simple:</strong> ${Security.escapeHTML(d.simpleExplanation)}</p>` : ''}
                         ${d.legalBasis ? `<p style="margin:0 0 8px;"><strong>Legal Basis:</strong> ${Security.escapeHTML(d.legalBasis)}</p>` : ''}
                         ${d.sourceCitation ? `<p style="margin:0;"><strong>Source:</strong> ${Security.escapeHTML(d.sourceCitation)}</p>` : ''}
                     </div><hr style="border:0;border-top:1px solid #e2e8f0;margin-bottom:28px;">`;
                 });
 
                 html += '</div>';
-                window.appHandlers.printContent('LEX Legal Dictionary', html);
+
+                window.appHandlers.printContent(
+                    'LEX Legal Dictionary',
+                    html
+                );
             },
 
-            renderVocabRows: (data) => {
+            renderVocabRows: data => {
                 const list = document.getElementById('vocab-list');
+                const az = document.getElementById('dict-az');
+                const count = document.getElementById('dict-result-count');
+
                 if (!list) return;
 
+                if (count) {
+                    count.textContent =
+                        `${data.length} term${data.length === 1 ? '' : 's'} shown`;
+                }
+
                 if (!data.length) {
-                    list.innerHTML = `<div class="lg:col-span-2 p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><i class="fas fa-book-open text-5xl mb-4 opacity-20"></i><p class="font-bold text-slate-500">No matching dictionary entries.</p><p class="text-xs mt-1">Add one manually or let Lex draft an entry for you.</p></div>`;
+                    if (az) az.innerHTML = '';
+                    list.innerHTML = `
+                        <div class="p-12 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
+                            <i class="fas fa-book-open text-5xl mb-4 opacity-20"></i>
+                            <p class="font-bold text-slate-500">No matching dictionary entries.</p>
+                            <p class="text-xs mt-1">Change your search or practice-area filter, or add a new term.</p>
+                        </div>`;
                     return;
                 }
 
-                list.innerHTML = data.map(d => {
-                    const status =
-                        d.sourceStatus === 'verified'
-                            ? `<span class="text-[10px] font-black text-emerald-700"><i class="fas fa-circle-check mr-1"></i>VERIFIED</span>`
-                            : d.sourceStatus === 'ai_draft'
-                            ? `<span class="text-[10px] font-black text-amber-700"><i class="fas fa-triangle-exclamation mr-1"></i>AI DRAFT</span>`
-                            : `<span class="text-[10px] font-black text-slate-400"><i class="fas fa-pen mr-1"></i>PERSONAL</span>`;
+                const grouped = {};
 
-                    const relatedPreview = (d.relatedTerms || []).slice(0, 3)
-                        .map(term => `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px]">${Security.escapeHTML(term)}</span>`)
-                        .join('');
+                data.forEach(d => {
+                    const first = (d.term || '#').trim().charAt(0).toUpperCase();
+                    const letter = /[A-Z]/.test(first) ? first : '#';
 
-                    return `<article class="border border-slate-200 rounded-2xl p-5 bg-white hover:border-indigo-300 hover:shadow-sm transition flex flex-col">
-                        <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                                <div class="flex flex-wrap items-center gap-2 mb-2">
-                                    ${status}
-                                    <span class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-wider">${Security.escapeHTML(d.category || 'Legal Term')}</span>
-                                </div>
-                                <h4 class="text-xl font-black text-indigo-900 serif-text break-words">${Security.escapeHTML(d.term || d.word)}</h4>
-                                ${d.subjectTag ? `<p class="text-[10px] font-bold uppercase tracking-widest text-violet-500 mt-1">${Security.escapeHTML(d.subjectTag)}</p>` : ''}
-                            </div>
-                            <div class="flex gap-1 flex-shrink-0">
-                                <button onclick="window.appHandlers.viewVocab('${d.id}')" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50" title="Open"><i class="fas fa-eye"></i></button>
-                                <button onclick="window.appHandlers.editVocabById('${d.id}')" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:text-amber-600 hover:bg-amber-50" title="Edit"><i class="fas fa-pen"></i></button>
-                                <button onclick="window.appHandlers.deleteVocab('${d.id}')" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50" title="Delete"><i class="fas fa-trash"></i></button>
-                            </div>
+                    if (!grouped[letter]) grouped[letter] = [];
+                    grouped[letter].push(d);
+                });
+
+                const letters = Object.keys(grouped).sort();
+
+                if (az) {
+                    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+                    az.innerHTML = alphabet.map(letter => {
+                        const enabled = Boolean(grouped[letter]);
+
+                        return enabled
+                            ? `<button onclick="window.appHandlers.jumpDictionaryLetter('${letter}')" class="w-7 h-7 rounded-lg text-[11px] font-black text-indigo-700 hover:bg-indigo-50">${letter}</button>`
+                            : `<span class="w-7 h-7 rounded-lg text-[11px] font-bold text-slate-300 flex items-center justify-center">${letter}</span>`;
+                    }).join('');
+                }
+
+                list.innerHTML = letters.map(letter => `
+                    <section id="dict-letter-${letter}" class="scroll-mt-16 mb-8">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black serif-text text-lg">${letter}</div>
+                            <div class="h-px bg-slate-200 flex-1"></div>
+                            <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold">${grouped[letter].length} term${grouped[letter].length === 1 ? '' : 's'}</span>
                         </div>
 
-                        <p class="text-sm text-slate-700 leading-relaxed mt-4">${Security.escapeHTML(d.definition || d.meaning)}</p>
+                        <div class="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                            ${grouped[letter].map(d => {
+                                const statusIcon =
+                                    d.sourceStatus === 'verified'
+                                        ? '<i class="fas fa-circle-check text-emerald-500" title="Verified"></i>'
+                                        : d.sourceStatus === 'ai_draft'
+                                        ? '<i class="fas fa-triangle-exclamation text-amber-500" title="AI Draft"></i>'
+                                        : '<i class="fas fa-pen text-slate-300" title="Personal entry"></i>';
 
-                        ${d.simpleExplanation ? `<div class="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-100"><p class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">In Simple Terms</p><p class="text-xs text-slate-600 leading-relaxed">${Security.escapeHTML(d.simpleExplanation)}</p></div>` : ''}
-
-                        ${d.legalBasis ? `<p class="text-xs text-blue-700 mt-3"><b>Legal basis:</b> ${Security.escapeHTML(d.legalBasis)}</p>` : ''}
-
-                        ${relatedPreview ? `<div class="mt-3 flex flex-wrap gap-1">${relatedPreview}</div>` : ''}
-
-                        <div class="mt-auto pt-4 flex flex-wrap gap-2">
-                            <button onclick="window.appHandlers.viewVocab('${d.id}')" class="text-xs font-bold text-indigo-700 hover:underline">Full Entry</button>
-                            <button onclick="window.appHandlers.dictionaryToFlashcard('${d.id}')" class="text-xs font-bold text-emerald-700 hover:underline">+ Flashcard</button>
-                            <button onclick="window.appHandlers.printVocabById('${d.id}')" class="text-xs font-bold text-slate-500 hover:underline">Print</button>
+                                return `
+                                    <button onclick="window.appHandlers.viewVocab('${d.id}')" class="w-full text-left p-4 bg-white hover:bg-indigo-50/40 transition group">
+                                        <div class="flex items-start gap-3">
+                                            <span class="mt-1">${statusIcon}</span>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <h5 class="font-black text-slate-900 group-hover:text-indigo-700">${Security.escapeHTML(d.term)}</h5>
+                                                    <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[9px] uppercase font-black">${Security.escapeHTML(d.category || 'Legal Term')}</span>
+                                                    ${(d.practiceAreas || []).slice(0, 3).map(area =>
+                                                        `<span class="text-[9px] font-bold text-indigo-500">${Security.escapeHTML(area)}</span>`
+                                                    ).join('')}
+                                                </div>
+                                                <p class="text-xs md:text-sm text-slate-500 leading-6 mt-1">${Security.escapeHTML(Utils.excerpt(d.definition || d.meaning, 250))}</p>
+                                            </div>
+                                            <div class="flex-shrink-0 text-[10px] text-slate-400 pt-1">
+                                                ${d.lookupCount || 0} <i class="fas fa-eye ml-1"></i>
+                                            </div>
+                                        </div>
+                                    </button>`;
+                            }).join('')}
                         </div>
-                    </article>`;
-                }).join('');
+                    </section>
+                `).join('');
             },
 
             filterVocab: () => {
-                const term = (document.getElementById('vocab-search')?.value || '').toLowerCase().trim();
-                const category = document.getElementById('vocab-category-filter')?.value || 'all';
+                const query =
+                    (document.getElementById('vocab-search')?.value || '')
+                        .toLowerCase()
+                        .trim();
+
+                const category =
+                    document.getElementById('vocab-category-filter')?.value ||
+                    'all';
+
+                const area = views.lex_vocab.activePracticeArea || 'all';
 
                 const filtered = views.lex_vocab.vocabData.filter(d => {
-                    const categoryMatch = category === 'all' || d.category === category;
+                    const categoryMatch =
+                        category === 'all' ||
+                        d.category === category;
+
+                    const areaMatch =
+                        area === 'all' ||
+                        (d.practiceAreas || []).includes(area);
+
                     const haystack = [
                         d.term,
                         d.definition,
@@ -6015,10 +6632,18 @@ ${sourceText ? `SOURCE TEXT:\n${sourceText}` : ''}`;
                         d.etymology,
                         d.sourceCitation,
                         d.subjectTag,
-                        ...(d.relatedTerms || [])
+                        ...(d.keyPoints || []),
+                        ...(d.commonMistakes || []),
+                        ...(d.relatedTopics || []),
+                        ...(d.relatedTerms || []),
+                        ...(d.practiceAreas || [])
                     ].join(' ').toLowerCase();
 
-                    return categoryMatch && (!term || haystack.includes(term));
+                    return (
+                        categoryMatch &&
+                        areaMatch &&
+                        (!query || haystack.includes(query))
+                    );
                 });
 
                 window.appHandlers.renderVocabRows(filtered);
