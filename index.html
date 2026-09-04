@@ -1258,153 +1258,460 @@ let currentUser = null;
 
         // Central Gemini client: discovers models available to the user's API key
         // instead of relying on a single hardcoded model name that may return 404.
+        // Central Gemini client — resilient production-style model routing.
+        // V5.3 prefers stable current Flash models, retries transient capacity errors,
+        // and automatically fails over when one model is overloaded/unavailable.
         const GeminiService = {
             cache: new Map(),
+
+            // Stable model IDs are intentionally preferred over the moving
+            // "gemini-flash-latest" alias. models.list() still augments this list
+            // based on what the user's API key can actually access.
             staticFallbackModels: [
-                'models/gemini-flash-latest',
+                'models/gemini-3.8-flash',
+                'models/gemini-3.7-flash',
+                'models/gemini-3.6-flash',
                 'models/gemini-3.5-flash',
-                'models/gemini-2.5-flash',
-                'models/gemini-3-flash-preview'
+                'models/gemini-3.5-flash-lite',
+                'models/gemini-3.1-flash-lite',
+                'models/gemini-flash-latest',
+                'models/gemini-2.5-flash-lite',
+                'models/gemini-2.5-flash'
             ],
+
+            transientStatuses: new Set([429, 500, 502, 503, 504]),
+            retryDelaysMs: [650, 1500],
+            maxCandidateModels: 10,
+            maxTotalCalls: 14,
+
             cacheKey(apiKey) {
                 return String(apiKey || '').slice(-12);
             },
+
             normalizeModelName(name = '') {
                 const value = String(name || '').trim();
                 return value.startsWith('models/') ? value : `models/${value}`;
             },
+
+            friendlyModelName(name = '') {
+                return String(name || '')
+                    .replace(/^models\//, '')
+                    .replace(/^gemini-/, 'Gemini ')
+                    .replace(/-/g, ' ')
+                    .replace(/\b\w/g, char => char.toUpperCase())
+                    .replace(/\bFlash Lite\b/i, 'Flash-Lite');
+            },
+
             isUsableTextModel(model) {
                 const name = String(model?.name || model?.baseModelId || '').toLowerCase();
                 const methods = model?.supportedGenerationMethods || model?.supportedActions || [];
+
                 if (!methods.includes('generateContent')) return false;
                 if (!name.includes('gemini')) return false;
-                return !/(embedding|imagen|veo|image|tts|audio|live|robotics|computer-use)/i.test(name);
+
+                return !/(embedding|imagen|veo|image|tts|audio|live|robotics|computer-use|transcribe|translate)/i.test(name);
             },
+
             modelScore(model) {
-                const name = String(model?.name || '').replace(/^models\//, '').toLowerCase();
+                const name = String(model?.name || model?.baseModelId || '')
+                    .replace(/^models\//, '')
+                    .toLowerCase();
+
+                // Exact current stable preferences.
                 const preferred = [
-                    'gemini-flash-latest',
+                    'gemini-3.8-flash',
+                    'gemini-3.7-flash',
+                    'gemini-3.6-flash',
                     'gemini-3.5-flash',
-                    'gemini-2.5-flash',
-                    'gemini-3-flash-preview'
+                    'gemini-3.5-flash-lite',
+                    'gemini-3.1-flash-lite',
+                    'gemini-flash-latest',
+                    'gemini-2.5-flash-lite',
+                    'gemini-2.5-flash'
                 ];
+
                 const exact = preferred.indexOf(name);
                 if (exact >= 0) return exact;
-                let score = 50;
-                if (name.includes('flash')) score -= 25;
-                if (name.includes('lite')) score -= 4;
-                if (name.includes('pro')) score += 12;
-                if (name.includes('latest')) score -= 5;
-                if (name.includes('preview')) score += 5;
-                if (name.includes('exp')) score += 20;
+
+                let score = 100;
+
+                // Prefer stable text Flash models.
+                if (name.includes('flash')) score -= 35;
+                if (name.includes('lite')) score -= 5;
+                if (name.includes('pro')) score += 18;
+
+                // Moving/preview/experimental aliases are deliberately below stable IDs.
+                if (name.includes('latest')) score += 12;
+                if (name.includes('preview')) score += 18;
+                if (name.includes('exp')) score += 30;
+
+                // Prefer newer stable model families when exact IDs were not listed above.
+                if (/gemini-3\.[89]-flash/.test(name)) score -= 22;
+                else if (/gemini-3\.[67]-flash/.test(name)) score -= 18;
+                else if (/gemini-3\.[15]-flash/.test(name)) score -= 12;
+                else if (/gemini-2\.5-flash/.test(name)) score += 8;
+
                 return score;
             },
+
+            async sleep(ms) {
+                await new Promise(resolve => setTimeout(resolve, ms));
+            },
+
             async readError(response) {
                 let payload = null;
-                try { payload = await response.json(); } catch (_) {}
-                const message = payload?.error?.message || payload?.message || `Gemini API error ${response.status}`;
+                try {
+                    payload = await response.json();
+                } catch (_) {}
+
+                const message =
+                    payload?.error?.message ||
+                    payload?.message ||
+                    `Gemini API error ${response.status}`;
+
                 const error = new Error(message);
-                error.status = response.status;
+                error.status = Number(response.status || 0);
                 error.payload = payload;
+                error.googleStatus = payload?.error?.status || '';
                 return error;
             },
+
+            isTransient(error) {
+                const status = Number(error?.status || 0);
+                const message = String(error?.message || '').toLowerCase();
+
+                return (
+                    this.transientStatuses.has(status) ||
+                    message.includes('high demand') ||
+                    message.includes('temporarily unavailable') ||
+                    message.includes('service unavailable') ||
+                    message.includes('resource exhausted') ||
+                    message.includes('try again later')
+                );
+            },
+
             async listAvailableModels(apiKey) {
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(apiKey)}`;
+                const endpoint =
+                    `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(apiKey)}`;
+
                 const response = await fetch(endpoint);
-                if (!response.ok) throw await this.readError(response);
+
+                if (!response.ok) {
+                    throw await this.readError(response);
+                }
+
                 const data = await response.json();
+
                 return (data.models || [])
                     .filter(model => this.isUsableTextModel(model))
                     .sort((a, b) => this.modelScore(a) - this.modelScore(b))
-                    .map(model => this.normalizeModelName(model.name || model.baseModelId));
+                    .map(model =>
+                        this.normalizeModelName(model.name || model.baseModelId)
+                    );
             },
+
             async candidateModels(apiKey, refresh = false) {
                 const key = this.cacheKey(apiKey);
-                if (!refresh && this.cache.has(key)) return this.cache.get(key);
-                let models = [];
-                try {
-                    models = await this.listAvailableModels(apiKey);
-                } catch (error) {
-                    console.warn('Could not list Gemini models; trying safe fallbacks.', error);
+
+                if (!refresh && this.cache.has(key)) {
+                    return this.cache.get(key);
                 }
-                const combined = [...models, ...this.staticFallbackModels]
-                    .map(name => this.normalizeModelName(name));
+
+                let listedModels = [];
+
+                try {
+                    listedModels = await this.listAvailableModels(apiKey);
+                } catch (error) {
+                    console.warn(
+                        'Could not list Gemini models; using stable fallback pool.',
+                        error
+                    );
+                }
+
+                // Static stable preferences come first, but only accessible models will
+                // actually succeed. Discovered models are included immediately after.
+                const combined = [
+                    ...this.staticFallbackModels,
+                    ...listedModels
+                ].map(name => this.normalizeModelName(name));
+
                 const unique = [...new Set(combined)];
+
+                // Re-rank the final combined pool to keep stable production models first.
+                unique.sort((a, b) =>
+                    this.modelScore({ name: a }) - this.modelScore({ name: b })
+                );
+
                 this.cache.set(key, unique);
                 return unique;
             },
+
             async callModel(apiKey, modelName, requestBody) {
                 const model = this.normalizeModelName(modelName);
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+                const endpoint =
+                    `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
                 const response = await fetch(endpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify(requestBody)
                 });
-                if (!response.ok) throw await this.readError(response);
+
+                if (!response.ok) {
+                    throw await this.readError(response);
+                }
+
                 const data = await response.json();
-                const text = data?.candidates?.[0]?.content?.parts
+
+                const responseText = data?.candidates?.[0]?.content?.parts
                     ?.map(part => part?.text || '')
                     .join('')
                     .trim();
-                if (!text) {
+
+                if (!responseText) {
                     const blockReason = data?.promptFeedback?.blockReason;
-                    throw new Error(blockReason ? `Gemini blocked the request: ${blockReason}` : 'Gemini returned an empty response.');
+
+                    throw new Error(
+                        blockReason
+                            ? `Gemini blocked the request: ${blockReason}`
+                            : 'Gemini returned an empty response.'
+                    );
                 }
+
                 data._lexModel = model.replace(/^models\//, '');
                 return data;
             },
+
+            async tryModelWithRetries(
+                apiKey,
+                model,
+                requestBody,
+                state
+            ) {
+                let lastError = null;
+
+                // Initial call + short transient retries.
+                const attempts = 1 + this.retryDelaysMs.length;
+
+                for (let attempt = 0; attempt < attempts; attempt += 1) {
+                    if (state.totalCalls >= this.maxTotalCalls) break;
+
+                    if (attempt > 0) {
+                        const baseDelay = this.retryDelaysMs[attempt - 1] || 1500;
+                        const jitter = Math.floor(Math.random() * 250);
+                        await this.sleep(baseDelay + jitter);
+                    }
+
+                    state.totalCalls += 1;
+
+                    try {
+                        return await this.callModel(
+                            apiKey,
+                            model,
+                            requestBody
+                        );
+                    } catch (error) {
+                        lastError = error;
+
+                        console.warn(
+                            `Gemini model ${model} attempt ${attempt + 1}/${attempts} failed:`,
+                            error
+                        );
+
+                        // JSON response mode is not accepted by every model.
+                        // Retry once without responseMimeType before abandoning it.
+                        if (
+                            Number(error?.status) === 400 &&
+                            requestBody?.generationConfig?.responseMimeType
+                        ) {
+                            if (state.totalCalls >= this.maxTotalCalls) break;
+
+                            const compatibleBody =
+                                JSON.parse(JSON.stringify(requestBody));
+
+                            delete compatibleBody.generationConfig.responseMimeType;
+                            state.totalCalls += 1;
+
+                            try {
+                                return await this.callModel(
+                                    apiKey,
+                                    model,
+                                    compatibleBody
+                                );
+                            } catch (compatibleError) {
+                                lastError = compatibleError;
+                            }
+                        }
+
+                        // Do not retry permanent/auth/input failures.
+                        if (!this.isTransient(lastError)) break;
+                    }
+                }
+
+                throw lastError || new Error(
+                    `Unable to use ${this.friendlyModelName(model)}.`
+                );
+            },
+
             async generate(apiKey, requestBody) {
-                if (!apiKey) throw new Error('Enter your Gemini API key first.');
+                if (!apiKey) {
+                    throw new Error('Enter your Gemini API key first.');
+                }
+
                 const key = this.cacheKey(apiKey);
                 let candidates = await this.candidateModels(apiKey);
                 let lastError = null;
 
-                // Try a small number of available models. A 404 simply moves to the next model.
-                for (const model of candidates.slice(0, 8)) {
+                const state = {
+                    totalCalls: 0,
+                    attemptedModels: []
+                };
+
+                for (
+                    const model of candidates.slice(0, this.maxCandidateModels)
+                ) {
+                    if (state.totalCalls >= this.maxTotalCalls) break;
+
+                    state.attemptedModels.push(model);
+
                     try {
-                        const data = await this.callModel(apiKey, model, requestBody);
-                        const reordered = [model, ...candidates.filter(item => item !== model)];
+                        const data = await this.tryModelWithRetries(
+                            apiKey,
+                            model,
+                            requestBody,
+                            state
+                        );
+
+                        // Put the successful model first for the next call.
+                        const reordered = [
+                            model,
+                            ...candidates.filter(item => item !== model)
+                        ];
+
                         this.cache.set(key, reordered);
+
+                        data._lexAttemptedModels =
+                            [...state.attemptedModels];
+
+                        data._lexFallbackUsed =
+                            state.attemptedModels.length > 1;
+
                         return data;
                     } catch (error) {
                         lastError = error;
-                        console.warn(`Gemini model ${model} failed:`, error);
 
-                        // Some models may reject JSON response mode. Retry the same model without it.
-                        if (error.status === 400 && requestBody?.generationConfig?.responseMimeType) {
-                            const compatibleBody = JSON.parse(JSON.stringify(requestBody));
-                            delete compatibleBody.generationConfig.responseMimeType;
-                            try {
-                                const data = await this.callModel(apiKey, model, compatibleBody);
-                                const reordered = [model, ...candidates.filter(item => item !== model)];
-                                this.cache.set(key, reordered);
-                                return data;
-                            } catch (retryError) {
-                                lastError = retryError;
-                            }
+                        console.warn(
+                            `Gemini model ${model} exhausted; trying next compatible model.`,
+                            error
+                        );
+
+                        const status = Number(error?.status || 0);
+
+                        // Permanent authentication/permission errors should not fan out.
+                        if ([400, 401, 403].includes(status)) {
+                            throw error;
                         }
 
-                        // These errors may be model-specific or temporary, so another listed model may work.
-                        if (![403, 404, 429, 500, 503, 504].includes(Number(lastError?.status))) {
-                            throw lastError;
+                        // 404 can be model-access-specific; continue to another model.
+                        // 429/5xx/high-demand errors are temporary/model-capacity errors.
+                        if (
+                            status === 404 ||
+                            this.isTransient(error)
+                        ) {
+                            continue;
+                        }
+
+                        throw error;
+                    }
+                }
+
+                // Refresh the model list once in case access changed during the session.
+                if (state.totalCalls < this.maxTotalCalls) {
+                    this.cache.delete(key);
+
+                    const refreshed = await this.candidateModels(
+                        apiKey,
+                        true
+                    );
+
+                    const untried = refreshed
+                        .filter(
+                            model =>
+                                !state.attemptedModels.includes(model)
+                        )
+                        .slice(0, 3);
+
+                    for (const model of untried) {
+                        if (state.totalCalls >= this.maxTotalCalls) break;
+
+                        state.attemptedModels.push(model);
+
+                        try {
+                            const data = await this.tryModelWithRetries(
+                                apiKey,
+                                model,
+                                requestBody,
+                                state
+                            );
+
+                            const reordered = [
+                                model,
+                                ...refreshed.filter(item => item !== model)
+                            ];
+
+                            this.cache.set(key, reordered);
+                            data._lexAttemptedModels =
+                                [...state.attemptedModels];
+                            data._lexFallbackUsed = true;
+
+                            return data;
+                        } catch (error) {
+                            lastError = error;
                         }
                     }
                 }
 
                 this.cache.delete(key);
+
                 const status = Number(lastError?.status || 0);
+                const attemptedNames = state.attemptedModels
+                    .slice(0, 6)
+                    .map(model => this.friendlyModelName(model))
+                    .join(', ');
+
                 if (status === 404) {
-                    throw new Error('No compatible Gemini text model was found for this API key. Lex checked the models available to your key automatically. Try creating a fresh key in Google AI Studio.');
+                    throw new Error(
+                        `No compatible Gemini text model could generate this request. Lex automatically checked multiple models${attemptedNames ? ` (${attemptedNames})` : ''}. Verify that your Google AI Studio key has access to a current text-generation model.`
+                    );
                 }
+
                 if (status === 429) {
-                    throw new Error('The Gemini free-tier limit was reached. Please wait a minute and try again.');
+                    throw new Error(
+                        'Gemini is currently rate-limiting this API key. Lex already retried and tried alternative compatible models. Please try the request again after your quota/capacity recovers.'
+                    );
                 }
-                if (status === 403) {
-                    throw new Error('This Gemini API key is not permitted to generate content. Check that the key is active and belongs to a Google AI Studio project.');
+
+                if ([500, 502, 503, 504].includes(status) ||
+                    this.isTransient(lastError)) {
+                    throw new Error(
+                        'Gemini is temporarily experiencing heavy demand. Lex already retried and automatically tried alternative compatible models, but all available routes were busy. Your Lex data and question are safe; submit the question again when service capacity recovers.'
+                    );
                 }
-                throw lastError || new Error('Unable to connect to Gemini.');
+
+                if (status === 403 || status === 401) {
+                    throw new Error(
+                        'This Gemini API key is not permitted to generate content. Check that the key is active and belongs to a Google AI Studio project with Gemini API access.'
+                    );
+                }
+
+                throw lastError || new Error(
+                    'Unable to connect to Gemini after trying compatible fallback models.'
+                );
             },
+
             text(data) {
                 return data?.candidates?.[0]?.content?.parts
                     ?.map(part => part?.text || '')
@@ -2728,6 +3035,34 @@ async ocrPdf(file, onProgress = () => {}) {
                     if (this.activePanel === 'digests') this.showDigests();
                     else if (this.activePanel === 'overview') this.showOverview();
                 });
+
+                // V5.4: master-case deletions are global. This listener guarantees
+                // that Subject → Case Digests never keeps an orphaned local card.
+                if (this.digestDeletedListener) {
+                    window.removeEventListener(
+                        'lex:digest-deleted',
+                        this.digestDeletedListener
+                    );
+                }
+
+                this.digestDeletedListener = event => {
+                    const deletedId = event?.detail?.id;
+                    if (!deletedId) return;
+
+                    this.digestsData =
+                        this.digestsData.filter(item => item.id !== deletedId);
+
+                    if (this.activePanel === 'digests') {
+                        this.showDigests();
+                    } else if (this.activePanel === 'overview') {
+                        this.showOverview();
+                    }
+                };
+
+                window.addEventListener(
+                    'lex:digest-deleted',
+                    this.digestDeletedListener
+                );
                 this.unsubscribeDoctrines = AppDB.subscribe('doctrines', snapshot => {
                     this.doctrinesData = [];
                     snapshot.forEach(record => this.doctrinesData.push({ id: record.id, ...record.data() }));
@@ -2747,6 +3082,16 @@ async ocrPdf(file, onProgress = () => {}) {
                     if (this.activePanel === 'syllabus') this.showSyllabusTracker();
                 });
             }
+            destroy() {
+                if (this.digestDeletedListener) {
+                    window.removeEventListener(
+                        'lex:digest-deleted',
+                        this.digestDeletedListener
+                    );
+                    this.digestDeletedListener = null;
+                }
+            }
+
             refreshTabStyles() {
                 const notebookTab = document.getElementById('subject-tab-notebook');
                 const materialsTab = document.getElementById('subject-tab-materials');
@@ -3295,7 +3640,7 @@ async ocrPdf(file, onProgress = () => {}) {
   </div>`;
 }).join('');
                 const discussedCount = records.filter(digest => Array.isArray(digest.discussedSubjectIds) && digest.discussedSubjectIds.includes(this.subjectId)).length;
-                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are master records from Consolidated Case Digests, displayed only when linked to this subject. Pending cases are listed first; discussed cases move to the bottom automatically.</p><p class="text-xs font-bold mt-2 ${discussedCount === records.length && records.length ? 'text-emerald-700' : 'text-slate-500'}"><i class="fas fa-check-circle mr-1"></i>${discussedCount} of ${records.length} case${records.length === 1 ? '' : 's'} discussed</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
+                area.innerHTML = `<div class="p-8 overflow-y-auto h-full"><div class="max-w-6xl mx-auto"><div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Filtered Master Library</p><h3 class="text-2xl font-bold text-slate-800 serif-text">${Security.escapeHTML(this.subjectName)} — Case Digests</h3><p class="text-sm text-slate-500 mt-1">These are live master records from the Case Library, displayed only when linked to this subject. Deleting a case from the Case Library removes it here automatically; use Unlink if you want to remove it only from this subject. Pending cases are listed first; discussed cases move to the bottom automatically. When you open a digest, long Facts are formatted into study-friendly bullets without changing the saved master text.</p><p class="text-xs font-bold mt-2 ${discussedCount === records.length && records.length ? 'text-emerald-700' : 'text-slate-500'}"><i class="fas fa-check-circle mr-1"></i>${discussedCount} of ${records.length} case${records.length === 1 ? '' : 's'} discussed</p></div><div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.linkExistingDigestToCurrentSubject()" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50"><i class="fas fa-link mr-2"></i>Link Existing</button><button onclick="window.appHandlers.addDigestForCurrentSubject()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-plus mr-2"></i>New Digest</button></div></div>${records.length ? `<div class="space-y-4">${cards}</div>` : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center"><i class="fas fa-gavel text-5xl text-slate-200 mb-4"></i><h4 class="font-bold text-slate-700">No case digests linked yet</h4><p class="text-sm text-slate-500 mt-2">Create a digest here or link an existing record from the consolidated library.</p></div>`}</div></div>`;
             }
         showDoctrines() {
                 this.activeNoteId = null;
@@ -4745,7 +5090,7 @@ const cleanAiJsonResponse = (text) => {
             setLexTutorMode: async (mode) => { LexContextEngine.tutorMode=mode; document.querySelectorAll('.lex-tutor-mode').forEach(b=>b.classList.toggle('active',b.dataset.tutorMode===mode)); const controls=document.getElementById('ask-lex-scope-controls'),subject=document.getElementById('ask-lex-subject'),caseSel=document.getElementById('ask-lex-case'); if(controls)controls.classList.toggle('hidden',mode==='general'); if(subject)subject.classList.toggle('hidden',mode==='case'); if(caseSel)caseSel.classList.toggle('hidden',mode!=='case'); await LexContextEngine.refreshSelectors(); window.appHandlers.refreshLexTutorContext(); },
             refreshLexTutorContext: async () => { const mode=LexContextEngine.tutorMode,subjectId=document.getElementById('ask-lex-subject')?.value||'',caseId=document.getElementById('ask-lex-case')?.value||''; try{const ctx=await LexContextEngine.build(mode,subjectId,caseId,''); const label=document.getElementById('ask-lex-context-label'); if(label)label.textContent=ctx.label;}catch(e){console.warn(e);} },
             clearLexTutor: () => { LexContextEngine.tutorHistory=[]; const box=document.getElementById('ask-lex-messages'); if(box)box.innerHTML='<div class="p-4 rounded-xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-950">New Ask Lex session started.</div>'; },
-            sendLexTutor: async () => { const input=document.getElementById('ask-lex-input'),button=document.getElementById('ask-lex-send'),messages=document.getElementById('ask-lex-messages'),question=input?.value.trim()||''; if(!question)return; const apiKey=localStorage.getItem('gemini_api_key')||''; if(!apiKey){window.appHandlers.openAISettings();return;} const mode=LexContextEngine.tutorMode,subjectId=document.getElementById('ask-lex-subject')?.value||'',caseId=document.getElementById('ask-lex-case')?.value||''; messages.insertAdjacentHTML('beforeend',`<div class="lex-user-msg bg-indigo-700 text-white rounded-xl rounded-br-none p-3 text-sm whitespace-pre-wrap">${Security.escapeHTML(question)}</div>`); input.value=''; button.disabled=true;button.innerHTML='<i class="fas fa-spinner fa-spin"></i>'; const loadingId='lex-tutor-'+Date.now();messages.insertAdjacentHTML('beforeend',`<div id="${loadingId}" class="lex-ai-msg bg-slate-50 border border-slate-200 rounded-xl rounded-bl-none p-3 text-sm text-slate-500"><i class="fas fa-spinner fa-spin mr-2"></i>Building contextual answer…</div>`);messages.scrollTop=messages.scrollHeight;try{const ctx=await LexContextEngine.build(mode,subjectId,caseId,question);const sourceRule=mode==='case'?`Use ONLY the saved case digest supplied in CONTEXT. If the digest does not support a point, say so.`:mode==='subject'||mode==='bar'?`Prioritize the student's saved Lex context. Clearly distinguish saved-context statements from any general Philippine-law explanation you add. Never invent citations.`:`Answer as a Philippine law-school tutor. Do not invent statutes, cases, citations, or quotations.`;const modeRule=mode==='bar'?`BAR MODE: teach toward issue spotting, legal basis, ALAC application, common traps, and the learner's weak areas. Be concise enough for active review.`:`Teach for understanding and recitation. Simplify language without simplifying away legal qualifications.`;const prompt=`You are LEX, the student's contextual Philippine law-school tutor.\n\nMODE: ${mode.toUpperCase()}\n${sourceRule}\n${modeRule}\n\nCONTEXT LABEL: ${ctx.label}\nCONTEXT:\n${ctx.context||'No saved context supplied.'}\n\nSTUDENT QUESTION:\n${question}\n\nReturn clean basic HTML only. Use short headings and bullets when useful. If the question asks for a rule or doctrine, include a brief Tagalog/Taglish explanation after the English explanation. Never fabricate legal authority.`;const contents=[...LexContextEngine.tutorHistory.slice(-6),{role:'user',parts:[{text:prompt}]}];const data=await GeminiService.generate(apiKey,{contents,generationConfig:{temperature:0.12}});const raw=GeminiService.text(data),html=Security.sanitizeAI(raw.replace(/^```html\s*/i,'').replace(/\s*```$/i,''));document.getElementById(loadingId)?.remove();const messageId=LexContextEngine.tutorHistory.length;LexContextEngine.tutorHistory.push({role:'user',parts:[{text:question}]},{role:'model',parts:[{text:raw}]});messages.insertAdjacentHTML('beforeend',`<div class="lex-ai-msg bg-white border border-slate-200 rounded-xl rounded-bl-none p-4 text-sm text-slate-800 leading-relaxed shadow-sm">${html}<div class="mt-3 pt-3 border-t border-slate-100"><button onclick="window.appHandlers.saveTutorAnswerToVault(${messageId+1}, '${Security.escapeHTML(ctx.label).replace(/'/g,"\\'")}')" class="text-xs font-bold text-violet-700 hover:underline"><i class="fas fa-vault mr-1"></i>Save answer to Knowledge Vault</button></div></div>`);}catch(e){document.getElementById(loadingId)?.remove();messages.insertAdjacentHTML('beforeend',`<div class="lex-ai-msg bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">${Security.escapeHTML(e.message)}</div>`);}finally{button.disabled=false;button.innerHTML='<i class="fas fa-paper-plane mr-1"></i>Ask Lex';messages.scrollTop=messages.scrollHeight;} },
+            sendLexTutor: async () => { const input=document.getElementById('ask-lex-input'),button=document.getElementById('ask-lex-send'),messages=document.getElementById('ask-lex-messages'),question=input?.value.trim()||''; if(!question)return; const apiKey=localStorage.getItem('gemini_api_key')||''; if(!apiKey){window.appHandlers.openAISettings();return;} const mode=LexContextEngine.tutorMode,subjectId=document.getElementById('ask-lex-subject')?.value||'',caseId=document.getElementById('ask-lex-case')?.value||''; messages.insertAdjacentHTML('beforeend',`<div class="lex-user-msg bg-indigo-700 text-white rounded-xl rounded-br-none p-3 text-sm whitespace-pre-wrap">${Security.escapeHTML(question)}</div>`); input.value=''; button.disabled=true;button.innerHTML='<i class="fas fa-spinner fa-spin"></i>'; const loadingId='lex-tutor-'+Date.now();messages.insertAdjacentHTML('beforeend',`<div id="${loadingId}" class="lex-ai-msg bg-slate-50 border border-slate-200 rounded-xl rounded-bl-none p-3 text-sm text-slate-500"><i class="fas fa-spinner fa-spin mr-2"></i>Building contextual answer…</div>`);messages.scrollTop=messages.scrollHeight;try{const ctx=await LexContextEngine.build(mode,subjectId,caseId,question);const sourceRule=mode==='case'?`Use ONLY the saved case digest supplied in CONTEXT. If the digest does not support a point, say so.`:mode==='subject'||mode==='bar'?`Prioritize the student's saved Lex context. Clearly distinguish saved-context statements from any general Philippine-law explanation you add. Never invent citations.`:`Answer as a Philippine law-school tutor. Do not invent statutes, cases, citations, or quotations.`;const modeRule=mode==='bar'?`BAR MODE: teach toward issue spotting, legal basis, ALAC application, common traps, and the learner's weak areas. Be concise enough for active review.`:`Teach for understanding and recitation. Simplify language without simplifying away legal qualifications.`;const prompt=`You are LEX, the student's contextual Philippine law-school tutor.\n\nMODE: ${mode.toUpperCase()}\n${sourceRule}\n${modeRule}\n\nCONTEXT LABEL: ${ctx.label}\nCONTEXT:\n${ctx.context||'No saved context supplied.'}\n\nSTUDENT QUESTION:\n${question}\n\nReturn clean basic HTML only. Use short headings and bullets when useful. If the question asks for a rule or doctrine, include a brief Tagalog/Taglish explanation after the English explanation. Never fabricate legal authority.`;const contents=[...LexContextEngine.tutorHistory.slice(-6),{role:'user',parts:[{text:prompt}]}];const data=await GeminiService.generate(apiKey,{contents,generationConfig:{temperature:0.12}});const raw=GeminiService.text(data),html=Security.sanitizeAI(raw.replace(/^```html\s*/i,'').replace(/\s*```$/i,''));const modelNote=data?._lexModel?`<div class="mt-3 text-[10px] text-slate-400"><i class="fas fa-microchip mr-1"></i>${Security.escapeHTML(GeminiService.friendlyModelName(data._lexModel))}${data._lexFallbackUsed?' • automatic fallback used':''}</div>`:'';document.getElementById(loadingId)?.remove();const messageId=LexContextEngine.tutorHistory.length;LexContextEngine.tutorHistory.push({role:'user',parts:[{text:question}]},{role:'model',parts:[{text:raw}]});messages.insertAdjacentHTML('beforeend',`<div class="lex-ai-msg bg-white border border-slate-200 rounded-xl rounded-bl-none p-4 text-sm text-slate-800 leading-relaxed shadow-sm">${html}${modelNote}<div class="mt-3 pt-3 border-t border-slate-100"><button onclick="window.appHandlers.saveTutorAnswerToVault(${messageId+1}, '${Security.escapeHTML(ctx.label).replace(/'/g,"\\'")}')" class="text-xs font-bold text-violet-700 hover:underline"><i class="fas fa-vault mr-1"></i>Save answer to Knowledge Vault</button></div></div>`);}catch(e){document.getElementById(loadingId)?.remove();messages.insertAdjacentHTML('beforeend',`<div class="lex-ai-msg bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">${Security.escapeHTML(e.message)}</div>`);}finally{button.disabled=false;button.innerHTML='<i class="fas fa-paper-plane mr-1"></i>Ask Lex';messages.scrollTop=messages.scrollHeight;} },
             saveTutorAnswerToVault: (index,label='Ask Lex') => { const item=LexContextEngine.tutorHistory[index]; if(!item)return; const html=item.parts?.[0]?.text||''; window.appHandlers.saveToKnowledgeVault({title:`Ask Lex — ${label}`,topic:label,content:Utils.htmlToText(html),sourceType:'ask_lex',sourceLabel:label}); },
 
             // ========================================================
@@ -8193,7 +8538,91 @@ getCurrentSubjectContext: () => ({
   const grNo = (digest.citation || '').match(/G\.R\.\s*No\.\s*\d+/i);
   const block = (icon, label, text, boxClass) => {
     if (!text) return '';
-    return `<div class="mb-4"><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 pb-1 border-b border-slate-200"><i class="fas ${icon} mr-1"></i>${label}</h5><div class="p-4 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap ${boxClass}" style="text-align:justify;text-justify:inter-word;hyphens:auto;overflow-wrap:anywhere;">${esc(text)}</div></div>`;
+    return `<div class="mb-4"><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 pb-1 border-b border-slate-200"><i class="fas ${icon} mr-1"></i>${label}</h5><div class="p-4 rounded-lg border text-sm leading-7 whitespace-pre-wrap ${boxClass}" style="text-align:left;overflow-wrap:anywhere;">${esc(text)}</div></div>`;
+  };
+
+  // V5.5 — Facts are formatted for reading only.
+  // The master digest text in Firestore is never changed.
+  const factsBlock = (factsText) => {
+    const source = String(factsText || '').replace(/\r/g, '').trim();
+    if (!source) return '';
+
+    const cleanItem = value => String(value || '')
+      .replace(/^\s*(?:[-•*]|\(?\d{1,3}[\).:-])\s*/u, '')
+      .trim();
+
+    // First respect the author's existing line breaks / numbering.
+    let items = source
+      .split(/\n+/)
+      .map(cleanItem)
+      .filter(item => item.length > 8);
+
+    // A pasted digest often arrives as one dense paragraph.
+    // In that case, use the browser's sentence segmenter when available and
+    // combine short consecutive sentences into comfortable bullet-sized facts.
+    if (items.length < 2 && source.length > 260) {
+      let sentences = [];
+
+      try {
+        if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+          const segmenter = new Intl.Segmenter('en', { granularity: 'sentence' });
+          sentences = [...segmenter.segment(source)]
+            .map(part => String(part.segment || '').trim())
+            .filter(sentence => sentence.length > 5);
+        }
+      } catch (_) {}
+
+      if (sentences.length < 2) {
+        // Conservative fallback. It only splits after sentence-ending punctuation
+        // followed by an uppercase letter/number to avoid fragmenting citations too aggressively.
+        sentences = source
+          .split(/(?<=[.!?])\s+(?=[A-Z0-9“"'])/)
+          .map(sentence => sentence.trim())
+          .filter(sentence => sentence.length > 5);
+      }
+
+      if (sentences.length >= 2) {
+        items = [];
+        let current = '';
+
+        sentences.forEach(sentence => {
+          const proposed = current ? `${current} ${sentence}` : sentence;
+
+          // Aim for 1–2 related sentences per bullet instead of one bullet per sentence.
+          if (current && (proposed.length > 330 || current.length > 210)) {
+            items.push(current.trim());
+            current = sentence;
+          } else {
+            current = proposed;
+          }
+        });
+
+        if (current.trim()) items.push(current.trim());
+      }
+    }
+
+    // If splitting would not improve readability, keep the text but add generous spacing.
+    if (items.length < 2) {
+      return `<div class="mb-4">
+        <h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 pb-1 border-b border-slate-200">
+          <i class="fas fa-file-lines mr-1"></i>Facts
+        </h5>
+        <div class="p-5 rounded-lg border bg-slate-50 border-slate-200 text-slate-700 text-sm leading-8 whitespace-pre-wrap" style="text-align:left;overflow-wrap:anywhere;">
+          ${esc(source)}
+        </div>
+      </div>`;
+    }
+
+    return `<div class="mb-4">
+      <h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 pb-1 border-b border-slate-200">
+        <i class="fas fa-file-lines mr-1"></i>Facts
+      </h5>
+      <div class="p-5 rounded-lg border bg-slate-50 border-slate-200 text-slate-700">
+        <ul class="list-disc pl-5 space-y-3.5 text-sm leading-7">
+          ${items.map(item => `<li class="pl-1">${esc(item)}</li>`).join('')}
+        </ul>
+      </div>
+    </div>`;
   };
   const titleParts = (digest.title || 'Untitled Case').split(/\s+v\.?\s+/i);
   const titleDisplay = titleParts[1] ? `${esc(titleParts[0])} v. ${esc(titleParts[1])}` : esc(digest.title || 'Untitled Case');
@@ -8215,7 +8644,7 @@ getCurrentSubjectContext: () => ({
         </label>
       </div>
       ${digest.gist ? `<div class="mb-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 leading-relaxed"><span class="font-bold text-[10px] uppercase tracking-wider block mb-1 text-amber-700" style="text-align:left;"><i class="fas fa-bolt mr-1"></i>Recitation Gist</span><div style="text-align:justify;text-justify:inter-word;hyphens:auto;overflow-wrap:anywhere;">${esc(digest.gist)}</div></div>` : ''}
-      ${block('fa-file-lines', 'Facts', normalized.facts, 'bg-slate-50 border-slate-200 text-slate-700')}
+      ${factsBlock(normalized.facts)}
       ${block('fa-circle-question', 'Issue', normalized.issue, 'bg-blue-50 border-blue-200 text-slate-800')}
       ${block('fa-gavel', 'Ruling', normalized.ruling, 'bg-slate-50 border-slate-200 text-slate-700')}
       ${block('fa-scale-balanced', 'Ratio Decidendi', normalized.ratioDecidendi, 'bg-violet-50 border-violet-200 text-slate-800')}
@@ -9554,7 +9983,187 @@ await AppDB.add('digests', digestData);
             // Backward-compatible alias for any older internal call.
             printDigestById: (id) => window.appHandlers.viewDigestPdfById(id),
 
-            deleteDigest: (id) => { Modal.show({ title: 'Delete Digest', content: 'Are you sure you want to delete this digest?', submitText: 'Delete', submitClass: 'px-4 py-2 bg-red-600 text-white rounded-lg', onSubmit: async () => await AppDB.delete('digests', id) }); },
+            deleteDigest: async (id) => {
+                // Resolve the master digest first so the confirmation can explain
+                // exactly what will happen across linked Subject Case Digest views.
+                let digest = null;
+
+                const lookupPools = [
+                    views.digests?.digests || [],
+                    views.subject_notebook?.digestsData || [],
+                    views.case_recitation?.digests || []
+                ];
+
+                for (const pool of lookupPools) {
+                    if (!Array.isArray(pool)) continue;
+                    const match = pool.find(item => item.id === id);
+                    if (match) {
+                        digest = DigestUtils.normalize(match);
+                        break;
+                    }
+                }
+
+                if (!digest) {
+                    try {
+                        const snapshot = await AppDB.get('digests', id);
+                        if (snapshot?.exists?.()) {
+                            digest = DigestUtils.normalize({
+                                id: snapshot.id,
+                                ...snapshot.data()
+                            });
+                        }
+                    } catch (error) {
+                        console.warn('Unable to pre-load digest before deletion:', error);
+                    }
+                }
+
+                const linkedSubjectIds = [
+                    ...new Set([
+                        ...(Array.isArray(digest?.subjectIds) ? digest.subjectIds : []),
+                        ...(digest?.primarySubjectId ? [digest.primarySubjectId] : [])
+                    ].filter(Boolean))
+                ];
+
+                const title = digest?.title || 'this case digest';
+                const subjectCount = linkedSubjectIds.length;
+
+                Modal.show({
+                    title: '<i class="fas fa-trash text-red-600 mr-2"></i>Delete Case Everywhere',
+                    content: `
+                        <div class="space-y-4">
+                            <div class="p-4 bg-red-50 border border-red-200 rounded-xl">
+                                <p class="font-black text-red-900">${Security.escapeHTML(title)}</p>
+                                <p class="text-sm text-red-800 mt-2 leading-relaxed">
+                                    This is the <b>master case record</b>. Deleting it from the Case Library will also remove it from every linked
+                                    <b>Subject → Case Digests</b> view.
+                                </p>
+                            </div>
+
+                            <div class="text-sm text-slate-600 leading-relaxed">
+                                ${subjectCount
+                                    ? `This case is currently linked to <b>${subjectCount}</b> subject${subjectCount === 1 ? '' : 's'}.`
+                                    : 'Any subject view that currently displays this case will be refreshed automatically.'}
+                            </div>
+
+                            <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                                <i class="fas fa-circle-info mr-1"></i>
+                                <b>Delete</b> removes the case itself everywhere. If you only want to remove it from one subject while keeping the master case,
+                                use <b>Unlink</b> inside that Subject's Case Digests page instead.
+                            </div>
+                        </div>
+                    `,
+                    submitText: 'Delete Everywhere',
+                    submitClass: 'px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold',
+                    onSubmit: async () => {
+                        // 1) Delete the single Firestore master record.
+                        await AppDB.delete('digests', id);
+
+                        // 2) Immediately purge every local cache that can display a case.
+                        // This prevents inactive workspace tabs from showing a stale/orphaned card.
+                        if (Array.isArray(views.digests?.digests)) {
+                            views.digests.digests =
+                                views.digests.digests.filter(item => item.id !== id);
+                        }
+
+                        if (Array.isArray(views.subject_notebook?.digestsData)) {
+                            views.subject_notebook.digestsData =
+                                views.subject_notebook.digestsData.filter(item => item.id !== id);
+                        }
+
+                        if (Array.isArray(views.case_recitation?.digests)) {
+                            views.case_recitation.digests =
+                                views.case_recitation.digests.filter(item => item.id !== id);
+                        }
+
+                        // Some older builds used `allDigests` / `records`; clean those
+                        // defensively if they exist so legacy UI state cannot resurrect the card.
+                        ['allDigests', 'records', 'filteredDigests'].forEach(key => {
+                            if (Array.isArray(views.digests?.[key])) {
+                                views.digests[key] =
+                                    views.digests[key].filter(item => item.id !== id);
+                            }
+                        });
+
+                        // 3) Refresh whatever visible screen is currently open.
+                        if (
+                            currentView === 'subject_notebook' &&
+                            views.subject_notebook?.activePanel === 'digests'
+                        ) {
+                            views.subject_notebook.showDigests();
+                        }
+
+                        if (currentView === 'digests') {
+                            // Firestore subscription will also fire; this gives immediate UI feedback.
+                            if (typeof window.appHandlers.renderDigestRows === 'function') {
+                                const activeSubject =
+                                    views.digests?.activeSubject ||
+                                    views.digests?.selectedSubject ||
+                                    '';
+                                const source =
+                                    Array.isArray(views.digests?.digests)
+                                        ? views.digests.digests
+                                        : [];
+                                try {
+                                    window.appHandlers.renderDigestRows(source, activeSubject);
+                                } catch (_) {
+                                    // Subscription render remains the authoritative fallback.
+                                }
+                            }
+                        }
+
+                        if (currentView === 'case_recitation') {
+                            const select = document.getElementById('recit-case-select');
+                            if (select) {
+                                select.querySelector(`option[value="${CSS.escape(id)}"]`)?.remove();
+
+                                if (views.case_recitation?.active?.id === id) {
+                                    views.case_recitation.active = null;
+                                    views.case_recitation.questions = [];
+                                    views.case_recitation.index = 0;
+
+                                    const workspace =
+                                        document.getElementById('case-recit-workspace');
+
+                                    if (workspace) {
+                                        workspace.innerHTML = `
+                                            <div class="text-center py-16 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
+                                                <i class="fas fa-trash text-4xl opacity-20 mb-4"></i>
+                                                <p>The active case was deleted from the Case Library.</p>
+                                                <p class="text-xs mt-1">Choose another saved case to continue recitation.</p>
+                                            </div>`;
+                                    }
+                                }
+                            }
+                        }
+
+                        // 4) Mark all open Subject Notebook workspace tabs as needing a
+                        // fresh Case Digest view when the user returns to them.
+                        if (typeof LexWorkspaceTabs !== 'undefined') {
+                            LexWorkspaceTabs.tabs.forEach(tab => {
+                                if (tab.viewId !== 'subject_notebook') return;
+
+                                tab.context = {
+                                    ...(tab.context || {}),
+                                    digestCacheRevision: Date.now()
+                                };
+                            });
+
+                            LexWorkspaceTabs.saveSession();
+                            LexWorkspaceTabs.render();
+                        }
+
+                        // 5) Broadcast a lightweight event for any future component that
+                        // wants to react to master-case deletion without duplicating logic.
+                        window.dispatchEvent(new CustomEvent('lex:digest-deleted', {
+                            detail: {
+                                id,
+                                title,
+                                linkedSubjectIds
+                            }
+                        }));
+                    }
+                });
+            },
            printDigest: (title, subject, topic, facts, issue, ruling, notes) => {
                 const html = `<div style="font-family: serif; max-width: 800px; margin: 0 auto; line-height: 1.6;">
                     <h1 style="color: #1e3a8a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; font-size: 26px; margin-bottom: 5px;">${title}</h1>
