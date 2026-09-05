@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lex: Law School Companion V6.0</title>
+    <title>Lex: Law School Companion V6.2</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -1250,6 +1250,145 @@ let currentUser = null;
                 return [d.title, d.subject, d.subjectName, d.topic, d.facts, d.issue, d.ruling, d.ratioDecidendi, d.doctrine, d.codalProvision, d.legalFramework, d.conceptualExplanation, d.recitationSummary, d.verbatimNotes, d.personalNotes, d.gist]
                     .map(value => this.text(value).toLowerCase()).join(' ');
             },
+            recitationGistParts(record = {}) {
+                const d = this.normalize(record);
+                const raw = String(d.gist || '').replace(/\r/g, '').trim();
+
+                const result = {
+                    facts: '',
+                    issue: '',
+                    ruling: '',
+                    ratio: ''
+                };
+
+                if (raw) {
+                    const labelPattern =
+                        /(?:^|\n|\s)(FACTS?|ISSUE|RULING|RATIO(?:\s+DECIDENDI)?|DOCTRINE)\s*:\s*/gi;
+
+                    const matches = [...raw.matchAll(labelPattern)];
+
+                    if (matches.length) {
+                        matches.forEach((match, index) => {
+                            const label = String(match[1] || '')
+                                .toUpperCase()
+                                .replace(/\s+/g, ' ')
+                                .trim();
+
+                            const start =
+                                match.index + match[0].length;
+
+                            const end =
+                                index + 1 < matches.length
+                                    ? matches[index + 1].index
+                                    : raw.length;
+
+                            const value = raw
+                                .slice(start, end)
+                                .replace(/\s+/g, ' ')
+                                .trim();
+
+                            if (!value) return;
+
+                            if (label.startsWith('FACT')) {
+                                result.facts = value;
+                            } else if (label === 'ISSUE') {
+                                result.issue = value;
+                            } else if (label === 'RULING') {
+                                result.ruling = value;
+                            } else if (label.startsWith('RATIO')) {
+                                result.ratio = value;
+                            }
+                        });
+                    }
+                }
+
+                // Older records may use Doctrine inside the gist. Doctrine is not
+                // mislabeled as Ratio. Use the actual saved Ratio Decidendi instead.
+                if (!result.facts && d.facts) {
+                    result.facts = Utils.excerpt(
+                        String(d.facts).replace(/\s+/g, ' ').trim(),
+                        520
+                    );
+                }
+
+                if (!result.issue && d.issue) {
+                    result.issue = Utils.excerpt(
+                        String(d.issue).replace(/\s+/g, ' ').trim(),
+                        320
+                    );
+                }
+
+                if (!result.ruling && d.ruling) {
+                    result.ruling = Utils.excerpt(
+                        String(d.ruling).replace(/\s+/g, ' ').trim(),
+                        420
+                    );
+                }
+
+                if (!result.ratio && d.ratioDecidendi) {
+                    result.ratio = Utils.excerpt(
+                        String(d.ratioDecidendi).replace(/\s+/g, ' ').trim(),
+                        620
+                    );
+                }
+
+                return result;
+            },
+
+            recitationGistHTML(record = {}, options = {}) {
+                const parts = this.recitationGistParts(record);
+                const esc = Security.escapeHTML;
+                const compact = Boolean(options.compact);
+
+                const rows = [
+                    {
+                        key: 'facts',
+                        label: 'FACTS',
+                        icon: 'fa-file-lines'
+                    },
+                    {
+                        key: 'issue',
+                        label: 'ISSUE',
+                        icon: 'fa-circle-question'
+                    },
+                    {
+                        key: 'ruling',
+                        label: 'RULING',
+                        icon: 'fa-gavel'
+                    },
+                    {
+                        key: 'ratio',
+                        label: 'RATIO',
+                        icon: 'fa-scale-balanced'
+                    }
+                ].filter(item => parts[item.key]);
+
+                if (!rows.length) {
+                    const raw = String(
+                        this.normalize(record).gist || ''
+                    ).trim();
+
+                    return raw
+                        ? `<div class="text-sm leading-7 text-amber-900">${esc(raw)}</div>`
+                        : '<span class="text-amber-400 italic">No gist recorded.</span>';
+                }
+
+                return `
+                    <div class="${compact ? 'space-y-3' : 'space-y-4'}">
+                        ${rows.map((item, index) => `
+                            <div class="${index ? 'pt-3 border-t border-amber-200/70' : ''}">
+                                <div class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[.14em] text-amber-700 mb-1.5">
+                                    <i class="fas ${item.icon} text-[9px]"></i>
+                                    <span>${item.label}</span>
+                                </div>
+                                <div class="text-sm ${compact ? 'leading-6' : 'leading-7'} text-amber-950" style="text-align:left;overflow-wrap:anywhere;">
+                                    ${esc(parts[item.key])}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>`;
+            },
+
             exportText(record = {}) {
                 const d = this.normalize(record);
                 return `CASE: ${d.title || 'Untitled Case'}\nG.R. NO. / CITATION: ${d.citation || d.grNo || '—'}\nSUBJECT: ${d.subject || d.subjectName || ''}\nTOPIC: ${d.topic || ''}\nRECITATION GIST: ${d.gist || '—'}\n\nFACTS\n${d.facts || '—'}\n\nISSUE\n${d.issue || '—'}\n\nRULING\n${d.ruling || '—'}\n\nRATIO DECIDENDI\n${d.ratioDecidendi || '—'}\n\nMY NOTES\n${this.myNotesText(d) || '—'}\n\nVERBATIM NOTES\n${d.verbatimNotes || '—'}`;
@@ -1280,8 +1419,20 @@ let currentUser = null;
                 'models/gemini-2.5-flash'
             ],
 
+            // URL Context extraction favors stable/lighter models first.
+            urlContextFallbackModels: [
+                'models/gemini-3.6-flash',
+                'models/gemini-3.5-flash-lite',
+                'models/gemini-3.5-flash',
+                'models/gemini-3.1-flash-lite',
+                'models/gemini-2.5-flash-lite',
+                'models/gemini-2.5-flash',
+                'models/gemini-3.8-flash',
+                'models/gemini-3.7-flash'
+            ],
+
             transientStatuses: new Set([429, 500, 502, 503, 504]),
-            retryDelaysMs: [650, 1500],
+            retryDelaysMs: [1200, 3200],
             maxCandidateModels: 10,
             maxTotalCalls: 14,
 
@@ -1382,6 +1533,7 @@ let currentUser = null;
                 const message = String(error?.message || '').toLowerCase();
 
                 return (
+                    Boolean(error?.retryable) ||
                     this.transientStatuses.has(status) ||
                     message.includes('high demand') ||
                     message.includes('temporarily unavailable') ||
@@ -1393,9 +1545,13 @@ let currentUser = null;
 
             async listAvailableModels(apiKey) {
                 const endpoint =
-                    `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(apiKey)}`;
+                    'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000';
 
-                const response = await fetch(endpoint);
+                const response = await fetch(endpoint, {
+                    headers: {
+                        'x-goog-api-key': apiKey
+                    }
+                });
 
                 if (!response.ok) {
                     throw await this.readError(response);
@@ -1451,12 +1607,13 @@ let currentUser = null;
                 const model = this.normalizeModelName(modelName);
 
                 const endpoint =
-                    `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                    `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent`;
 
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': apiKey
                     },
                     body: JSON.stringify(requestBody)
                 });
@@ -1466,23 +1623,47 @@ let currentUser = null;
                 }
 
                 const data = await response.json();
+                const candidate = data?.candidates?.[0];
 
-                const responseText = data?.candidates?.[0]?.content?.parts
+                const responseText = candidate?.content?.parts
                     ?.map(part => part?.text || '')
                     .join('')
                     .trim();
 
-                if (!responseText) {
-                    const blockReason = data?.promptFeedback?.blockReason;
+                data._lexUrlContextMetadata =
+                    candidate?.urlContextMetadata ||
+                    candidate?.url_context_metadata ||
+                    null;
 
-                    throw new Error(
+                if (!responseText) {
+                    const blockReason =
+                        data?.promptFeedback?.blockReason;
+
+                    const finishReason =
+                        candidate?.finishReason ||
+                        candidate?.finish_reason ||
+                        '';
+
+                    const error = new Error(
                         blockReason
                             ? `Gemini blocked the request: ${blockReason}`
+                            : finishReason
+                            ? `Gemini returned no usable text (finish reason: ${finishReason}).`
                             : 'Gemini returned an empty response.'
                     );
+
+                    error.lexCode = 'EMPTY_RESPONSE';
+                    error.retryable = true;
+                    error.finishReason = finishReason;
+                    error.urlContextMetadata =
+                        data._lexUrlContextMetadata;
+
+                    throw error;
                 }
 
-                data._lexModel = model.replace(/^models\//, '');
+                data._lexModel =
+                    model.replace(/^models\//, '');
+
                 return data;
             },
 
@@ -1494,11 +1675,18 @@ let currentUser = null;
             ) {
                 let lastError = null;
 
-                // Initial call + short transient retries.
-                const attempts = 1 + this.retryDelaysMs.length;
+                const retryCount =
+                    Number.isInteger(state.retriesPerModel)
+                        ? Math.max(0, state.retriesPerModel)
+                        : this.retryDelaysMs.length;
+
+                const attempts = 1 + retryCount;
+                const totalLimit =
+                    state.maxTotalCalls ||
+                    this.maxTotalCalls;
 
                 for (let attempt = 0; attempt < attempts; attempt += 1) {
-                    if (state.totalCalls >= this.maxTotalCalls) break;
+                    if (state.totalCalls >= totalLimit) break;
 
                     if (attempt > 0) {
                         const baseDelay = this.retryDelaysMs[attempt - 1] || 1500;
@@ -1528,7 +1716,7 @@ let currentUser = null;
                             Number(error?.status) === 400 &&
                             requestBody?.generationConfig?.responseMimeType
                         ) {
-                            if (state.totalCalls >= this.maxTotalCalls) break;
+                            if (state.totalCalls >= totalLimit) break;
 
                             const compatibleBody =
                                 JSON.parse(JSON.stringify(requestBody));
@@ -1547,6 +1735,13 @@ let currentUser = null;
                             }
                         }
 
+                        if (
+                            lastError?.lexCode === 'EMPTY_RESPONSE' ||
+                            lastError?.lexCode === 'URL_RETRIEVAL_FAILED'
+                        ) {
+                            break;
+                        }
+
                         // Do not retry permanent/auth/input failures.
                         if (!this.isTransient(lastError)) break;
                     }
@@ -1557,24 +1752,69 @@ let currentUser = null;
                 );
             },
 
-            async generate(apiKey, requestBody) {
+            async generate(apiKey, requestBody, options = {}) {
                 if (!apiKey) {
                     throw new Error('Enter your Gemini API key first.');
                 }
 
                 const key = this.cacheKey(apiKey);
-                let candidates = await this.candidateModels(apiKey);
+                const discovered =
+                    await this.candidateModels(apiKey);
+
+                const preferredModels =
+                    Array.isArray(options.preferredModels)
+                        ? options.preferredModels.map(
+                            item =>
+                                this.normalizeModelName(item)
+                        )
+                        : [];
+
+                let candidates = preferredModels.length
+                    ? [
+                        ...new Set([
+                            ...preferredModels,
+                            ...discovered
+                        ])
+                    ]
+                    : discovered;
+
                 let lastError = null;
+
+                const maxCandidateModels =
+                    Math.max(
+                        1,
+                        Number(
+                            options.maxCandidateModels ||
+                            this.maxCandidateModels
+                        )
+                    );
+
+                const maxTotalCalls =
+                    Math.max(
+                        1,
+                        Number(
+                            options.maxTotalCalls ||
+                            this.maxTotalCalls
+                        )
+                    );
 
                 const state = {
                     totalCalls: 0,
-                    attemptedModels: []
+                    attemptedModels: [],
+                    maxTotalCalls,
+                    retriesPerModel:
+                        Number.isInteger(options.retriesPerModel)
+                            ? options.retriesPerModel
+                            : undefined
                 };
 
                 for (
-                    const model of candidates.slice(0, this.maxCandidateModels)
+                    const model of candidates.slice(
+                        0,
+                        maxCandidateModels
+                    )
                 ) {
-                    if (state.totalCalls >= this.maxTotalCalls) break;
+                    if (state.totalCalls >= maxTotalCalls) break;
 
                     state.attemptedModels.push(model);
 
@@ -1620,6 +1860,8 @@ let currentUser = null;
                         // 429/5xx/high-demand errors are temporary/model-capacity errors.
                         if (
                             status === 404 ||
+                            error?.lexCode === 'EMPTY_RESPONSE' ||
+                            error?.lexCode === 'URL_RETRIEVAL_FAILED' ||
                             this.isTransient(error)
                         ) {
                             continue;
@@ -1630,7 +1872,7 @@ let currentUser = null;
                 }
 
                 // Refresh the model list once in case access changed during the session.
-                if (state.totalCalls < this.maxTotalCalls) {
+                if (state.totalCalls < maxTotalCalls) {
                     this.cache.delete(key);
 
                     const refreshed = await this.candidateModels(
@@ -1646,7 +1888,7 @@ let currentUser = null;
                         .slice(0, 3);
 
                     for (const model of untried) {
-                        if (state.totalCalls >= this.maxTotalCalls) break;
+                        if (state.totalCalls >= maxTotalCalls) break;
 
                         state.attemptedModels.push(model);
 
@@ -1718,6 +1960,148 @@ let currentUser = null;
                     ?.map(part => part?.text || '')
                     .join('')
                     .trim() || '';
+            }
+        };
+
+        // V6.1 — Assigned Case URL retrieval is separated from final JSON
+        // synthesis to avoid tool+structured-output failures in one request.
+        const AssignedCaseUrlIntelligence = {
+            metadataRows(data) {
+                const metadata =
+                    data?._lexUrlContextMetadata ||
+                    data?.candidates?.[0]?.urlContextMetadata ||
+                    data?.candidates?.[0]?.url_context_metadata ||
+                    null;
+
+                return (
+                    metadata?.urlMetadata ||
+                    metadata?.url_metadata ||
+                    []
+                );
+            },
+
+            retrievalSucceeded(data) {
+                const rows = this.metadataRows(data);
+                if (!rows.length) return true;
+
+                return rows.some(row => {
+                    const status = String(
+                        row?.urlRetrievalStatus ||
+                        row?.url_retrieval_status ||
+                        ''
+                    ).toUpperCase();
+
+                    return status.includes('SUCCESS');
+                });
+            },
+
+            async retrieveEvidence({
+                apiKey,
+                url,
+                title,
+                subject,
+                topic,
+                onStatus = () => {}
+            }) {
+                if (!AssignedCaseUtils.validPublicUrl(url)) {
+                    throw new Error(
+                        'The assigned case does not contain a valid public URL.'
+                    );
+                }
+
+                onStatus(
+                    'Opening the assigned public decision with URL Context…'
+                );
+
+                const prompt = `You are a source-extraction assistant for LEX, a Philippine law-school application.
+
+Retrieve and analyze ONLY this exact public URL:
+${url}
+
+Expected case title: ${title || 'Not specified'}
+Subject: ${subject || 'Not specified'}
+Topic: ${topic || 'Not specified'}
+
+STRICT SOURCE RULES:
+- The retrieved URL is the ONLY legal source for this step.
+- Do not use Google Search, memory, another website, or outside legal knowledge.
+- If the URL is inaccessible, paywalled, does not contain the decision, or is merely an index/search page, return exactly: SOURCE_RETRIEVAL_FAILED
+- Do not write the final law-school digest yet.
+- Do not invent missing party arguments, findings, legal provisions, doctrines, citations, or disposition.
+- Keep party allegations/arguments distinct from Supreme Court findings.
+- Do not provide verbatim quotations.
+
+Create a comprehensive CASE SOURCE EVIDENCE MEMO containing:
+1. CASE TITLE / G.R. NO. / DATE if present
+2. MATERIAL FACTS in chronological order
+3. PROCEDURAL HISTORY
+4. MATERIAL PARTY ARGUMENTS / CLAIMS
+5. LEGAL ISSUE(S) ACTUALLY RESOLVED
+6. SUPREME COURT RULING / DISPOSITION
+7. SUPREME COURT REASONING / RATIO
+8. DOCTRINE(S) ACTUALLY STATED OR APPLIED
+9. CODAL / CONSTITUTIONAL / STATUTORY / RULE PROVISIONS ACTUALLY MENTIONED
+10. GENERAL RULES, REQUISITES / TESTS, EXCEPTIONS, AND QUALIFICATIONS ACTUALLY DISCUSSED
+11. HOW THE COURT APPLIED THE RULE TO THE MATERIAL FACTS
+12. UP TO 5 STUDY-WORTHY LEGAL TERMS actually defined, explained, distinguished, or materially applied, with source-grounded meanings.
+
+Be detailed enough that a second model can write an accurate full case digest using ONLY this memo.`;
+
+                const request = {
+                    contents: [{
+                        role: 'user',
+                        parts: [{ text: prompt }]
+                    }],
+                    tools: [
+                        { url_context: {} }
+                    ]
+                };
+
+                const data =
+                    await GeminiService.generate(
+                        apiKey,
+                        request,
+                        {
+                            preferredModels:
+                                GeminiService.urlContextFallbackModels,
+                            maxCandidateModels: 8,
+                            maxTotalCalls: 10,
+                            retriesPerModel: 1
+                        }
+                    );
+
+                const evidence =
+                    GeminiService.text(data).trim();
+
+                if (
+                    !this.retrievalSucceeded(data) ||
+                    /^SOURCE_RETRIEVAL_FAILED\b/i.test(evidence)
+                ) {
+                    const error = new Error(
+                        'Gemini could not retrieve the assigned case from this link. Confirm that the link directly opens a public HTML decision or public PDF, then update the link and try again.'
+                    );
+                    error.lexCode = 'URL_RETRIEVAL_FAILED';
+                    throw error;
+                }
+
+                if (evidence.length < 500) {
+                    const error = new Error(
+                        'The assigned case link was reached, but not enough source content was returned to create a reliable case digest. Use a more direct decision/PDF link.'
+                    );
+                    error.lexCode = 'URL_RETRIEVAL_FAILED';
+                    throw error;
+                }
+
+                return {
+                    context: evidence,
+                    mode: 'url_context_evidence',
+                    chunkCount: 1,
+                    originalCharacters: 0,
+                    model: data?._lexModel || '',
+                    metadata:
+                        data?._lexUrlContextMetadata ||
+                        null
+                };
             }
         };
 
@@ -4196,9 +4580,9 @@ async ocrPdf(file, onProgress = () => {}) {
         <i class="fas fa-bolt text-amber-600"></i>
         <span class="text-xs font-bold uppercase tracking-wider text-amber-700">Recitation Gist</span>
       </div>
-      <p class="text-sm text-amber-900 leading-relaxed flex-1">
-        ${digest.gist ? Security.escapeHTML(digest.gist) : '<span class="text-amber-400 italic">No gist recorded.</span>'}
-      </p>
+      <div class="flex-1">
+        ${DigestUtils.recitationGistHTML(digest, { compact: true })}
+      </div>
     </div>
   </div>`;
 }).join('');
@@ -6351,6 +6735,18 @@ People v. Example&#9;https://...&#9;Criminal Law&#9;"></textarea>
                     window.appHandlers.openAISettings();
                     return;
                 }
+
+                if (
+                    window.appHandlers.assignedDigestInProgress &&
+                    window.appHandlers.assignedDigestInProgress !== id
+                ) {
+                    alert(
+                        'Lex is already digesting another assigned case. Finish that case before starting another one.'
+                    );
+                    return;
+                }
+
+                window.appHandlers.assignedDigestInProgress = id;
 
                 await AppDB.update('assigned_cases', id, {
                     status: 'digesting',
@@ -10132,7 +10528,7 @@ getCurrentSubjectContext: () => ({
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Citation</label><input id="subject-digest-citation" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="G.R. No., date"></div>
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic / Article</label><input id="subject-digest-topic" class="w-full p-2 border border-slate-300 rounded-lg outline-none" placeholder="e.g., Negligence"></div>
         </div>
-        <div class="mt-3"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist (1-2 sentences)</label><textarea id="subject-digest-gist" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-amber-500" placeholder="e.g. Minors sued to cancel TLAs; SC ruled standing for future generations."></textarea></div>
+        <div class="mt-3"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist (Facts • Issue • Ruling • Ratio)</label><textarea id="subject-digest-gist" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-amber-500" placeholder="e.g. Minors sued to cancel TLAs; SC ruled standing for future generations."></textarea></div>
         <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="subject-digest-facts" rows="4" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>
         <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="subject-digest-issue" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y"></textarea></div>
         <div class="mt-3"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="subject-digest-ruling" rows="3" class="w-full p-2 border border-slate-300 rounded-lg outline-none resize-y" placeholder="Court's direct answer and disposition"></textarea></div>
@@ -10289,7 +10685,7 @@ getCurrentSubjectContext: () => ({
           <span class="text-[10px] font-black uppercase tracking-wide">Discussed</span>
         </label>
       </div>
-      ${digest.gist ? `<div class="mb-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r text-sm text-amber-900 leading-relaxed"><span class="font-bold text-[10px] uppercase tracking-wider block mb-1 text-amber-700" style="text-align:left;"><i class="fas fa-bolt mr-1"></i>Recitation Gist</span><div style="text-align:justify;text-justify:inter-word;hyphens:auto;overflow-wrap:anywhere;">${esc(digest.gist)}</div></div>` : ''}
+      ${digest.gist || normalized.ratioDecidendi ? `<div class="mb-5 p-5 bg-amber-50 border-l-4 border-amber-500 rounded-r text-amber-900"><span class="font-bold text-[10px] uppercase tracking-wider block mb-3 text-amber-700" style="text-align:left;"><i class="fas fa-bolt mr-1"></i>Recitation Gist</span>${DigestUtils.recitationGistHTML(normalized)}</div>` : ''}
       ${factsBlock(normalized.facts)}
       ${block('fa-circle-question', 'Issue', normalized.issue, 'bg-blue-50 border-blue-200 text-slate-800')}
       ${block('fa-gavel', 'Ruling', normalized.ruling, 'bg-slate-50 border-slate-200 text-slate-700')}
@@ -11135,7 +11531,7 @@ await AppDB.add('digests', digestData);
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Notebook</label><select id="dig-subj-edit" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500 bg-white">${subjectOptions}</select></div>
             <div><label class="block text-sm font-medium text-slate-700 mb-1">Topic/Article</label><input type="text" id="dig-topic-edit" placeholder="e.g. Art 1156" class="w-full border border-slate-300 rounded-lg p-2 outline-none focus:ring-2 focus:ring-blue-500" value="${topic.replace(/"/g, '&quot;')}"></div>
         </div>
-        <div class="mt-2"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist (1-2 sentences)</label><textarea id="dig-gist-edit" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-amber-500" placeholder="e.g. Minors sued to cancel TLAs...">${decodeHtml(gist)}</textarea></div>
+        <div class="mt-2"><label class="block text-sm font-medium text-amber-700 mb-1"><i class="fas fa-bolt mr-1"></i>Recitation Gist (Facts • Issue • Ruling • Ratio)</label><textarea id="dig-gist-edit" rows="2" class="w-full border border-amber-200 bg-amber-50 rounded-lg p-2 outline-none resize-none focus:ring-2 focus:ring-amber-500" placeholder="e.g. Minors sued to cancel TLAs...">${decodeHtml(gist)}</textarea></div>
         <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Facts</label><textarea id="dig-facts-edit" rows="2" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(facts)}</textarea></div>
         <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Issue</label><textarea id="dig-issue-edit" rows="3" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(issue)}</textarea></div>
         <div class="mt-2"><label class="block text-sm font-medium text-slate-700 mb-1">Ruling</label><textarea id="dig-ruling-edit" rows="3" class="w-full border border-slate-300 rounded-lg p-2 outline-none resize-y focus:ring-2 focus:ring-blue-500">${decodeHtml(ruling)}</textarea></div>
@@ -11525,7 +11921,37 @@ await AppDB.add('digests', digestData);
 
                 // ---- Quick identification ----
                 writeSectionLabel('Recitation Gist');
-                writeParagraph(d.gist, { size: 10, after: 5 });
+                {
+                    const gistParts =
+                        DigestUtils.recitationGistParts(d);
+
+                    const gistRows = [
+                        ['FACTS', gistParts.facts],
+                        ['ISSUE', gistParts.issue],
+                        ['RULING', gistParts.ruling],
+                        ['RATIO', gistParts.ratio]
+                    ].filter(([, value]) => value);
+
+                    if (gistRows.length) {
+                        gistRows.forEach(([label, value]) => {
+                            writeParagraph(
+                                `${label}: ${value}`,
+                                {
+                                    size: 10,
+                                    after: 4
+                                }
+                            );
+                        });
+                    } else {
+                        writeParagraph(
+                            d.gist,
+                            {
+                                size: 10,
+                                after: 5
+                            }
+                        );
+                    }
+                }
 
                 // ---- My Notes ----
                 writeMajorHeader('My Notes');
@@ -11987,7 +12413,7 @@ await AppDB.add('digests', digestData);
                                     <p class="font-black text-slate-950 serif-text leading-snug">${esc(title)} <span class="font-medium text-slate-500">| ${esc(citation)}</span></p>
                                     <div class="mt-5">
                                         <p class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1">GIST OF THE CASE:</p>
-                                        <div class="text-sm leading-6 text-slate-800 whitespace-pre-wrap">${esc(gist)}</div>
+                                        <div class="text-sm leading-6 text-slate-800">${DigestUtils.recitationGistHTML(d, { compact: true })}</div>
                                     </div>
                                 </div>
                                 <div class="digest-summary-cell p-4 md:p-5">
@@ -12197,6 +12623,15 @@ await AppDB.add('digests', digestData);
         return; 
     } 
     
+    if (window.appHandlers.digestInProgress) {
+        alert(
+            'A case digest is already running. Lex prevents overlapping digests to avoid duplicate API calls and duplicate case records.'
+        );
+        return;
+    }
+
+    window.appHandlers.digestInProgress = true;
+
     const area = document.getElementById('digest-results-area'); 
     const btn = document.getElementById('btn-process-digest'); 
     btn.disabled = true; 
@@ -12211,21 +12646,24 @@ await AppDB.add('digests', digestData);
         let caseContext;
 
         if (usingAssignedUrl) {
-            intelligence = {
-                mode: 'url_context',
-                context:
-                    `PUBLIC CASE SOURCE URL: ${assignedCaseContext.url}\n\nUse the Gemini URL Context tool to retrieve and analyze ONLY this exact public URL as the case source.`,
-                chunkCount: 1,
-                originalCharacters: 0
-            };
+            intelligence =
+                await AssignedCaseUrlIntelligence.retrieveEvidence({
+                    apiKey,
+                    url: assignedCaseContext.url,
+                    title: titleInput,
+                    subject: selectedSubjectName,
+                    topic: topicInput,
+                    onStatus: message => {
+                        btn.innerHTML =
+                            '<i class="fas fa-spinner fa-spin mr-1"></i> Reading Public Case Link…';
 
-            caseContext = intelligence.context;
+                        area.innerHTML =
+                            `<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">${Security.escapeHTML(message)}</p><p class="text-slate-500 text-xs mt-2 break-all max-w-xl">${Security.escapeHTML(assignedCaseContext.url)}</p><p class="text-[11px] text-slate-400 mt-2">Lex will not create a digest unless enough source-grounded case evidence is retrieved.</p></div>`;
+                    }
+                });
 
-            btn.innerHTML =
-                '<i class="fas fa-spinner fa-spin mr-1"></i> Reading Public Case Link…';
-
-            area.innerHTML =
-                `<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Opening Assigned Case Source</p><p class="text-slate-500 text-xs mt-1 break-all max-w-xl">${Security.escapeHTML(assignedCaseContext.url)}</p><p class="text-[11px] text-slate-400 mt-2">Lex is using Gemini URL Context so browser CORS does not need to expose the page directly.</p></div>`;
+            caseContext =
+                intelligence.context;
         } else {
             intelligence =
                 await FullTextIntelligence.caseEvidence(
@@ -12249,7 +12687,7 @@ await AppDB.add('digests', digestData);
             '<i class="fas fa-spinner fa-spin mr-1"></i> Synthesizing Digest…';
 
         area.innerHTML =
-            `<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Synthesizing the complete decision…</p><p class="text-slate-500 text-xs mt-1">${usingAssignedUrl ? 'Public case URL retrieved as the controlling source.' : `${intelligence.chunkCount} source section${intelligence.chunkCount===1?'':'s'} analyzed without truncating the case.`}</p></div>`;
+            `<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Synthesizing the complete decision…</p><p class="text-slate-500 text-xs mt-1">${usingAssignedUrl ? `Public case source retrieved and validated${intelligence.model ? ` with ${Security.escapeHTML(GeminiService.friendlyModelName(intelligence.model))}` : ''}.` : `${intelligence.chunkCount} source section${intelligence.chunkCount===1?'':'s'} analyzed without truncating the case.`}</p></div>`;
         // Normalized Case Digester output: each table column receives one source field only.
         const promptText = `You are LEX, my Philippine Law School Case Digest Tutor.
 
@@ -12276,7 +12714,7 @@ ${caseContext}
 
 IMPORTANT SOURCE NOTE:
 ${usingAssignedUrl
-? `The TARGET CASE SOURCE is the exact public URL above. Use the URL Context tool to retrieve that URL and treat the retrieved page/PDF as the ONLY source. Do not use Google Search, general web knowledge, or another version of the case. If the URL cannot be retrieved or does not contain the decision, do not fabricate a digest. Because Lex cannot locally verify exact quotations from URL Context, return an empty "verbatim_notes" field.`
+? `The TARGET CASE SOURCE above is a source-evidence memo produced from the exact assigned public URL through Gemini URL Context. Treat that memo as the ONLY evidence for the final digest. Do not retrieve another page, use Google Search, general web knowledge, or another version of the case. Do not invent anything missing from the memo. Because Lex cannot locally verify quotations against the remote URL, return an empty "verbatim_notes" field.`
 : intelligence.mode === 'full_case_chunked'
 ? 'The source above contains evidence memos independently extracted from EVERY portion of the supplied decision. Treat those memos as the only evidence for synthesis. Do not invent missing links between chunks.'
 : 'The complete supplied case text appears above.'}
@@ -12422,12 +12860,21 @@ This is a teaching/application section. Do NOT copy the Ratio Decidendi word-for
 12. RECITATION GIST
 ==================================================
 
-Prepare a SHORT, NATURAL, ORAL recitation version organized compactly as:
+Prepare a SHORT, NATURAL, ORAL recitation version using EXACTLY these four labeled blocks:
 
 FACTS: essential factual story.
+
 ISSUE: controlling legal question.
+
 RULING: direct answer and essential result.
-DOCTRINE: legal principle to remember.
+
+RATIO: the Supreme Court's controlling reason for the ruling — the legal rule applied to the material facts and why it produced the result.
+
+Formatting rules:
+- Put a blank line between FACTS, ISSUE, RULING, and RATIO.
+- Keep each block concise and natural for oral recitation.
+- RATIO is not merely the Doctrine. It must explain WHY the Court reached the ruling.
+- Do not add a DOCTRINE label inside the Recitation Gist because Doctrine is already stored separately.
 
 It should sound natural when spoken in class and be substantially shorter than the full digest.
 
@@ -12582,11 +13029,8 @@ OUTPUT RULES:
             }
         };
 
-        if (usingAssignedUrl) {
-            digestRequest.tools = [
-                { url_context: {} }
-            ];
-        }
+        // Assigned Case URL Context retrieval has already completed and been
+        // validated. Final JSON synthesis is intentionally tool-free.
 
         const data =
             await GeminiService.generate(
@@ -12658,6 +13102,10 @@ OUTPUT RULES:
                 sourceUrl:
                     usingAssignedUrl
                         ? assignedCaseContext.url
+                        : '',
+                urlRetrievalModel:
+                    usingAssignedUrl
+                        ? (intelligence.model || '')
                         : ''
             },
             sourceUrl:
@@ -12744,7 +13192,7 @@ OUTPUT RULES:
         const myNotesPreview = DigestUtils.myNotesText(digestData);
         area.innerHTML = `<div class="space-y-4">
             <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to the Case Library and linked to the selected notebook. ${usingAssignedUrl ? 'Public assigned-case link analyzed with URL Context' : window.appHandlers.digestMeta?.pageCount ? `Full PDF analyzed: ${window.appHandlers.digestMeta.pageCount} pages` : 'Full supplied text analyzed'} • ${intelligence.chunkCount} analysis section${intelligence.chunkCount===1?'':'s'}.</p></div>
+                <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to the Case Library and linked to the selected notebook. ${usingAssignedUrl ? `Public assigned-case link retrieved with URL Context${intelligence.model ? ` (${GeminiService.friendlyModelName(intelligence.model)})` : ''}` : window.appHandlers.digestMeta?.pageCount ? `Full PDF analyzed: ${window.appHandlers.digestMeta.pageCount} pages` : 'Full supplied text analyzed'} • ${intelligence.chunkCount} analysis section${intelligence.chunkCount===1?'':'s'}.</p></div>
                 <div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.saveLatestDigestToVault()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-vault mr-1"></i>Save Doctrine to Vault</button><button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View Table</button></div>
             </div>
             ${knowledgeStatusHtml}
@@ -12757,7 +13205,7 @@ OUTPUT RULES:
         </div>`;
     } catch (error) { 
         // FIX #7: Escape error message to prevent XSS
-        area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${Security.escapeHTML(error.message || 'Unknown error')}</div>`;
+        area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200"><p class="font-bold"><i class="fas fa-triangle-exclamation mr-1"></i>Digest could not be completed</p><p class="text-sm mt-2">${Security.escapeHTML(error.message || 'Unknown error')}</p>${usingAssignedUrl ? '<p class="text-xs mt-3 text-red-600">For Assigned Cases, verify that the saved link opens the actual public decision or a direct public PDF—not a login page, search-results page, or private document.</p>' : ''}</div>`;
 
         if (usingAssignedUrl && assignedCaseContext?.id) {
             try {
@@ -12780,6 +13228,8 @@ OUTPUT RULES:
         window.appHandlers.digestText = ''; 
         window.appHandlers.digestMeta = null;
         window.appHandlers.pendingAssignedCaseDigest = null;
+        window.appHandlers.digestInProgress = false;
+        window.appHandlers.assignedDigestInProgress = null;
     } 
 },
 setMode: (mode) => {
