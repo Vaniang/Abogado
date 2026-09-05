@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lex: Law School Companion V5.9</title>
+    <title>Lex: Law School Companion V6.0</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -35,6 +35,7 @@
     <script>mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict', suppressErrorEvents: true });</script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
@@ -2066,21 +2067,42 @@ let currentUser = null;
                 return candidates[0]?.count ? candidates[0].value : '\t';
             },
 
-            parseBulk(text = '') {
-                const lines = String(text || '')
-                    .replace(/\r/g, '')
-                    .split('\n')
-                    .map(line => line.trim())
-                    .filter(Boolean);
+            normalizeAssignedDate(value = '') {
+                if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                    return value.toISOString().slice(0, 10);
+                }
 
-                if (!lines.length) return [];
+                if (typeof value === 'number' && value > 20000 && value < 60000) {
+                    const excelEpoch = Date.UTC(1899, 11, 30);
+                    const date = new Date(excelEpoch + Math.round(value * 86400000));
+                    if (!Number.isNaN(date.getTime())) {
+                        return date.toISOString().slice(0, 10);
+                    }
+                }
 
-                const delimiter = this.detectDelimiter(lines[0]);
-                const rows = lines.map(line =>
-                    this.parseDelimitedLine(line, delimiter)
-                );
+                const text = String(value || '').trim();
+                if (!text) return '';
 
-                const normalizedHeader = rows[0].map(cell =>
+                const parsed = new Date(text);
+                if (!Number.isNaN(parsed.getTime()) && /[-/]/.test(text)) {
+                    return parsed.toISOString().slice(0, 10);
+                }
+
+                return text;
+            },
+
+            parseRows(rows = []) {
+                const cleanRows = (rows || [])
+                    .map(row =>
+                        Array.isArray(row)
+                            ? row.map(cell => String(cell ?? '').trim())
+                            : []
+                    )
+                    .filter(row => row.some(cell => cell));
+
+                if (!cleanRows.length) return [];
+
+                const normalizedHeader = cleanRows[0].map(cell =>
                     this.canonical(cell)
                 );
 
@@ -2120,8 +2142,8 @@ let currentUser = null;
                     urlIndex >= 0;
 
                 const dataRows = hasHeader
-                    ? rows.slice(1)
-                    : rows;
+                    ? cleanRows.slice(1)
+                    : cleanRows;
 
                 const output = [];
 
@@ -2138,9 +2160,11 @@ let currentUser = null;
                         row[hasHeader && topicIndex >= 0 ? topicIndex : 2] || ''
                     ).trim();
 
-                    const assignedDate = hasHeader && dateIndex >= 0
-                        ? String(row[dateIndex] || '').trim()
-                        : '';
+                    const assignedDate = this.normalizeAssignedDate(
+                        hasHeader && dateIndex >= 0
+                            ? row[dateIndex]
+                            : (row[3] || '')
+                    );
 
                     if (!title || !url) return;
 
@@ -2150,6 +2174,55 @@ let currentUser = null;
                         topic,
                         assignedDate
                     });
+                });
+
+                return output;
+            },
+
+            parseBulk(text = '') {
+                const lines = String(text || '')
+                    .replace(/\r/g, '')
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(Boolean);
+
+                if (!lines.length) return [];
+
+                const delimiter = this.detectDelimiter(lines[0]);
+                const rows = lines.map(line =>
+                    this.parseDelimitedLine(line, delimiter)
+                );
+
+                return this.parseRows(rows);
+            },
+
+            async parseWorkbookFile(file) {
+                if (!file) return [];
+
+                if (!window.XLSX) {
+                    throw new Error('Excel import library failed to load. Please refresh the page and try again.');
+                }
+
+                const buffer = await file.arrayBuffer();
+                const workbook = XLSX.read(buffer, {
+                    type: 'array',
+                    cellDates: true
+                });
+
+                const output = [];
+
+                workbook.SheetNames.forEach(sheetName => {
+                    const sheet = workbook.Sheets[sheetName];
+                    if (!sheet) return;
+
+                    const rows = XLSX.utils.sheet_to_json(sheet, {
+                        header: 1,
+                        defval: '',
+                        raw: true
+                    });
+
+                    const parsed = this.parseRows(rows);
+                    parsed.forEach(item => output.push(item));
                 });
 
                 return output;
@@ -3781,7 +3854,7 @@ async ocrPdf(file, onProgress = () => {}) {
                                 : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center">
                                     <i class="fas fa-list-ul text-5xl text-slate-200 mb-4"></i>
                                     <h4 class="font-black text-slate-700">No assigned cases yet</h4>
-                                    <p class="text-sm text-slate-500 mt-2 max-w-xl mx-auto">Bulk paste a spreadsheet-style list or add a case manually. Required fields are Case Title and public Link.</p>
+                                    <p class="text-sm text-slate-500 mt-2 max-w-xl mx-auto">Bulk paste a spreadsheet-style list, upload CSV/XLSX, or add a case manually. Required fields are Case Title and public Link.</p>
                                     <div class="mt-5 flex flex-wrap justify-center gap-2">
                                         <button onclick="window.appHandlers.bulkImportAssignedCases()" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-file-import mr-2"></i>Bulk Import</button>
                                         <button onclick="window.appHandlers.addAssignedCase()" class="bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Add First Case</button>
@@ -6129,13 +6202,13 @@ const cleanAiJsonResponse = (text) => {
                     title: '<i class="fas fa-file-import text-indigo-600 mr-2"></i>Bulk Import Assigned Cases',
                     content: `
                         <div class="p-4 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-900">
-                            <p class="font-bold">Paste from Excel/Google Sheets or upload a CSV/TXT file.</p>
+                            <p class="font-bold">Paste from Excel/Google Sheets or upload a CSV, TXT, or Excel file.</p>
                             <p class="text-xs mt-1">Recommended columns: <b>Case Title | Link | Topic | Assigned Date</b>. Title and Link are required.</p>
                         </div>
 
                         <div class="mt-4">
-                            <label class="block text-sm font-bold text-slate-700 mb-1">Upload CSV / TXT <span class="font-normal text-slate-400">(optional)</span></label>
-                            <input id="assigned-case-file" type="file" accept=".csv,.txt,.tsv" class="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Upload CSV / TXT / XLSX <span class="font-normal text-slate-400">(optional)</span></label>
+                            <input id="assigned-case-file" type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" class="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
                         </div>
 
                         <div class="mt-4">
@@ -6146,32 +6219,46 @@ People v. Example&#9;https://...&#9;Criminal Law&#9;"></textarea>
                         </div>
 
                         <div class="mt-3 text-[11px] text-slate-400 leading-relaxed">
-                            Lex accepts tab-separated spreadsheet rows, CSV, or pipe-separated rows. Duplicate Case Title + Link combinations already in this Subject are skipped.
+                            Lex accepts pasted spreadsheet rows, CSV, TSV, TXT, pipe-separated rows, and Excel files (.xlsx / .xls). Duplicate Case Title + Link combinations already in this Subject are skipped.
                         </div>
                     `,
                     submitText: 'Import Cases',
                     onSubmit: async () => {
-                        let raw =
+                        const raw =
                             document.getElementById('assigned-case-bulk-text').value.trim();
 
                         const file =
                             document.getElementById('assigned-case-file').files?.[0];
 
-                        if (file) {
-                            const fileText = await file.text();
-                            raw = raw
-                                ? `${raw}\n${fileText}`
-                                : fileText;
-                        }
+                        let parsed = [];
 
-                        if (!raw) {
-                            throw new Error(
-                                'Paste a case list or choose a CSV/TXT file.'
+                        if (raw) {
+                            parsed = parsed.concat(
+                                AssignedCaseUtils.parseBulk(raw)
                             );
                         }
 
-                        const parsed =
-                            AssignedCaseUtils.parseBulk(raw);
+                        if (file) {
+                            const fileName =
+                                String(file.name || '').toLowerCase();
+
+                            if (/\.(xlsx|xls)$/i.test(fileName)) {
+                                parsed = parsed.concat(
+                                    await AssignedCaseUtils.parseWorkbookFile(file)
+                                );
+                            } else {
+                                const fileText = await file.text();
+                                parsed = parsed.concat(
+                                    AssignedCaseUtils.parseBulk(fileText)
+                                );
+                            }
+                        }
+
+                        if (!raw && !file) {
+                            throw new Error(
+                                'Paste a case list or choose a CSV/TXT/XLSX file.'
+                            );
+                        }
 
                         if (!parsed.length) {
                             throw new Error(
