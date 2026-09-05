@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lex: Law School Companion V5.8</title>
+    <title>Lex: Law School Companion V5.9</title>
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -2002,6 +2002,160 @@ let currentUser = null;
             }
         };
 
+        // ============================================================
+        // V5.9 — ASSIGNED CASES QUEUE
+        // ============================================================
+        const AssignedCaseUtils = {
+            canonical(value = '') {
+                return String(value || '')
+                    .toLowerCase()
+                    .normalize('NFKD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-z0-9]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            },
+
+            validPublicUrl(value = '') {
+                try {
+                    const url = new URL(String(value || '').trim());
+                    return ['http:', 'https:'].includes(url.protocol);
+                } catch (_) {
+                    return false;
+                }
+            },
+
+            parseDelimitedLine(line, delimiter) {
+                const cells = [];
+                let current = '';
+                let quoted = false;
+
+                for (let i = 0; i < line.length; i += 1) {
+                    const char = line[i];
+
+                    if (char === '"') {
+                        if (quoted && line[i + 1] === '"') {
+                            current += '"';
+                            i += 1;
+                        } else {
+                            quoted = !quoted;
+                        }
+                        continue;
+                    }
+
+                    if (char === delimiter && !quoted) {
+                        cells.push(current.trim());
+                        current = '';
+                        continue;
+                    }
+
+                    current += char;
+                }
+
+                cells.push(current.trim());
+                return cells;
+            },
+
+            detectDelimiter(firstLine = '') {
+                const candidates = [
+                    { value: '\t', count: (firstLine.match(/\t/g) || []).length },
+                    { value: '|', count: (firstLine.match(/\|/g) || []).length },
+                    { value: ',', count: (firstLine.match(/,/g) || []).length }
+                ].sort((a, b) => b.count - a.count);
+
+                return candidates[0]?.count ? candidates[0].value : '\t';
+            },
+
+            parseBulk(text = '') {
+                const lines = String(text || '')
+                    .replace(/\r/g, '')
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(Boolean);
+
+                if (!lines.length) return [];
+
+                const delimiter = this.detectDelimiter(lines[0]);
+                const rows = lines.map(line =>
+                    this.parseDelimitedLine(line, delimiter)
+                );
+
+                const normalizedHeader = rows[0].map(cell =>
+                    this.canonical(cell)
+                );
+
+                const findIndex = patterns =>
+                    normalizedHeader.findIndex(value =>
+                        patterns.some(pattern => value.includes(pattern))
+                    );
+
+                const titleIndex = findIndex([
+                    'case title',
+                    'case name',
+                    'case',
+                    'title'
+                ]);
+
+                const urlIndex = findIndex([
+                    'link',
+                    'url',
+                    'source'
+                ]);
+
+                const topicIndex = findIndex([
+                    'topic',
+                    'coverage',
+                    'article',
+                    'subject matter'
+                ]);
+
+                const dateIndex = findIndex([
+                    'assigned date',
+                    'date assigned',
+                    'date'
+                ]);
+
+                const hasHeader =
+                    titleIndex >= 0 &&
+                    urlIndex >= 0;
+
+                const dataRows = hasHeader
+                    ? rows.slice(1)
+                    : rows;
+
+                const output = [];
+
+                dataRows.forEach(row => {
+                    const title = String(
+                        row[hasHeader ? titleIndex : 0] || ''
+                    ).trim();
+
+                    const url = String(
+                        row[hasHeader ? urlIndex : 1] || ''
+                    ).trim();
+
+                    const topic = String(
+                        row[hasHeader && topicIndex >= 0 ? topicIndex : 2] || ''
+                    ).trim();
+
+                    const assignedDate = hasHeader && dateIndex >= 0
+                        ? String(row[dateIndex] || '').trim()
+                        : '';
+
+                    if (!title || !url) return;
+
+                    output.push({
+                        title,
+                        url,
+                        topic,
+                        assignedDate
+                    });
+                });
+
+                return output;
+            }
+        };
+
         const Utils = {
             getDailyVerse: () => {
                 const verses = [{ text: "Learn to do right; seek justice. Defend the oppressed.", ref: "Isaiah 1:17" }, { text: "But let justice roll on like a river, righteousness like a never-failing stream!", ref: "Amos 5:24" }, { text: "Speak up for those who cannot speak for themselves...", ref: "Proverbs 31:8" }];
@@ -3118,6 +3272,7 @@ async ocrPdf(file, onProgress = () => {}) {
                 this.unsubscribeDoctrines = null;
                 this.unsubscribeMaterials = null;
                 this.unsubscribeSyllabus = null;
+                this.unsubscribeAssignedCases = null;
                 this.subjectId = null;
                 this.subjectName = '';
                 this.activeNoteId = null;
@@ -3127,6 +3282,7 @@ async ocrPdf(file, onProgress = () => {}) {
                 this.doctrinesData = [];
                 this.materialsData = [];
                  this.syllabusData = [];
+                this.assignedCasesData = [];
                 this.currentMaterialId = null;
             }
             render() {
@@ -3141,6 +3297,7 @@ async ocrPdf(file, onProgress = () => {}) {
                 <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 subject-tabs">
                 <button id="subject-tab-notebook" onclick="window.appHandlers.showSubjectOverview()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-book-open mr-1"></i>Notebook</button>
                 <button id="subject-tab-materials" onclick="window.appHandlers.showSubjectMaterials()" class="px-3 py-1.5 rounded-md text-xs font-bold transition" title="Upload and study this subject's readings"><i class="fas fa-folder-open mr-1"></i>Study Materials</button>
+                <button id="subject-tab-assigned-cases" onclick="window.appHandlers.showSubjectAssignedCases()" class="px-3 py-1.5 rounded-md text-xs font-bold transition" title="Track assigned cases and digest them from their source links"><i class="fas fa-list-ul mr-1"></i>Assigned Cases</button>
                 <button id="subject-tab-digests" onclick="window.appHandlers.showSubjectDigests()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-gavel mr-1"></i>Case Digests</button>
                 <button id="subject-tab-doctrines" onclick="window.appHandlers.showSubjectDoctrines()" class="px-3 py-1.5 rounded-md text-xs font-bold transition"><i class="fas fa-table mr-1"></i>Doctrine Matrix</button>
                 </div>
@@ -3183,6 +3340,7 @@ async ocrPdf(file, onProgress = () => {}) {
                 this.digestsData = [];
                 this.doctrinesData = [];
                 this.materialsData = [];
+                this.assignedCasesData = [];
                 this.currentMaterialId = null;
                 document.getElementById('content-area').innerHTML = this.render();
                 this.refreshTabStyles();
@@ -3245,6 +3403,30 @@ async ocrPdf(file, onProgress = () => {}) {
                     snapshot.forEach(record => this.syllabusData.push({ id: record.id, ...record.data() }));
                     if (this.activePanel === 'syllabus') this.showSyllabusTracker();
                 });
+
+                this.unsubscribeAssignedCases = AppDB.subscribeQuery('assigned_cases', 'subjectId', '==', subjectId, snapshot => {
+                    this.assignedCasesData = [];
+                    snapshot.forEach(record => this.assignedCasesData.push({ id: record.id, ...record.data() }));
+
+                    this.assignedCasesData.sort((a, b) => {
+                        const aDone = a.status === 'digested' || Boolean(a.digestId);
+                        const bDone = b.status === 'digested' || Boolean(b.digestId);
+
+                        if (aDone !== bDone) return aDone ? 1 : -1;
+
+                        return (a.title || '').localeCompare(
+                            b.title || '',
+                            undefined,
+                            { sensitivity: 'base', numeric: true }
+                        );
+                    });
+
+                    if (this.activePanel === 'assigned_cases') {
+                        this.showAssignedCases();
+                    } else if (this.activePanel === 'overview') {
+                        this.showOverview();
+                    }
+                });
             }
             destroy() {
                 if (this.digestDeletedListener) {
@@ -3259,16 +3441,26 @@ async ocrPdf(file, onProgress = () => {}) {
             refreshTabStyles() {
                 const notebookTab = document.getElementById('subject-tab-notebook');
                 const materialsTab = document.getElementById('subject-tab-materials');
+                const assignedCasesTab = document.getElementById('subject-tab-assigned-cases');
                 const digestTab = document.getElementById('subject-tab-digests');
                 const doctrineTab = document.getElementById('subject-tab-doctrines');
                 const activeClasses = ['bg-white', 'text-blue-700', 'shadow-sm'];
                 const inactiveClasses = ['text-slate-500', 'hover:text-slate-800'];
-                [notebookTab, materialsTab, digestTab, doctrineTab].forEach(tab => {
+                [notebookTab, materialsTab, assignedCasesTab, digestTab, doctrineTab].forEach(tab => {
                     if (!tab) return;
                     tab.classList.remove(...activeClasses, ...inactiveClasses);
                     tab.classList.add(...inactiveClasses);
                 });
-                const activeTab = this.activePanel === 'materials' ? materialsTab : this.activePanel === 'digests' ? digestTab : this.activePanel === 'doctrines' ? doctrineTab : notebookTab;
+                const activeTab =
+                    this.activePanel === 'materials'
+                        ? materialsTab
+                        : this.activePanel === 'assigned_cases'
+                        ? assignedCasesTab
+                        : this.activePanel === 'digests'
+                        ? digestTab
+                        : this.activePanel === 'doctrines'
+                        ? doctrineTab
+                        : notebookTab;
                 if (activeTab) {
                     activeTab.classList.remove(...inactiveClasses);
                     activeTab.classList.add(...activeClasses);
@@ -3348,6 +3540,10 @@ async ocrPdf(file, onProgress = () => {}) {
                 const digestCount = this.linkedDigests().length;
                 const doctrineCount = this.linkedDoctrines().length;
                 const materialCount = this.materialsData.length;
+                const assignedCaseCount = this.assignedCasesData.length;
+                const pendingAssignedCases = this.assignedCasesData.filter(
+                    item => item.status !== 'digested' && !item.digestId
+                ).length;
                 const sectionCards = DEFAULT_NOTE_SECTIONS.filter(section => section.id !== 'dashboard').map(section => {
                     const count = this.notesData.filter(note => (note.sectionId || 'class_notes') === section.id).length;
                     return `<button onclick="window.appHandlers.addNote('${this.subjectId}', '${section.id}')" class="text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition"><div class="flex justify-between items-center"><i class="fas ${section.icon} text-blue-500"></i><span class="text-2xl font-bold text-slate-700">${count}</span></div><p class="text-xs font-bold text-slate-500 mt-3">${Security.escapeHTML(section.label.replace(/^\d+ — /, ''))}</p></button>`;
@@ -3356,6 +3552,7 @@ async ocrPdf(file, onProgress = () => {}) {
                     <div class="bg-gradient-to-r from-blue-800 to-slate-900 rounded-2xl p-8 text-white shadow-lg"><p class="text-xs uppercase tracking-widest text-blue-200 font-bold">Subject Notebook</p><h3 class="text-3xl font-bold serif-text mt-2">${Security.escapeHTML(this.subjectName)}</h3><p class="text-blue-100 mt-2">${total} organized page${total === 1 ? '' : 's'} in ${Security.escapeHTML(AppState.activeLabel())}</p><button onclick="window.appHandlers.addNote('${this.subjectId}')" class="mt-5 bg-white text-blue-800 px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Create a Page</button></div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                     <button onclick="window.appHandlers.showSubjectMaterials()" class="bg-white border border-emerald-200 rounded-xl p-5 text-left hover:shadow-md hover:border-emerald-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-emerald-600">Grounded Study Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Study Materials</h4></div><span class="text-4xl font-bold text-emerald-600">${materialCount}</span></div><p class="text-sm text-slate-500 mt-3">Upload a PDF, open its study tools, then save useful notes and questions to your notebook.</p></button>
+                    <button onclick="window.appHandlers.showSubjectAssignedCases()" class="bg-white border border-indigo-200 rounded-xl p-5 text-left hover:shadow-md hover:border-indigo-400 transition"><div class="flex justify-between items-center gap-4"><div><p class="text-xs uppercase tracking-widest font-bold text-indigo-600">Case Assignment Queue</p><h4 class="text-lg font-bold text-slate-800 mt-1">Assigned Cases</h4></div><div class="text-right"><span class="text-4xl font-bold text-indigo-600">${assignedCaseCount}</span><p class="text-[10px] font-black uppercase tracking-wider text-amber-600">${pendingAssignedCases} pending</p></div></div><p class="text-sm text-slate-500 mt-3">Load case titles and source links once, then digest each case directly into the Case Library and this Subject.</p></button>
                         <button onclick="window.appHandlers.showSubjectDigests()" class="bg-white border border-amber-200 rounded-xl p-5 text-left hover:shadow-md hover:border-amber-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-amber-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Case Digests</h4></div><span class="text-4xl font-bold text-amber-600">${digestCount}</span></div><p class="text-sm text-slate-500 mt-3">The same records shown in Consolidated Case Digests—no duplicate copies.</p></button>
                         <button onclick="window.appHandlers.showSubjectDoctrines()" class="bg-white border border-blue-200 rounded-xl p-5 text-left hover:shadow-md hover:border-blue-400 transition"><div class="flex justify-between items-center"><div><p class="text-xs uppercase tracking-widest font-bold text-blue-600">Linked Master Library</p><h4 class="text-lg font-bold text-slate-800 mt-1">Doctrine Matrix</h4></div><span class="text-4xl font-bold text-blue-600">${doctrineCount}</span></div><p class="text-sm text-slate-500 mt-3">Edit once and the doctrine updates globally and inside this subject.</p></button>
                     </div>
@@ -3465,6 +3662,135 @@ async ocrPdf(file, onProgress = () => {}) {
         </div>
     </div>`;
 }
+            showAssignedCases() {
+                this.activeNoteId = null;
+                this.activePanel = 'assigned_cases';
+                this.currentMaterialId = null;
+                this.renderSidebar();
+                this.refreshTabStyles();
+
+                const area = document.getElementById('notebook-editor-area');
+                if (!area) return;
+
+                const rows = this.assignedCasesData || [];
+                const digested = rows.filter(
+                    item =>
+                        item.status === 'digested' ||
+                        Boolean(item.digestId)
+                ).length;
+                const pending = rows.length - digested;
+
+                const cards = rows.map(item => {
+                    const isDone =
+                        item.status === 'digested' ||
+                        Boolean(item.digestId);
+
+                    const status =
+                        item.status === 'digesting'
+                            ? `<span class="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-spinner fa-spin mr-1"></i>Digesting</span>`
+                            : isDone
+                            ? `<span class="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-circle-check mr-1"></i>Digested</span>`
+                            : `<span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-black uppercase tracking-wider"><i class="fas fa-clock mr-1"></i>Pending</span>`;
+
+                    const sourceButton = AssignedCaseUtils.validPublicUrl(item.url)
+                        ? `<button onclick="window.open('${Security.escapeHTML(item.url)}','_blank','noopener')" class="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-blue-700 hover:border-blue-200 text-xs font-bold"><i class="fas fa-arrow-up-right-from-square mr-1"></i>Open Source</button>`
+                        : `<span class="px-3 py-2 rounded-lg bg-red-50 border border-red-100 text-red-600 text-xs font-bold"><i class="fas fa-link-slash mr-1"></i>Invalid Link</span>`;
+
+                    const mainAction = isDone
+                        ? `<button onclick="window.appHandlers.viewAssignedCaseDigest('${item.id}')" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black"><i class="fas fa-book-open mr-1"></i>View Digest</button>`
+                        : `<button onclick="window.appHandlers.digestAssignedCase('${item.id}')" ${item.status === 'digesting' ? 'disabled' : ''} class="px-3 py-2 rounded-lg bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white text-xs font-black shadow-sm"><i class="fas fa-wand-magic-sparkles mr-1"></i>Digest Case</button>`;
+
+                    return `
+                        <article class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:border-indigo-300 transition">
+                            <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        ${status}
+                                        ${item.topic
+                                            ? `<span class="px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">${Security.escapeHTML(item.topic)}</span>`
+                                            : ''}
+                                    </div>
+
+                                    <h4 class="text-lg font-black text-slate-900 serif-text mt-3">${Security.escapeHTML(item.title || 'Untitled Case')}</h4>
+
+                                    <p class="text-xs text-blue-600 mt-2 break-all">
+                                        <i class="fas fa-link mr-1"></i>${Security.escapeHTML(item.url || 'No source link')}
+                                    </p>
+
+                                    ${item.assignedDate
+                                        ? `<p class="text-xs text-slate-400 mt-2"><i class="fas fa-calendar mr-1"></i>Assigned: ${Security.escapeHTML(item.assignedDate)}</p>`
+                                        : ''}
+
+                                    ${item.lastError
+                                        ? `<div class="mt-3 p-3 rounded-lg bg-red-50 border border-red-100 text-xs text-red-700"><i class="fas fa-triangle-exclamation mr-1"></i>${Security.escapeHTML(item.lastError)}</div>`
+                                        : ''}
+                                </div>
+
+                                <div class="flex flex-wrap gap-2 flex-shrink-0">
+                                    ${mainAction}
+                                    ${sourceButton}
+                                    <button onclick="window.appHandlers.editAssignedCase('${item.id}')" class="w-9 h-9 rounded-lg bg-slate-100 text-slate-500 hover:text-amber-600 hover:bg-amber-50" title="Edit"><i class="fas fa-pen"></i></button>
+                                    <button onclick="window.appHandlers.deleteAssignedCase('${item.id}')" class="w-9 h-9 rounded-lg bg-red-50 text-red-500 hover:bg-red-100" title="Delete assignment"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </article>`;
+                }).join('');
+
+                area.innerHTML = `
+                    <div class="p-5 md:p-8 overflow-y-auto h-full">
+                        <div class="max-w-6xl mx-auto">
+                            <div class="flex flex-col xl:flex-row xl:items-end justify-between gap-4 mb-6">
+                                <div>
+                                    <p class="text-xs uppercase tracking-[.2em] font-black text-indigo-600">Subject Case Assignment Queue</p>
+                                    <h3 class="text-2xl font-black text-slate-900 serif-text mt-1">${Security.escapeHTML(this.subjectName)} — Assigned Cases</h3>
+                                    <p class="text-sm text-slate-500 mt-2 max-w-3xl leading-relaxed">
+                                        Load your assigned case titles and public source links. Clicking <b>Digest Case</b> opens the source with Gemini URL Context,
+                                        creates the full digest, saves it to the master Case Library, links it to this Subject, and runs Doctrine/Dictionary auto-building.
+                                    </p>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <button onclick="window.appHandlers.bulkImportAssignedCases()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-sm"><i class="fas fa-file-import mr-2"></i>Bulk Import</button>
+                                    <button onclick="window.appHandlers.addAssignedCase()" class="bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2.5 rounded-xl text-sm font-black shadow-sm"><i class="fas fa-plus mr-2"></i>Add Case</button>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                                <div class="bg-white border border-slate-200 rounded-xl p-4">
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Assigned</p>
+                                    <p class="text-3xl font-black text-slate-900 mt-1">${rows.length}</p>
+                                </div>
+                                <div class="bg-white border border-amber-200 rounded-xl p-4">
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-amber-600">Pending</p>
+                                    <p class="text-3xl font-black text-amber-600 mt-1">${pending}</p>
+                                </div>
+                                <div class="bg-white border border-emerald-200 rounded-xl p-4">
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-emerald-600">Digested</p>
+                                    <p class="text-3xl font-black text-emerald-600 mt-1">${digested}</p>
+                                </div>
+                            </div>
+
+                            <div class="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
+                                <i class="fas fa-circle-info mr-2"></i>
+                                <b>Best source:</b> use a direct public Supreme Court, Lawphil, eLibrary, or public PDF/page URL for the actual decision.
+                                Private/login-only links cannot be retrieved automatically.
+                            </div>
+
+                            ${rows.length
+                                ? `<div class="space-y-4">${cards}</div>`
+                                : `<div class="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-12 text-center">
+                                    <i class="fas fa-list-ul text-5xl text-slate-200 mb-4"></i>
+                                    <h4 class="font-black text-slate-700">No assigned cases yet</h4>
+                                    <p class="text-sm text-slate-500 mt-2 max-w-xl mx-auto">Bulk paste a spreadsheet-style list or add a case manually. Required fields are Case Title and public Link.</p>
+                                    <div class="mt-5 flex flex-wrap justify-center gap-2">
+                                        <button onclick="window.appHandlers.bulkImportAssignedCases()" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-file-import mr-2"></i>Bulk Import</button>
+                                        <button onclick="window.appHandlers.addAssignedCase()" class="bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold"><i class="fas fa-plus mr-2"></i>Add First Case</button>
+                                    </div>
+                                   </div>`}
+                        </div>
+                    </div>`;
+            }
+
             showMaterials() {
                 this.activeNoteId = null;
                 this.activePanel = 'materials';
@@ -5375,6 +5701,8 @@ const cleanAiJsonResponse = (text) => {
                                 else views.subject_notebook.showOverview();
                             } else if (desiredPanel === 'materials') {
                                 views.subject_notebook.showMaterials();
+                            } else if (desiredPanel === 'assigned_cases') {
+                                views.subject_notebook.showAssignedCases();
                             } else if (desiredPanel === 'digests') {
                                 views.subject_notebook.showDigests();
                             } else if (desiredPanel === 'doctrines') {
@@ -5681,6 +6009,370 @@ const cleanAiJsonResponse = (text) => {
         }, 100);
     }
 },
+            showSubjectAssignedCases: () => {
+                views.subject_notebook.showAssignedCases();
+            },
+
+            addAssignedCase: (id = null) => {
+                const existing = id
+                    ? views.subject_notebook.assignedCasesData.find(
+                        item => item.id === id
+                    )
+                    : null;
+
+                Modal.show({
+                    title: existing
+                        ? '<i class="fas fa-pen text-amber-500 mr-2"></i>Edit Assigned Case'
+                        : '<i class="fas fa-plus text-indigo-600 mr-2"></i>Add Assigned Case',
+                    content: `
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Case Title <span class="text-red-500">*</span></label>
+                            <input id="assigned-case-title" value="${Security.escapeHTML(existing?.title || '')}" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="e.g., Ang Tibay v. CIR">
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Public Case Link <span class="text-red-500">*</span></label>
+                            <input id="assigned-case-url" type="url" value="${Security.escapeHTML(existing?.url || '')}" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="https://...">
+                            <p class="text-[11px] text-slate-400 mt-1">Use the direct public page/PDF of the decision whenever possible.</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Topic / Coverage</label>
+                                <input id="assigned-case-topic" value="${Security.escapeHTML(existing?.topic || '')}" class="w-full p-2.5 border border-slate-300 rounded-lg" placeholder="e.g., Administrative Due Process">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-1">Assigned Date</label>
+                                <input id="assigned-case-date" type="date" value="${Security.escapeHTML(existing?.assignedDate || '')}" class="w-full p-2.5 border border-slate-300 rounded-lg">
+                            </div>
+                        </div>
+                    `,
+                    submitText: existing ? 'Update Case' : 'Add Case',
+                    onSubmit: async () => {
+                        const title =
+                            document.getElementById('assigned-case-title').value.trim();
+
+                        const url =
+                            document.getElementById('assigned-case-url').value.trim();
+
+                        if (!title) {
+                            throw new Error('Case Title is required.');
+                        }
+
+                        if (!AssignedCaseUtils.validPublicUrl(url)) {
+                            throw new Error(
+                                'Enter a valid public http:// or https:// case link.'
+                            );
+                        }
+
+                        const payload = {
+                            subjectId: views.subject_notebook.subjectId,
+                            subjectName: views.subject_notebook.subjectName,
+                            title,
+                            url,
+                            topic:
+                                document.getElementById('assigned-case-topic').value.trim(),
+                            assignedDate:
+                                document.getElementById('assigned-case-date').value,
+                            updated: serverTimestamp()
+                        };
+
+                        if (existing) {
+                            await AppDB.update(
+                                'assigned_cases',
+                                existing.id,
+                                payload
+                            );
+                        } else {
+                            await AppDB.add('assigned_cases', {
+                                ...payload,
+                                status: 'pending',
+                                digestId: '',
+                                sourceType: 'public_url',
+                                created: serverTimestamp()
+                            });
+                        }
+                    }
+                });
+            },
+
+            editAssignedCase: id =>
+                window.appHandlers.addAssignedCase(id),
+
+            deleteAssignedCase: id => {
+                const item =
+                    views.subject_notebook.assignedCasesData.find(
+                        row => row.id === id
+                    );
+
+                if (!item) return;
+
+                Modal.show({
+                    title: '<i class="fas fa-trash text-red-500 mr-2"></i>Delete Assignment',
+                    content: `
+                        <p>Remove <b>${Security.escapeHTML(item.title)}</b> from this Subject's Assigned Cases queue?</p>
+                        <p class="text-xs text-slate-500 mt-3">This deletes only the assignment row. If the case was already digested, its master Case Library record is not deleted.</p>
+                    `,
+                    submitText: 'Delete Assignment',
+                    submitClass:
+                        'px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold',
+                    onSubmit: async () =>
+                        await AppDB.delete(
+                            'assigned_cases',
+                            id
+                        )
+                });
+            },
+
+            bulkImportAssignedCases: () => {
+                Modal.show({
+                    title: '<i class="fas fa-file-import text-indigo-600 mr-2"></i>Bulk Import Assigned Cases',
+                    content: `
+                        <div class="p-4 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-900">
+                            <p class="font-bold">Paste from Excel/Google Sheets or upload a CSV/TXT file.</p>
+                            <p class="text-xs mt-1">Recommended columns: <b>Case Title | Link | Topic | Assigned Date</b>. Title and Link are required.</p>
+                        </div>
+
+                        <div class="mt-4">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Upload CSV / TXT <span class="font-normal text-slate-400">(optional)</span></label>
+                            <input id="assigned-case-file" type="file" accept=".csv,.txt,.tsv" class="w-full p-2.5 border border-slate-300 rounded-lg bg-white">
+                        </div>
+
+                        <div class="mt-4">
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Paste Case List</label>
+                            <textarea id="assigned-case-bulk-text" rows="10" class="w-full p-3 border border-slate-300 rounded-lg font-mono text-xs resize-y" placeholder="Case Title&#9;Link&#9;Topic&#9;Assigned Date
+Ang Tibay v. CIR&#9;https://...&#9;Administrative Due Process&#9;2026-09-10
+People v. Example&#9;https://...&#9;Criminal Law&#9;"></textarea>
+                        </div>
+
+                        <div class="mt-3 text-[11px] text-slate-400 leading-relaxed">
+                            Lex accepts tab-separated spreadsheet rows, CSV, or pipe-separated rows. Duplicate Case Title + Link combinations already in this Subject are skipped.
+                        </div>
+                    `,
+                    submitText: 'Import Cases',
+                    onSubmit: async () => {
+                        let raw =
+                            document.getElementById('assigned-case-bulk-text').value.trim();
+
+                        const file =
+                            document.getElementById('assigned-case-file').files?.[0];
+
+                        if (file) {
+                            const fileText = await file.text();
+                            raw = raw
+                                ? `${raw}\n${fileText}`
+                                : fileText;
+                        }
+
+                        if (!raw) {
+                            throw new Error(
+                                'Paste a case list or choose a CSV/TXT file.'
+                            );
+                        }
+
+                        const parsed =
+                            AssignedCaseUtils.parseBulk(raw);
+
+                        if (!parsed.length) {
+                            throw new Error(
+                                'No valid rows were found. Include at least Case Title and Link.'
+                            );
+                        }
+
+                        const subjectId =
+                            views.subject_notebook.subjectId;
+
+                        const subjectName =
+                            views.subject_notebook.subjectName;
+
+                        const existingKeys = new Set(
+                            views.subject_notebook.assignedCasesData.map(
+                                item =>
+                                    `${AssignedCaseUtils.canonical(item.title)}|${String(item.url || '').trim().toLowerCase()}`
+                            )
+                        );
+
+                        let added = 0;
+                        let duplicates = 0;
+                        let invalid = 0;
+
+                        for (const item of parsed) {
+                            if (!AssignedCaseUtils.validPublicUrl(item.url)) {
+                                invalid += 1;
+                                continue;
+                            }
+
+                            const key =
+                                `${AssignedCaseUtils.canonical(item.title)}|${item.url.trim().toLowerCase()}`;
+
+                            if (existingKeys.has(key)) {
+                                duplicates += 1;
+                                continue;
+                            }
+
+                            await AppDB.add('assigned_cases', {
+                                subjectId,
+                                subjectName,
+                                title: item.title,
+                                url: item.url.trim(),
+                                topic: item.topic || '',
+                                assignedDate: item.assignedDate || '',
+                                status: 'pending',
+                                digestId: '',
+                                sourceType: 'public_url',
+                                created: serverTimestamp(),
+                                updated: serverTimestamp()
+                            });
+
+                            existingKeys.add(key);
+                            added += 1;
+                        }
+
+                        alert(
+                            `Assigned Cases imported: ${added} added` +
+                            `${duplicates ? ` • ${duplicates} duplicate${duplicates === 1 ? '' : 's'} skipped` : ''}` +
+                            `${invalid ? ` • ${invalid} invalid link${invalid === 1 ? '' : 's'} skipped` : ''}.`
+                        );
+                    }
+                });
+            },
+
+            digestAssignedCase: async id => {
+                const item =
+                    views.subject_notebook.assignedCasesData.find(
+                        row => row.id === id
+                    );
+
+                if (!item) return;
+
+                if (item.digestId) {
+                    window.appHandlers.viewAssignedCaseDigest(id);
+                    return;
+                }
+
+                if (!AssignedCaseUtils.validPublicUrl(item.url)) {
+                    alert(
+                        'This assigned case does not have a valid public source link.'
+                    );
+                    return;
+                }
+
+                const apiKey =
+                    localStorage.getItem('gemini_api_key') || '';
+
+                if (!apiKey) {
+                    window.appHandlers.openAISettings();
+                    return;
+                }
+
+                await AppDB.update('assigned_cases', id, {
+                    status: 'digesting',
+                    lastError: '',
+                    updated: serverTimestamp()
+                });
+
+                window.appHandlers.pendingAssignedCaseDigest = {
+                    id: item.id,
+                    title: item.title,
+                    url: item.url,
+                    topic: item.topic || '',
+                    subjectId:
+                        views.subject_notebook.subjectId,
+                    subjectName:
+                        views.subject_notebook.subjectName
+                };
+
+                window.appHandlers.navigate('case_digester');
+
+                setTimeout(async () => {
+                    const context =
+                        window.appHandlers.pendingAssignedCaseDigest;
+
+                    if (!context) return;
+
+                    const titleInput =
+                        document.getElementById('digest-title');
+
+                    const subjectSelect =
+                        document.getElementById('digest-subject');
+
+                    const topicInput =
+                        document.getElementById('digest-topic');
+
+                    const sourceDisplay =
+                        document.getElementById('digest-filename');
+
+                    if (titleInput) {
+                        titleInput.value = context.title;
+                    }
+
+                    if (topicInput) {
+                        topicInput.value = context.topic || '';
+                    }
+
+                    if (subjectSelect) {
+                        let option = [
+                            ...subjectSelect.options
+                        ].find(
+                            candidate =>
+                                candidate.value === context.subjectId
+                        );
+
+                        if (!option) {
+                            option = document.createElement('option');
+                            option.value = context.subjectId;
+                            option.dataset.name = context.subjectName;
+                            option.textContent = context.subjectName;
+                            subjectSelect.appendChild(option);
+                        }
+
+                        subjectSelect.value = context.subjectId;
+                    }
+
+                    if (sourceDisplay) {
+                        sourceDisplay.classList.remove('hidden');
+                        sourceDisplay.innerHTML =
+                            `<i class="fas fa-link mr-1"></i>Online case source: ${Security.escapeHTML(context.url)}`;
+                    }
+
+                    window.appHandlers.digestText = '';
+                    window.appHandlers.digestMeta = {
+                        fileName: 'Online case source',
+                        pageCount: 0,
+                        characters: 0,
+                        sourceUrl: context.url
+                    };
+
+                    await window.appHandlers.processDigest();
+                }, 180);
+            },
+
+            viewAssignedCaseDigest: id => {
+                const item =
+                    views.subject_notebook.assignedCasesData.find(
+                        row => row.id === id
+                    );
+
+                if (!item) return;
+
+                views.subject_notebook.showDigests();
+
+                if (item.digestId) {
+                    setTimeout(() => {
+                        const record =
+                            views.subject_notebook.digestsData.find(
+                                digest => digest.id === item.digestId
+                            );
+
+                        if (record) {
+                            window.appHandlers.openSubjectDigestModal(
+                                record.id
+                            );
+                        }
+                    }, 120);
+                }
+            },
+
             openSyllabusTracker: () => {
     views.subject_notebook.activePanel = 'syllabus';
     views.subject_notebook.showSyllabusTracker();
@@ -8531,6 +9223,38 @@ initPomoPosition: () => {
             showSubjectMaterials: () => views.subject_notebook.showMaterials(),
             openSubjectMaterial: (id) => views.subject_notebook.showMaterialWorkspace(id),
             showSubjectDigests: () => views.subject_notebook.showDigests(),
+            openSubjectDigestModal: (id) => {
+                const raw =
+                    views.subject_notebook.digestsData.find(
+                        item => item.id === id
+                    );
+
+                if (!raw) return;
+
+                const d = DigestUtils.normalize(raw);
+                const esc = Security.escapeHTML;
+
+                const block = (icon, label, value, boxClass) => {
+                    if (!value) return '';
+
+                    return `<div class="mb-4"><h5 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-2 pb-1 border-b border-slate-200"><i class="fas ${icon} mr-1"></i>${label}</h5><div class="p-4 rounded-lg border text-sm leading-7 whitespace-pre-wrap ${boxClass}" style="text-align:left;overflow-wrap:anywhere;">${esc(value)}</div></div>`;
+                };
+
+                Modal.show({
+                    title: `<i class="fas fa-gavel text-indigo-600 mr-2"></i>${esc(d.title || 'Case Digest')}`,
+                    content: `
+                        <div class="max-w-3xl mx-auto">
+                            ${d.citation ? `<p class="text-xs text-slate-500 mb-4">${esc(d.citation)}</p>` : ''}
+                            ${block('fa-file-lines', 'Facts', d.facts, 'bg-slate-50 border-slate-200 text-slate-700')}
+                            ${block('fa-circle-question', 'Issue', d.issue, 'bg-blue-50 border-blue-200 text-blue-900')}
+                            ${block('fa-scale-balanced', 'Ruling', d.ruling, 'bg-slate-50 border-slate-200 text-slate-800')}
+                            ${block('fa-brain', 'Ratio Decidendi', d.ratioDecidendi, 'bg-violet-50 border-violet-200 text-violet-900')}
+                            ${block('fa-book', 'Doctrine', d.doctrine, 'bg-amber-50 border-amber-200 text-amber-900')}
+                        </div>
+                    `,
+                    hideSubmit: true
+                });
+            },
             toggleLinkedDigestDiscussed: async (id, checked) => {
                 const subject = window.appHandlers.getCurrentSubjectContext();
                 if (!subject?.id) throw new Error('Open a subject notebook first.');
@@ -11367,9 +12091,22 @@ await AppDB.add('digests', digestData);
         return; 
     } 
     
-    let textToDigest = textAreaInput || window.appHandlers.digestText; 
-    if (!textToDigest) { 
-        alert("Please paste the full text of the case or upload a PDF."); 
+    const assignedCaseContext =
+        window.appHandlers.pendingAssignedCaseDigest || null;
+
+    const usingAssignedUrl = Boolean(
+        assignedCaseContext?.url &&
+        AssignedCaseUtils.validPublicUrl(
+            assignedCaseContext.url
+        )
+    );
+
+    let textToDigest =
+        textAreaInput ||
+        window.appHandlers.digestText;
+
+    if (!textToDigest && !usingAssignedUrl) { 
+        alert("Please paste the full text of the case, upload a PDF, or use an Assigned Case with a public source link."); 
         return; 
     } 
     
@@ -11380,11 +12117,52 @@ await AppDB.add('digests', digestData);
     area.innerHTML = `<div class="flex justify-center h-full items-center flex-col"><div class="loader mb-4"></div><p class="text-slate-500 text-sm animate-pulse">Gemini is analyzing the case...</p></div>`; 
     
     try { 
-        const autoKnowledgeEnabled = document.getElementById('digest-auto-knowledge')?.checked !== false;
-        const intelligence = await FullTextIntelligence.caseEvidence(apiKey, textToDigest, selectedSubjectName, topicInput, (current,total,pageRange) => { btn.innerHTML=`<i class="fas fa-spinner fa-spin mr-1"></i> Reading ${pageRange} • ${current}/${total}`; area.innerHTML=`<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Full Case Intelligence</p><p class="text-slate-500 text-xs mt-1">Extracting grounded evidence from ${Security.escapeHTML(pageRange)} (${current} of ${total})…</p></div>`; });
-        const caseContext = intelligence.context;
-        btn.innerHTML='<i class="fas fa-spinner fa-spin mr-1"></i> Synthesizing Digest…';
-        area.innerHTML=`<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Synthesizing the complete decision…</p><p class="text-slate-500 text-xs mt-1">${intelligence.chunkCount} source section${intelligence.chunkCount===1?'':'s'} analyzed without truncating the case.</p></div>`;
+        const autoKnowledgeEnabled =
+            document.getElementById('digest-auto-knowledge')?.checked !== false;
+
+        let intelligence;
+        let caseContext;
+
+        if (usingAssignedUrl) {
+            intelligence = {
+                mode: 'url_context',
+                context:
+                    `PUBLIC CASE SOURCE URL: ${assignedCaseContext.url}\n\nUse the Gemini URL Context tool to retrieve and analyze ONLY this exact public URL as the case source.`,
+                chunkCount: 1,
+                originalCharacters: 0
+            };
+
+            caseContext = intelligence.context;
+
+            btn.innerHTML =
+                '<i class="fas fa-spinner fa-spin mr-1"></i> Reading Public Case Link…';
+
+            area.innerHTML =
+                `<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Opening Assigned Case Source</p><p class="text-slate-500 text-xs mt-1 break-all max-w-xl">${Security.escapeHTML(assignedCaseContext.url)}</p><p class="text-[11px] text-slate-400 mt-2">Lex is using Gemini URL Context so browser CORS does not need to expose the page directly.</p></div>`;
+        } else {
+            intelligence =
+                await FullTextIntelligence.caseEvidence(
+                    apiKey,
+                    textToDigest,
+                    selectedSubjectName,
+                    topicInput,
+                    (current, total, pageRange) => {
+                        btn.innerHTML =
+                            `<i class="fas fa-spinner fa-spin mr-1"></i> Reading ${pageRange} • ${current}/${total}`;
+
+                        area.innerHTML =
+                            `<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Full Case Intelligence</p><p class="text-slate-500 text-xs mt-1">Extracting grounded evidence from ${Security.escapeHTML(pageRange)} (${current} of ${total})…</p></div>`;
+                    }
+                );
+
+            caseContext = intelligence.context;
+        }
+
+        btn.innerHTML =
+            '<i class="fas fa-spinner fa-spin mr-1"></i> Synthesizing Digest…';
+
+        area.innerHTML =
+            `<div class="flex justify-center h-full items-center flex-col text-center"><div class="loader mb-4"></div><p class="text-slate-700 text-sm font-bold">Synthesizing the complete decision…</p><p class="text-slate-500 text-xs mt-1">${usingAssignedUrl ? 'Public case URL retrieved as the controlling source.' : `${intelligence.chunkCount} source section${intelligence.chunkCount===1?'':'s'} analyzed without truncating the case.`}</p></div>`;
         // Normalized Case Digester output: each table column receives one source field only.
         const promptText = `You are LEX, my Philippine Law School Case Digest Tutor.
 
@@ -11410,7 +12188,11 @@ TARGET CASE SOURCE
 ${caseContext}
 
 IMPORTANT SOURCE NOTE:
-${intelligence.mode === 'full_case_chunked' ? 'The source above contains evidence memos independently extracted from EVERY portion of the supplied decision. Treat those memos as the only evidence for synthesis. Do not invent missing links between chunks.' : 'The complete supplied case text appears above.'}
+${usingAssignedUrl
+? `The TARGET CASE SOURCE is the exact public URL above. Use the URL Context tool to retrieve that URL and treat the retrieved page/PDF as the ONLY source. Do not use Google Search, general web knowledge, or another version of the case. If the URL cannot be retrieved or does not contain the decision, do not fabricate a digest. Because Lex cannot locally verify exact quotations from URL Context, return an empty "verbatim_notes" field.`
+: intelligence.mode === 'full_case_chunked'
+? 'The source above contains evidence memos independently extracted from EVERY portion of the supplied decision. Treat those memos as the only evidence for synthesis. Do not invent missing links between chunks.'
+: 'The complete supplied case text appears above.'}
 
 ==================================================
 PRIMARY RULE — NO HALLUCINATION
@@ -11424,7 +12206,7 @@ The TARGET CASE TEXT is the controlling source.
 - Distinguish party allegations and arguments from lower-court findings and from the Supreme Court's own findings and reasoning.
 - Focus on the issue actually resolved by the Supreme Court and relevant to the selected Subject/Topic.
 - Never invent the wording of a law or legal provision.
-- Every quotation must be copied word-for-word from the supplied source. Lex will verify returned quotations against the original full case text and discard any quotation that cannot be found.
+- ${usingAssignedUrl ? 'For URL Context mode, do not return verbatim quotations; keep "verbatim_notes" empty because local source-string verification is unavailable.' : 'Every quotation must be copied word-for-word from the supplied source. Lex will verify returned quotations against the original full case text and discard any quotation that cannot be found.'}
 - Simplify the language, not the law.
 
 ==================================================
@@ -11702,10 +12484,28 @@ OUTPUT RULES:
 - Do NOT create additional JSON keys.
 `;
 
-        const data = await GeminiService.generate(apiKey, {
-            contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.15 }
-        });
+        const digestRequest = {
+            contents: [{
+                role: 'user',
+                parts: [{ text: promptText }]
+            }],
+            generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.15
+            }
+        };
+
+        if (usingAssignedUrl) {
+            digestRequest.tools = [
+                { url_context: {} }
+            ];
+        }
+
+        const data =
+            await GeminiService.generate(
+                apiKey,
+                digestRequest
+            );
         let jsonString = GeminiService.text(data).replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
         let parsedDigest;
         try { parsedDigest = JSON.parse(jsonString); }
@@ -11724,7 +12524,12 @@ OUTPUT RULES:
         const exceptionsToExceptions = DigestUtils.text(parsedDigest.exceptions_to_exceptions);
         const supremeCourtApplication = DigestUtils.text(parsedDigest.supreme_court_application);
         const gist = DigestUtils.text(parsedDigest.recitation_gist);
-        const verbatimNotes = DigestUtils.validateVerbatimNotes(parsedDigest.verbatim_notes, textToDigest);
+        const verbatimNotes = usingAssignedUrl
+            ? ''
+            : DigestUtils.validateVerbatimNotes(
+                parsedDigest.verbatim_notes,
+                textToDigest
+            );
         const extractedLegalTerms = autoKnowledgeEnabled ? DigestAutoKnowledge.cleanLegalTerms(parsedDigest.legal_terms) : [];
 
         const digestData = {
@@ -11752,7 +12557,30 @@ OUTPUT RULES:
             verbatimNotes,
             personalNotes: '',
             notes: '', // reserved for the user's own notes; never duplicate AI fields here
-            sourceAnalysis: { mode: intelligence.mode, chunkCount: intelligence.chunkCount, pageCount: Number(window.appHandlers.digestMeta?.pageCount || 0), originalCharacters: Number(intelligence.originalCharacters || textToDigest.length) },
+            sourceAnalysis: {
+                mode: intelligence.mode,
+                chunkCount: intelligence.chunkCount,
+                pageCount: Number(
+                    window.appHandlers.digestMeta?.pageCount || 0
+                ),
+                originalCharacters: Number(
+                    intelligence.originalCharacters ||
+                    textToDigest?.length ||
+                    0
+                ),
+                sourceUrl:
+                    usingAssignedUrl
+                        ? assignedCaseContext.url
+                        : ''
+            },
+            sourceUrl:
+                usingAssignedUrl
+                    ? assignedCaseContext.url
+                    : '',
+            assignedCaseId:
+                usingAssignedUrl
+                    ? assignedCaseContext.id
+                    : '',
             extractedLegalTerms,
             autoKnowledgeEnabled,
             schemaVersion: 6,
@@ -11771,8 +12599,30 @@ OUTPUT RULES:
             }
         }
 
-        const digestRef = await AppDB.add('digests', digestData);
-        views.case_digester.digestedData = { id: digestRef.id, ...digestData };
+        const digestRef =
+            await AppDB.add(
+                'digests',
+                digestData
+            );
+
+        views.case_digester.digestedData = {
+            id: digestRef.id,
+            ...digestData
+        };
+
+        if (usingAssignedUrl && assignedCaseContext?.id) {
+            await AppDB.update(
+                'assigned_cases',
+                assignedCaseContext.id,
+                {
+                    status: 'digested',
+                    digestId: digestRef.id,
+                    digestedAt: serverTimestamp(),
+                    lastError: '',
+                    updated: serverTimestamp()
+                }
+            );
+        }
 
         let autoKnowledgeResult = null;
         let autoKnowledgeError = '';
@@ -11807,7 +12657,7 @@ OUTPUT RULES:
         const myNotesPreview = DigestUtils.myNotesText(digestData);
         area.innerHTML = `<div class="space-y-4">
             <div class="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-4 shadow-sm">
-                <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to the Case Library and linked to the selected notebook. ${window.appHandlers.digestMeta?.pageCount ? `Full PDF analyzed: ${window.appHandlers.digestMeta.pageCount} pages` : 'Full supplied text analyzed'} • ${intelligence.chunkCount} analysis section${intelligence.chunkCount===1?'':'s'}.</p></div>
+                <i class="fas fa-check-circle text-3xl"></i><div class="flex-1"><p class="font-bold">Successfully Digested!</p><p class="text-xs opacity-80">Saved once to the Case Library and linked to the selected notebook. ${usingAssignedUrl ? 'Public assigned-case link analyzed with URL Context' : window.appHandlers.digestMeta?.pageCount ? `Full PDF analyzed: ${window.appHandlers.digestMeta.pageCount} pages` : 'Full supplied text analyzed'} • ${intelligence.chunkCount} analysis section${intelligence.chunkCount===1?'':'s'}.</p></div>
                 <div class="flex flex-wrap gap-2"><button onclick="window.appHandlers.saveLatestDigestToVault()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"><i class="fas fa-vault mr-1"></i>Save Doctrine to Vault</button><button onclick="window.appHandlers.navigate('digests')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm">View Table</button></div>
             </div>
             ${knowledgeStatusHtml}
@@ -11820,12 +12670,29 @@ OUTPUT RULES:
         </div>`;
     } catch (error) { 
         // FIX #7: Escape error message to prevent XSS
-        area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${Security.escapeHTML(error.message || 'Unknown error')}</div>`; 
+        area.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200">Error processing: ${Security.escapeHTML(error.message || 'Unknown error')}</div>`;
+
+        if (usingAssignedUrl && assignedCaseContext?.id) {
+            try {
+                await AppDB.update(
+                    'assigned_cases',
+                    assignedCaseContext.id,
+                    {
+                        status: 'pending',
+                        lastError:
+                            error?.message ||
+                            'Unable to digest this source link.',
+                        updated: serverTimestamp()
+                    }
+                );
+            } catch (_) {}
+        }
     } finally { 
         btn.disabled = false; 
         btn.innerHTML = '<i class="fas fa-robot mr-1"></i> Digest with Gemini'; 
         window.appHandlers.digestText = ''; 
         window.appHandlers.digestMeta = null;
+        window.appHandlers.pendingAssignedCaseDigest = null;
     } 
 },
 setMode: (mode) => {
